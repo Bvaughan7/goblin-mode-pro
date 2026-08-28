@@ -5,21 +5,34 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "goblin-mode-pro"
 dynamic = ["version"]
-description = "Fantasy-themed native Linux gaming performance tinkerer for MMORPGs"
+description = "Native Linux gaming performance and diagnostics utility"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [{ name = "Bryan Vaughan", email = "bryanvaughan07@gmail.com" }]
+keywords = ["linux-gaming", "proton", "gamemode", "mangohud", "gtk4", "wayland"]
+classifiers = [
+    "Environment :: X11 Applications :: GTK",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+    "Topic :: Games/Entertainment",
+    "Topic :: System :: Monitoring",
+]
 
-# NOTE: On Arch/CachyOS these are installed via pacman, not pip:
-#   python-gobject python-psutil python-pillow python-pystray gtk4 libadwaita wl-clipboard
-# They are listed here for documentation / non-Arch installs only.
+# On Arch-based distributions these come from pacman, not pip
+# (python-gobject python-psutil python-pillow python-pystray gtk4 libadwaita).
+# They are declared here for non-Arch installs and for tooling.
 dependencies = [
     "psutil>=5.9",
     "pystray>=0.19",
     "Pillow>=10",
     "PyGObject>=3.46",
 ]
+
+[project.urls]
+Homepage = "https://github.com/Bvaughan7/goblin-mode-pro"
+Source = "https://github.com/Bvaughan7/goblin-mode-pro"
+Issues = "https://github.com/Bvaughan7/goblin-mode-pro/issues"
 
 [project.scripts]
 goblin-mode-pro-daemon = "goblinmode.daemon:main"
@@ -33,7 +46,3 @@ where = ["src"]
 
 [tool.setuptools.dynamic]
 version = { attr = "goblinmode.__about__.__version__" }
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-pythonpath = ["src"]

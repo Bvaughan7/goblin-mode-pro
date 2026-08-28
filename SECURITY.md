@@ -1,0 +1,41 @@
+# Security policy
+
+## Reporting a vulnerability
+
+Please report suspected vulnerabilities privately through the repository's
+**Security advisories** page ("Report a vulnerability"), not via a public issue.
+Include the affected component, a description of the problem, and reproduction
+steps if you have them.
+
+## Design
+
+- The only component that runs as root is `goblin-mode-pro-helper`. It is a small
+  D-Bus service that imports only the standard library and PyGObject, runs under a
+  hardened systemd unit (`CapabilityBoundingSet=CAP_SYS_NICE`, `NoNewPrivileges`,
+  `ProtectSystem=strict` with an explicit `ReadWritePaths` allowlist,
+  `IPAddressDeny=any`, a syscall filter), and gates every mutating call behind
+  polkit.
+- The helper re-validates every argument regardless of the caller: the CPU
+  governor must be one the kernel advertises; `renice` only raises priority and
+  only for a process owned by the calling uid; RAPL power-limit writes are clamped
+  to the firmware maximum; sysctl keys are a fixed allowlist, each with an
+  accepted numeric range; the sysctl target path is resolved and confirmed to be
+  under `/proc/sys/`.
+- The daemon is unprivileged and its GUI bridge lives on the per-user session
+  bus. The helper's well-known name can only be owned by root (enforced by the
+  D-Bus bus policy), so it cannot be impersonated.
+- Persistent kernel tunables (`manage-kernel-tunables`) always prompt for admin
+  authentication; the runtime gaming knobs (`manage-performance`) are silent on
+  the active local session by default and can be switched to prompt.
+- Configuration input is constrained: a profile's `exe` may not contain a path
+  separator, `..`, or a control character; per-game file names are produced by a
+  separate slug function; user-supplied regular expressions are length-capped and
+  evaluated against length-bounded strings.
+- The generated launch wrapper imports environment variables as strict
+  `NAME=VALUE` lines and never uses `eval` or `source`.
+
+## Threat model
+
+Goblin Mode Pro assumes a single-user workstation where an active local login
+session is trusted. It is not designed to defend one local user against another
+on a shared machine.

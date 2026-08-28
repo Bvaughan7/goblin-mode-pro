@@ -1,25 +1,25 @@
-"""Auto-detect *any* game, not just a hardcoded executable list.
+"""Detect a running game without a hardcoded executable list.
 
 A scored signal stack, most reliable first:
 
 1. **Launcher wrappers** - Steam writes ``reaper SteamLaunch AppId=<N>`` into the
-   process cmdline (name looked up from ``appmanifest_<N>.acf``); Lutris writes
-   ``lutris-wrapper <name> …``; Heroic / Bottles leave their own trails.
-2. **DRM fdinfo** - ``/proc/<pid>/fdinfo/*`` exposes ``drm-engine-*`` /
-   ``drm-total-memory`` for any process doing GPU work (AMD, Intel, NVIDIA 550+).
-3. **Linked libraries** - ``/proc/<pid>/maps`` holds ``libvulkan`` / ``libSDL2``
-   / ``libwine`` / GL.
-4. **Blocklist** - browsers, editors, terminals, the DE, OBS, Discord.
+   process command line (name looked up from ``appmanifest_<N>.acf``); Lutris
+   writes ``lutris-wrapper <name> …``; Heroic leaves its own trail.
+2. **DRM fdinfo** - ``/proc/<pid>/fdinfo/*`` reports active render-engine time or
+   held VRAM for any GPU client (AMD, Intel, NVIDIA with a recent driver).
+   Compositors also hold a DRM fd, so only *active rendering* counts.
+3. **Linked libraries** - ``/proc/<pid>/maps`` contains ``libSDL2`` / ``libwine``
+   / VKD3D / DXVK.
+4. **Blocklist** - browsers, editors, terminals, the desktop environment.
 
-A process scoring at/above :data:`GAME_SCORE` for a couple of polls is treated as
-a game.
+A launcher-tagged process scoring at/above :data:`GAME_SCORE`, or a generic
+process corroborated by two independent signals, is treated as a game.
 """
 
 from __future__ import annotations
 
 import glob
 import logging
-import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -157,18 +157,6 @@ def _links_game_libs(pid: int) -> bool:
                     return True
     except OSError:
         pass
-    return False
-
-
-def has_gamepad_open() -> bool:
-    """Any process holding a joystick/gamepad evdev - a global corroborating hint."""
-    for js in glob.glob("/dev/input/js*") + glob.glob("/dev/input/by-id/*event-joystick"):
-        try:
-            for link in glob.glob("/proc/[0-9]*/fd/*"):
-                if os.path.realpath(link) == js:
-                    return True
-        except OSError:
-            continue
     return False
 
 

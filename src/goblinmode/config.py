@@ -10,6 +10,7 @@ from __future__ import annotations
 import dataclasses
 import json
 import os
+import re
 import tempfile
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
@@ -18,6 +19,28 @@ from typing import Any
 from goblinmode.paths import CONFIG_FILE, ensure_user_dirs
 
 SCHEMA_VERSION = 1
+
+#: An ``exe`` may hold an exact name, a substring, or (match_mode="regex") a
+#: pattern, so metacharacters are allowed - but never a path separator, ``..``,
+#: NUL or a control character, and length is bounded (regex ReDoS guard).
+#: Callers must pass a plain name; ``\`` / ``/`` paths are the caller's job to
+#: split (see ``_win_basename`` in observer/gamedetect).
+_EXE_BAD = re.compile(r"[/\\\x00-\x1f\x7f]|\.\.")
+
+
+def sanitize_exe(value: str) -> str:
+    """Validate a profile's ``exe`` token, or raise ``ValueError``."""
+    value = (value or "").strip().strip("\"'")
+    if not value or len(value) > 128 or value in (".", "..") or _EXE_BAD.search(value):
+        raise ValueError(f"invalid game executable name: {value!r}")
+    return value
+
+
+def slug(value: str) -> str:
+    """A filesystem-safe token derived from a name (per-game config files)."""
+    s = re.sub(r"[^A-Za-z0-9._-]+", "_", value).strip("._-")
+    return s[:80] or "game"
+
 
 # The five runner-variable toggles from the project brief. Value = the env
 # assignment applied when the toggle is on.
@@ -91,8 +114,10 @@ class GameProfile:
     runner_vars: dict[str, bool] = field(default_factory=_default_runner_vars)
 
     def __post_init__(self) -> None:
+        self.exe = sanitize_exe(self.exe)
         if not self.display_name:
             self.display_name = self.exe
+        self.display_name = self.display_name[:200]
         if self.match_mode not in MATCH_MODES:
             self.match_mode = "exact"
         self.nice_value = max(-10, min(19, int(self.nice_value)))
@@ -180,11 +205,22 @@ def load() -> Settings:
 
 
 def _from_dict(raw: dict[str, Any]) -> Settings:
+    if not isinstance(raw, dict):
+        return default_settings()
     raw = dict(raw)
     raw.pop("schema_version", None)
-    profiles = raw.pop("profiles", [])
+    raw_profiles = raw.pop("profiles", []) or []
     settings = Settings(**{k: v for k, v in raw.items() if k in _SETTINGS_FIELDS})
-    settings.profiles = [GameProfile(**p) for p in profiles]
+
+    profiles: list[GameProfile] = []
+    for p in raw_profiles:
+        if not isinstance(p, dict):
+            continue
+        try:
+            profiles.append(GameProfile(**{k: v for k, v in p.items() if k in _PROFILE_FIELDS}))
+        except (ValueError, TypeError):
+            continue  # drop a corrupt / hand-broken entry rather than fail to start
+    settings.profiles = profiles
     settings.__post_init__()
     return settings
 
@@ -207,3 +243,4 @@ def save(settings: Settings) -> None:
 
 
 _SETTINGS_FIELDS = {f.name for f in dataclasses.fields(Settings)}
+_PROFILE_FIELDS = {f.name for f in dataclasses.fields(GameProfile)}

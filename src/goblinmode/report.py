@@ -1,27 +1,29 @@
 """One-click bug report.
 
-Gathers everything you'd otherwise paste by hand into a forum thread or a GitHub
-issue - system info, the pre-flight check results, the latest incident, an
-analysis of the newest Wine/Proton log, and the tweaks that were active - and
-renders it three ways:
+Collects the context a support request needs - system info, the pre-flight
+results, the latest incident, an analysis of the newest Wine/Proton log, and the
+tweaks that were active - and renders it three ways:
 
-* :func:`as_markdown` - a clean paste for a forum / issue body
+* :func:`as_markdown` - a paste for a forum thread or an issue body
 * :func:`as_llm_prompt` - wrapped in a diagnostic system prompt
 * :func:`github_issue_url` - a pre-filled new-issue link
+
+Home paths and the login name are redacted from anything that came from a log.
 """
 
 from __future__ import annotations
 
 import json
-import platform
+import os
 import shutil
 import subprocess
 import urllib.parse
 from datetime import datetime, timezone
 from typing import Any
 
-from goblinmode import __version__, logrules, preflight
+from goblinmode import __version__, preflight
 from goblinmode.incidents import _system_info
+from goblinmode.logrules import analyze_text, redact as _redact
 from goblinmode.runner import latest_log_files
 
 _LLM_PROMPT = (
@@ -47,8 +49,6 @@ def _mesa_version() -> str | None:
 
 
 def _desktop() -> dict[str, str]:
-    import os
-
     return {
         "desktop": os.environ.get("XDG_CURRENT_DESKTOP", "?"),
         "session_type": os.environ.get("XDG_SESSION_TYPE", "?"),
@@ -62,6 +62,17 @@ def _ram_gb() -> float | None:
         return round(psutil.virtual_memory().total / (1024 ** 3), 1)
     except Exception:  # noqa: BLE001
         return None
+
+
+def _redact_incident(incident: dict | None) -> dict | None:
+    if not incident:
+        return incident
+    inc = dict(incident)
+    if inc.get("logs_tail"):
+        inc["logs_tail"] = [_redact(str(line)) for line in inc["logs_tail"]]
+    if inc.get("detail"):
+        inc["detail"] = _redact(str(inc["detail"]))
+    return inc
 
 
 def build_report(
@@ -87,9 +98,14 @@ def build_report(
         log_name = logs[0].name
         try:
             text = logs[0].read_text(errors="replace")[-200_000:]
-            log_findings = [f.__dict__ for f in logrules.analyze_text(text)]
+            for f in analyze_text(text):
+                d = dict(f.__dict__)
+                d["sample"] = _redact(d.get("sample", ""))
+                log_findings.append(d)
         except OSError:
             pass
+
+    incident = _redact_incident(incident)
 
     return {
         "schema": "gmp.report.v1",
@@ -136,9 +152,11 @@ def as_markdown(rep: dict) -> str:
         for f in rep["log_findings"]:
             L.append(f"- **{f['label']}** ×{f['count']} ({f['category']}) — {f['cause']}")
             L.append(f"  - fix: {f['fix']}")
-            L.append(f"  - `{f['sample']}`")
+            L.append(f"  - `{str(f['sample']).replace('`', '')[:200]}`")
+    elif rep["log_file"]:
+        L.append("- no known failure patterns matched")
     else:
-        L.append("- no known failure patterns matched" if rep["log_file"] else "- no captured log (set the Steam launch option / Lutris command prefix)")
+        L.append("- no captured log (set the launch option / command prefix to `goblin-run %command%`)")
 
     if rep.get("incident"):
         inc = rep["incident"]
@@ -153,8 +171,9 @@ def as_markdown(rep: dict) -> str:
     tw = rep.get("active_tweaks") or {}
     if tw:
         on = [k for k in ("governor", "epp_boosted", "tearing", "adaptive_sync",
-                          "power_limited") if tw.get(k)]
-        L.append(f"\n### Active tweaks\n- {', '.join(on) or 'none'} · reniced {list((tw.get('reniced') or {}).keys())}")
+                          "power_limited", "focus_mode") if tw.get(k)]
+        reniced = ", ".join((tw.get("reniced") or {}).keys()) or "none"
+        L.append(f"\n### Active tweaks\n- {', '.join(on) or 'none'}  ·  reniced: {reniced}")
     return "\n".join(L) + "\n"
 
 
@@ -162,13 +181,13 @@ def as_llm_prompt(rep: dict) -> str:
     return _LLM_PROMPT + "\n\n```json\n" + json.dumps(rep, indent=2, default=str) + "\n```\n"
 
 
-def github_issue_url(rep: dict, repo: str = "your-org/goblin-mode-pro") -> str:
+def github_issue_url(rep: dict, repo: str = "Bvaughan7/goblin-mode-pro") -> str:
     body = as_markdown(rep)
     if len(body) > 6000:
-        body = body[:6000] + "\n\n*(truncated — full report on the clipboard)*\n"
-    q = urllib.parse.urlencode({
+        body = body[:6000] + "\n\n*(truncated - full report is on the clipboard)*\n"
+    query = urllib.parse.urlencode({
         "title": f"[{rep.get('game') or 'game'}] ",
         "body": body,
         "labels": "triage",
     })
-    return f"https://github.com/{repo}/issues/new?{q}"
+    return f"https://github.com/{repo}/issues/new?{query}"

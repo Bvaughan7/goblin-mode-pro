@@ -1,17 +1,18 @@
-"""Goblin Mode Pro - a lightweight native Linux gaming performance tinkerer."""
+"""Goblin Mode Pro - a native Linux gaming performance and diagnostics utility."""
 
 from goblinmode.__about__ import __version__
 
 __all__ = ["__version__"]
 
-APP_ID = "com.goblinmode.Pro"  # the GUI's GApplication id - must stay unique to it
+#: GApplication id for the GUI. Kept distinct from the daemon<->GUI bridge name
+#: below, because GApplication registers org.gtk.Application on this name.
+APP_ID = "com.goblinmode.Pro"
 
-# The daemon<->GUI bridge uses its OWN name so it doesn't collide with the GUI's
-# GApplication registration (which exposes org.gtk.Application on APP_ID).
+#: Session-bus name and object path the daemon exposes to the GUI.
 BRIDGE_BUS_NAME = "com.goblinmode.Pro.Daemon"
 BRIDGE_OBJECT_PATH = "/com/goblinmode/Pro/Daemon"
 
+#: System-bus interface of the privileged helper.
 HELPER_BUS_NAME = "com.goblinmode.ProHelper"
 HELPER_OBJECT_PATH = "/com/goblinmode/ProHelper"
 HELPER_IFACE = "com.goblinmode.ProHelper.Manager"
-POLKIT_ACTION = "com.goblinmode.pro.manage-performance"

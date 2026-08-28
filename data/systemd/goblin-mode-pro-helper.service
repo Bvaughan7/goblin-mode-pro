@@ -1,5 +1,6 @@
 [Unit]
-Description=Goblin Mode Pro privileged helper (CPU governor / renice / RAPL)
+Description=Goblin Mode Pro privileged helper
+Documentation=https://github.com/Bvaughan7/goblin-mode-pro
 
 [Service]
 Type=dbus
@@ -8,21 +9,45 @@ ExecStart=/usr/bin/python3 /usr/lib/goblin-mode-pro/goblin_helper.py
 ExecStopPost=/usr/bin/python3 /usr/lib/goblin-mode-pro/goblin_helper.py --revert
 Restart=on-failure
 RestartSec=2
+TimeoutStopSec=10
 
-# The helper only ever touches these paths.
+# --- sandbox -------------------------------------------------------------
+# The only privileged thing it does is write a fixed set of kernel tunables
+# and call setpriority(); CAP_SYS_NICE is all it needs.
+User=root
+CapabilityBoundingSet=CAP_SYS_NICE
+AmbientCapabilities=
+NoNewPrivileges=yes
+
 RuntimeDirectory=goblin-mode-pro
 RuntimeDirectoryMode=0700
+UMask=0077
+
 ProtectSystem=strict
 ProtectHome=yes
-ReadWritePaths=/sys/devices/system/cpu /sys/class/powercap /sys/devices/virtual/powercap
+ReadWritePaths=/sys/devices/system/cpu /sys/class/powercap /sys/devices/virtual/powercap /proc/sys/vm /proc/sys/kernel
+ProtectKernelTunables=no
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+# renice must be able to stat arbitrary /proc/<pid> for the ownership check
+ProtectProc=default
 PrivateTmp=yes
-NoNewPrivileges=no
-CapabilityBoundingSet=CAP_SYS_NICE CAP_DAC_OVERRIDE
+PrivateDevices=yes
+IPAddressDeny=any
 RestrictAddressFamilies=AF_UNIX
-SystemCallFilter=@system-service
-SystemCallErrorNumber=EPERM
-MemoryDenyWriteExecute=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
 LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@obsolete @cpu-emulation @debug @mount @swap @reboot @raw-io @module
+SystemCallErrorNumber=EPERM
+KeyringMode=private
 
 [Install]
 WantedBy=multi-user.target

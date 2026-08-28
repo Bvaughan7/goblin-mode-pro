@@ -9,7 +9,9 @@ game is running.
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import logging
+import os
 import signal
 import sys
 import time
@@ -151,8 +153,12 @@ class Daemon:
     def _adopt_detected_game(self, cand) -> "config.GameProfile | None":
         """Turn an auto-detected game into a (persistent) default profile and tell
         the user."""
-        exe = cand.exe
-        if not exe or exe.lower() in {g.lower() for g in self.settings.ignored_games}:
+        try:
+            exe = config.sanitize_exe(cand.exe)
+        except ValueError:
+            log.warning("ignoring auto-detected game with an odd name: %r", cand.exe)
+            return None
+        if exe.lower() in {g.lower() for g in self.settings.ignored_games}:
             return None
         existing = self.settings.profile_for_exe(exe)
         if existing is not None:
@@ -413,10 +419,15 @@ class Daemon:
         return [f.__dict__ for f in logrules.analyze_text(text)]
 
     def set_profile(self, profile: dict[str, Any]) -> bool:
-        exe = profile.get("exe")
-        if not exe:
+        if not isinstance(profile, dict) or not profile.get("exe"):
             return False
-        new = config.GameProfile(**profile)
+        known = {f.name for f in dataclasses.fields(config.GameProfile)}
+        try:
+            new = config.GameProfile(**{k: v for k, v in profile.items() if k in known})
+        except (ValueError, TypeError) as exc:
+            log.warning("rejected invalid profile: %s", exc)
+            return False
+        exe = new.exe
         existing = self.settings.profile_for_exe(exe)
         if existing:
             self.settings.profiles[self.settings.profiles.index(existing)] = new
@@ -533,16 +544,13 @@ class Daemon:
             log.info("incident payload copied to clipboard (%d chars)", len(payload))
 
     def _launch_gui(self) -> None:
-        import shutil
         import subprocess
 
-        exe = shutil.which("goblin-mode-pro")
-        if exe:
-            subprocess.Popen([exe])
-        else:
-            subprocess.Popen(
-                [sys.executable, "-m", "goblinmode.gui.app"],
-            )
+        for exe in ("/usr/bin/goblin-mode-pro", "/usr/local/bin/goblin-mode-pro"):
+            if os.path.isfile(exe) and os.access(exe, os.X_OK):
+                subprocess.Popen([exe])
+                return
+        subprocess.Popen([sys.executable, "-m", "goblinmode.gui.app"])
 
 
 def _profile_dict(p: config.GameProfile) -> dict[str, Any]:
@@ -605,8 +613,10 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     if args.print_env_for is not None:
-        settings = config.load()
-        print(runner.print_env_for(args.print_env_for, settings))
+        argv = args.print_env_for
+        if argv and argv[0] == "--":
+            argv = argv[1:]
+        print(runner.print_env_for(argv, config.load()))
         return 0
 
     if args.write_wrapper:

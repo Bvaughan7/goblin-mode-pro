@@ -8,8 +8,8 @@ and once on exit.
 
 from __future__ import annotations
 
+import functools
 import logging
-import os
 import re
 from dataclasses import dataclass
 from typing import Callable
@@ -43,6 +43,18 @@ class GameEvent:
 
 
 MatchResult = tuple[GameProfile, int]
+
+#: longest string a user regex is run against - a backtracking guard, since
+#: Python's ``re`` has no timeout and the poll runs on the daemon's main loop
+_MAX_HAYSTACK = 4096
+
+
+@functools.lru_cache(maxsize=64)
+def _compiled(pattern: str):
+    try:
+        return re.compile(pattern[:128])
+    except re.error:
+        return None
 
 
 def _basename(s: str) -> str:
@@ -84,14 +96,14 @@ def _matches(
                 return True
         return False
     if profile.match_mode == "substring":
-        hay = (name + " " + exe + " " + " ".join(cmdline)).lower()
+        hay = (name + " " + exe + " " + " ".join(cmdline)).lower()[:_MAX_HAYSTACK]
         return target.lower() in hay
     if profile.match_mode == "regex":
-        try:
-            pat = re.compile(target)
-        except re.error:
+        pat = _compiled(target)
+        if pat is None:
             return False
-        return bool(pat.search(name) or pat.search(exe) or pat.search(" ".join(cmdline)))
+        hay = (name + " " + exe + " " + " ".join(cmdline))[:_MAX_HAYSTACK]
+        return bool(pat.search(hay))
     return False
 
 

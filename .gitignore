@@ -1,8 +1,26 @@
+# Python
 __pycache__/
-*.pyc
+*.py[cod]
 *.egg-info/
+.eggs/
 build/
 dist/
 .venv/
 venv/
+
+# Tooling
+.mypy_cache/
+.ruff_cache/
 .pytest_cache/
+.coverage
+
+# Editors / OS
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+
+# Local runtime output (should never be in the tree)
+*.log
+/config.json

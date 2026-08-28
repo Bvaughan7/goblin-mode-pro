@@ -21,6 +21,7 @@ import time
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 from goblinmode.paths import INCIDENT_FILE, ensure_user_dirs
@@ -31,15 +32,13 @@ SCHEMA = "gmp.incident.v1"
 
 SYSTEM_PROMPT = (
     "You are a Linux gaming performance diagnostician. The following JSON was "
-    "produced by Goblin Mode Pro on a Dell G7 laptop (Intel Comet Lake + NVIDIA "
-    "RTX 2060) running CachyOS (Arch-based), KDE Plasma on Wayland. The user "
-    "plays MMORPGs (World of Warcraft via Proton, native RuneScape). Given the "
-    "incident, the metric window leading up to it, the log tail and the "
-    "performance tweaks that were active, identify the most likely bottleneck "
-    "(thermal, power-limit/PL1-PL2, GPU driver, VRAM exhaustion / host-memory "
-    "fallback, PCIe link down-training, VKD3D-Proton pipeline caching, CPU, I/O) "
-    "and give concrete, CachyOS-specific remediation steps ordered by expected "
-    "impact. If gpu_state is present, use it. Be concise."
+    "produced by Goblin Mode Pro during a game session (system details are in the "
+    "'system' object). Given the incident, the metric window leading up to it, "
+    "the log tail and the performance tweaks that were active, identify the most "
+    "likely bottleneck - thermal, power-limit (RAPL PL1/PL2), GPU driver, VRAM "
+    "exhaustion / host-memory fallback, PCIe link down-training, VKD3D/DXVK "
+    "pipeline caching, CPU, or I/O - and give concrete remediation steps for that "
+    "distro, ordered by expected impact. Use gpu_state if present. Be concise."
 )
 
 
@@ -75,19 +74,37 @@ class Incident:
         return d
 
 
+def _dmi(field: str) -> str:
+    try:
+        return Path(f"/sys/class/dmi/id/{field}").read_text().strip()
+    except OSError:
+        return ""
+
+
+def _distro() -> str:
+    try:
+        for line in Path("/etc/os-release").read_text().splitlines():
+            if line.startswith("PRETTY_NAME="):
+                return line.split("=", 1)[1].strip().strip('"')
+    except OSError:
+        pass
+    return platform.system()
+
+
 def _system_info() -> dict[str, str]:
     info = {
-        "distro": "CachyOS",
-        "chassis": "Dell G7",
+        "distro": _distro(),
         "kernel": platform.release(),
         "python": platform.python_version(),
     }
+    chassis = " ".join(x for x in (_dmi("sys_vendor"), _dmi("product_name")) if x)
+    if chassis:
+        info["chassis"] = chassis
     try:
-        with open("/proc/cpuinfo") as fh:
-            for line in fh:
-                if line.startswith("model name"):
-                    info["cpu"] = line.split(":", 1)[1].strip()
-                    break
+        for line in Path("/proc/cpuinfo").read_text().splitlines():
+            if line.startswith("model name"):
+                info["cpu"] = line.split(":", 1)[1].strip()
+                break
     except OSError:
         pass
     if shutil.which("nvidia-smi"):
@@ -168,14 +185,16 @@ def _thin(rows: list, target: int = 20) -> list:
 
 
 def build_llm_payload(incident: Incident, model_hint: str = "") -> str:
+    from goblinmode.logrules import redact
+
     payload = {
         "schema": SCHEMA,
         "timestamp": incident.ts,
         "system": _system_info(),
         "game": {"exe": incident.game, "pid": incident.game_pid},
-        "trigger": {"type": incident.kind, "detail": incident.detail},
+        "trigger": {"type": incident.kind, "detail": redact(incident.detail)},
         "metrics_window": _thin(incident.metrics_window, 20),
-        "logs_tail": incident.logs_tail[-20:],
+        "logs_tail": [redact(str(x)) for x in incident.logs_tail[-20:]],
         "active_tweaks": incident.active_tweaks,
     }
     if incident.gpu_state:

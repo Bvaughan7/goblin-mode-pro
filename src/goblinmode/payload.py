@@ -40,6 +40,7 @@ class TweakStatus:
     epp_boosted: bool = False
     tearing: bool = False
     adaptive_sync: bool = False
+    focus_mode: bool = False
     power_limited: bool = False
     power_limits_w: tuple[int, int] | None = None
     reniced: dict[str, int] | None = None
@@ -53,6 +54,7 @@ class TweakStatus:
             "epp_boosted": self.epp_boosted,
             "tearing": self.tearing,
             "adaptive_sync": self.adaptive_sync,
+            "focus_mode": self.focus_mode,
             "power_limited": self.power_limited,
             "power_limits_w": list(self.power_limits_w) if self.power_limits_w else None,
             "reniced": self.reniced or {},
@@ -249,6 +251,7 @@ class PerformancePayload:
             epp_boosted=self._governor_applied,
             tearing=self._tearing_applied,
             adaptive_sync=self._vrr_applied,
+            focus_mode=self._focus_applied,
             power_limited=self._power_applied,
             power_limits_w=power_limits_w,
             reniced=dict(self._reniced),

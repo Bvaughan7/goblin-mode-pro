@@ -1,12 +1,16 @@
 # Goblin Mode Pro
 
-A lightweight native-Linux gaming "tinkerer" for MMORPGs (World of Warcraft via
-Proton, native RuneScape). It watches for a game launching, applies a set of
-performance tweaks, and reverts them cleanly when the game exits — then gets out
-of the way.
+A lightweight native-Linux gaming utility. It detects a game launching, applies a
+set of system performance tweaks, and reverts them cleanly on exit — then stays
+out of the way. It also runs a diagnostic engine that watches thermals, frame
+rate and the Wine/Proton log, and turns a problem into a shareable report.
 
-Built for **CachyOS / Arch** on a **Dell G7** (Intel Comet Lake + NVIDIA RTX
-2060), KDE Plasma 6 on Wayland.
+A headless `systemd --user` daemon does the work; a GTK4 / Libadwaita window and
+a tray icon are opened on demand. Anything requiring root is delegated to a small
+polkit-gated helper.
+
+Primary target: **Arch-based** distributions with **KDE Plasma on Wayland** and
+an NVIDIA or AMD GPU. Developed and tested on CachyOS.
 
 ---
 
@@ -27,18 +31,27 @@ Built for **CachyOS / Arch** on a **Dell G7** (Intel Comet Lake + NVIDIA RTX
 
 ### Privilege model
 
-Governor / EPP / negative renice / RAPL power limits are **root-only**. They are
-handled by a tiny **system** D-Bus service, `goblin-mode-pro-helper`, gated by
-the polkit action `com.goblinmode.pro.manage-performance`.
+CPU governor / EPP, `renice`, RAPL power limits and the pre-flight kernel
+tunables are **root-only**. They are handled by a small **system** D-Bus service,
+`goblin-mode-pro-helper`, running as root under a hardened systemd unit. Every
+mutating call is authorised through polkit:
 
-The shipped policy sets `allow_active=yes` — **no password prompt** while you are
-the active session, so a boost applies the instant a game launches. To require a
-prompt instead, edit
-`/usr/share/polkit-1/actions/com.goblinmode.pro.policy` and set
-`<allow_active>auth_admin_keep</allow_active>`.
+| polkit action | covers | default on the active session |
+|---|---|---|
+| `com.goblinmode.pro.manage-performance` | governor, EPP, renice, RAPL PL1/PL2 | allowed without a prompt |
+| `com.goblinmode.pro.manage-kernel-tunables` | persistent sysctls from the System Check | prompts for admin auth |
 
-If the helper is missing the daemon still runs in **limited mode**: MangoHud,
-tearing, diagnostics and LLM export all work; governor/renice do not.
+Inputs are constrained at the helper: the governor must be one the kernel
+advertises, `renice` only raises priority and only for a process the caller owns,
+RAPL writes are clamped to the firmware maximum, and sysctl keys are a fixed
+allowlist with per-key numeric ranges. `manage-performance` is silent on the
+active session so a boost applies the instant a game launches — to require a
+prompt there too, set `<allow_active>auth_admin_keep</allow_active>` in
+`/usr/share/polkit-1/actions/com.goblinmode.pro.policy`.
+
+Without the helper the daemon runs in **limited mode**: auto-detect, MangoHud,
+compositor tweaks, diagnostics, the log analyzer and reports all work; the CPU
+governor, `renice` and power limits do not.
 
 ---
 
@@ -52,15 +65,12 @@ git clone <repo> goblin-mode-pro && cd goblin-mode-pro
 ./install.sh --uninstall
 ```
 
-Dependencies (all from the official repos):
+Dependencies (Arch package names, all from the official repos):
 
 ```
 python python-gobject python-psutil python-pillow python-pystray
-gtk4 libadwaita wl-clipboard   # mangohud gamemode recommended
+gtk4 libadwaita wl-clipboard        # mangohud and gamemode recommended
 ```
-
-Running the test suite needs `python-pytest` (`sudo pacman -S python-pytest`),
-then `pytest` from the repo root.
 
 ---
 
@@ -128,10 +138,10 @@ KWin cannot *suspend* compositing on Wayland, so the "compositor" tweaks instead
 
 …for the duration of the game, restoring both on exit. On **KDE + X11** it does a
 real compositor suspend/resume; on GNOME/wlroots/unknown it no-ops with a log
-line (rely on `gamemoderun`, which the wrapper already uses).
+line (`gamemoderun`, which the wrapper already uses, covers the rest).
 
-The Dell G7 internal panel is `Vrr: incapable`, so Adaptive Sync only does
-something with an external VRR display attached.
+Adaptive Sync only takes effect on a VRR-capable output; a display reported as
+`Vrr: incapable` by `kscreen-doctor` is skipped.
 
 ### Frame-rate watchdog
 
@@ -154,21 +164,42 @@ GMP writes it a few seconds later. Relaunch once.
 ### Power limits (RAPL)
 
 Per game, off by default. `PL1` (sustained) and `PL2` (burst) are in watts; `0`
-keeps the firmware value. Raising them past what the G7 chassis can cool just
-trades one throttle for another — watch the Diagnostics graph. Restored to the
-snapshot on game exit.
+keeps the firmware value. Raising them past what the chassis can cool just trades
+a power-limit throttle for a thermal one — watch the Diagnostics graph. Clamped
+to the firmware maximum and restored to the snapshot on game exit.
 
 ---
+
+## Security notes
+
+- The privileged helper runs as root but under a hardened unit
+  (`CapabilityBoundingSet=CAP_SYS_NICE`, `NoNewPrivileges`, `ProtectSystem=strict`
+  with an explicit `ReadWritePaths` allowlist, `PrivateNetwork`/`IPAddressDeny`,
+  a syscall filter). It imports only the standard library and PyGObject.
+- Every helper method validates its arguments (enum / allowlist / range / process
+  ownership) independently of the caller.
+- The daemon <-> GUI bridge is on the **session** bus (per-user). The helper name
+  can only be owned by root (enforced by the bus policy), so it cannot be
+  impersonated.
+- Profile `exe` values are rejected if they contain a path separator, `..`, or a
+  control character; per-game file names are derived through a separate slug
+  function. User regex patterns are length-capped and matched against
+  length-bounded strings (backtracking guard).
+- The launch wrapper imports runner variables as strict `NAME=VALUE` lines — no
+  `eval`, no `source`.
+
+Report a suspected vulnerability privately via the repository's security advisory
+page rather than a public issue.
 
 ## Development
 
 ```sh
-python -m goblinmode.daemon -v        # run the daemon in the foreground
-python -m goblinmode.gui.app          # run the GUI
+python -m goblinmode.daemon -v                       # daemon, foreground
+python -m goblinmode.gui.app                          # GUI
 goblin-mode-pro-daemon --write-wrapper
-goblin-mode-pro-daemon --print-env-for /path/to/Wow.exe
+goblin-mode-pro-daemon --print-env-for -- /path/to/game
 goblin-mode-pro-daemon --revert
 ```
 
-Source layout under `src/goblinmode/` — see `daemon.py` for the wiring and
-`payload.py` for the apply/revert orchestration.
+Source is under `src/goblinmode/`; `daemon.py` wires the components together and
+`payload.py` orchestrates apply/revert. The privileged helper is `helper/goblin_helper.py`.

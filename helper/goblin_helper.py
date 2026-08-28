@@ -2,18 +2,26 @@
 """Goblin Mode Pro - privileged helper.
 
 Runs as root under ``goblin-mode-pro-helper.service`` and owns the system D-Bus
-name ``com.goblinmode.ProHelper``. It is deliberately tiny: it performs *only*
-the handful of root-only operations the unprivileged daemon cannot do, and every
-mutating call is gated by the polkit action ``com.goblinmode.pro.manage-performance``.
+name ``com.goblinmode.ProHelper``. It is deliberately small: it performs *only*
+the handful of root-only operations the unprivileged daemon cannot do.
+
+Every mutating call is authorised through polkit before it runs -
+``com.goblinmode.pro.manage-performance`` for the runtime gaming knobs (governor,
+EPP, renice, RAPL limits) and ``com.goblinmode.pro.manage-kernel-tunables`` for
+the persistent sysctls set from the pre-flight check.
 
 Design notes
 ------------
 * Standard library + PyGObject (Gio/GLib) only - no third-party imports, so the
-  helper keeps working even if the user's Python env is broken.
-* Before the first mutation it snapshots the current governor / EPP / RAPL limits
-  to ``/run/goblin-mode-pro/state.json`` (tmpfs, root-only). ``RevertAll`` and a
-  fresh ``--revert-on-exit`` restore from there, so a helper restart mid-game
-  still reverts cleanly.
+  helper keeps working even if the calling Python environment is broken.
+* Inputs are constrained at every entry point: the governor must be one the
+  kernel advertises; ``renice`` only raises priority and only for a process the
+  caller owns; RAPL writes are clamped to the firmware maximum; sysctl keys are
+  a fixed allowlist with per-key numeric ranges.
+* Before the first mutation the current governor / EPP / RAPL limits are
+  snapshotted to ``/run/goblin-mode-pro/state.json`` (tmpfs, root-only), so
+  ``RevertAll`` (and ``--revert`` on service stop) restores the machine even
+  after a helper restart.
 """
 
 from __future__ import annotations
@@ -35,7 +43,8 @@ from gi.repository import Gio, GLib  # noqa: E402
 BUS_NAME = "com.goblinmode.ProHelper"
 OBJECT_PATH = "/com/goblinmode/ProHelper"
 IFACE = "com.goblinmode.ProHelper.Manager"
-POLKIT_ACTION = "com.goblinmode.pro.manage-performance"
+POLKIT_PERF = "com.goblinmode.pro.manage-performance"
+POLKIT_KERNEL = "com.goblinmode.pro.manage-kernel-tunables"
 
 STATE_DIR = Path("/run/goblin-mode-pro")
 STATE_FILE = STATE_DIR / "state.json"
@@ -45,12 +54,13 @@ RAPL_BASE = Path("/sys/class/powercap/intel-rapl/intel-rapl:0")
 
 NICE_FLOOR = -10  # never let a caller push a process below this
 
-# sysctl keys the pre-flight check is allowed to set at runtime
-SYSCTL_ALLOW = {
-    "vm.max_map_count", "vm.swappiness", "vm.compaction_proactiveness",
-    "vm.dirty_ratio", "vm.dirty_background_ratio",
-    "kernel.split_lock_mitigate", "kernel.sched_cfs_bandwidth_slice_us",
-    "fs.file-max", "fs.inotify.max_user_watches",
+# sysctl keys the pre-flight check is allowed to set at runtime, each with an
+# accepted numeric range. Nothing outside this table can be touched.
+SYSCTL_ALLOW: dict[str, tuple[int, int]] = {
+    "vm.max_map_count": (65530, 2147483642),
+    "vm.swappiness": (0, 200),
+    "vm.compaction_proactiveness": (0, 100),
+    "kernel.split_lock_mitigate": (0, 1),
 }
 
 logging.basicConfig(
@@ -169,14 +179,22 @@ def set_epp(epp: str) -> bool:
     return ok
 
 
-def renice(pid: int, nice: int) -> bool:
-    if pid <= 1 or not Path(f"/proc/{pid}").exists():
+def renice(pid: int, nice: int, caller_uid: int | None = None) -> bool:
+    proc = Path(f"/proc/{int(pid)}")
+    if pid <= 1 or not proc.exists():
         raise ValueError(f"no such process: {pid}")
+    # only renice a process the caller actually owns (root may renice anything)
+    if caller_uid not in (None, 0):
+        try:
+            owner = proc.stat().st_uid
+        except OSError as exc:
+            raise ValueError(f"cannot stat process {pid}: {exc}") from exc
+        if owner != caller_uid:
+            raise PermissionError(f"process {pid} is not owned by uid {caller_uid}")
     nice = max(NICE_FLOOR, min(19, int(nice)))
-    # Renice the whole thread group.
     os.setpriority(os.PRIO_PROCESS, pid, nice)
     try:
-        for tid in os.listdir(f"/proc/{pid}/task"):
+        for tid in os.listdir(proc / "task"):
             try:
                 os.setpriority(os.PRIO_PROCESS, int(tid), nice)
             except (OSError, ValueError):
@@ -187,13 +205,20 @@ def renice(pid: int, nice: int) -> bool:
 
 
 def set_sysctl(key: str, value: str) -> bool:
-    if key not in SYSCTL_ALLOW:
+    rng = SYSCTL_ALLOW.get(key)
+    if rng is None:
         raise ValueError(f"sysctl not in allowlist: {key}")
-    if not re.match(r"^-?\d+$", value.strip()):
-        raise ValueError(f"non-numeric sysctl value: {value!r}")
-    path = Path("/proc/sys") / key.replace(".", "/")
-    _write(path, value.strip())
-    log.info("sysctl %s = %s", key, value.strip())
+    try:
+        num = int(str(value).strip())
+    except ValueError:
+        raise ValueError(f"non-numeric sysctl value: {value!r}") from None
+    if not rng[0] <= num <= rng[1]:
+        raise ValueError(f"{key}={num} out of range {rng}")
+    path = (Path("/proc/sys") / key.replace(".", "/")).resolve()
+    if not str(path).startswith("/proc/sys/") or not path.is_file():
+        raise ValueError(f"refusing to write {path}")
+    _write(path, str(num))
+    log.info("sysctl %s = %s", key, num)
     return True
 
 
@@ -207,15 +232,21 @@ def get_power_limits() -> tuple[int, int]:
     return pl1, pl2
 
 
+#: absolute upper bound for a RAPL power-limit write (µW), used when the firmware
+#: maximum can't be read - no real CPU accepts anywhere near this
+_RAPL_CEILING_UW = 1_000_000_000
+
 def set_power_limits(pl1_uw: int, pl2_uw: int) -> bool:
     _snapshot()
     ok = True
-    for idx, value in ((0, pl1_uw), (1, pl2_uw)):
+    for idx, value in ((0, int(pl1_uw)), (1, int(pl2_uw))):
         if value <= 0:
             continue
+        value = min(value, _RAPL_CEILING_UW)
         try:
             cap = int(_read(_rapl_constraint(idx, "max_power_uw")))
-            value = min(int(value), cap) if cap > 0 else int(value)
+            if cap > 0:
+                value = min(value, cap)
             _write(_rapl_constraint(idx, "power_limit_uw"), str(value))
         except OSError as exc:
             log.warning("RAPL write failed for constraint %d: %s", idx, exc)
@@ -311,7 +342,7 @@ def revert_all() -> bool:
 # --------------------------------------------------------------------------
 # polkit
 # --------------------------------------------------------------------------
-def _check_authorized(sender: str) -> bool:
+def _check_authorized(sender: str, action_id: str = POLKIT_PERF) -> bool:
     try:
         authority = Gio.DBusProxy.new_for_bus_sync(
             Gio.BusType.SYSTEM,
@@ -330,7 +361,7 @@ def _check_authorized(sender: str) -> bool:
                 "((sa{sv})sa{ss}us)",
                 (
                     ("system-bus-name", {"name": GLib.Variant("s", sender)}),
-                    POLKIT_ACTION,
+                    action_id,
                     {},
                     1,  # AllowUserInteraction
                     "",
@@ -345,6 +376,20 @@ def _check_authorized(sender: str) -> bool:
     except GLib.Error as exc:
         log.error("polkit check failed: %s", exc)
         return False
+
+
+def _caller_uid(connection, sender: str) -> int | None:
+    """The Unix uid behind a D-Bus sender name."""
+    try:
+        res = connection.call_sync(
+            "org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus",
+            "GetConnectionUnixUser", GLib.Variant("(s)", (sender,)),
+            GLib.VariantType("(u)"), Gio.DBusCallFlags.NONE, 5000, None,
+        )
+        return int(res.unpack()[0])
+    except GLib.Error as exc:
+        log.warning("could not resolve caller uid: %s", exc)
+        return None
 
 
 # --------------------------------------------------------------------------
@@ -371,11 +416,13 @@ def _handle_call(
     invocation,
 ):
     try:
-        if method_name in _MUTATING and not _check_authorized(sender):
-            invocation.return_dbus_error(
-                f"{IFACE}.NotAuthorized", "polkit authorization denied"
-            )
-            return
+        if method_name in _MUTATING:
+            action = POLKIT_KERNEL if method_name == "SetSysctl" else POLKIT_PERF
+            if not _check_authorized(sender, action):
+                invocation.return_dbus_error(
+                    f"{IFACE}.NotAuthorized", "polkit authorization denied"
+                )
+                return
 
         args = parameters.unpack()
         if method_name == "GetGovernor":
@@ -385,8 +432,9 @@ def _handle_call(
         elif method_name == "SetEPP":
             invocation.return_value(GLib.Variant("(b)", (set_epp(args[0]),)))
         elif method_name == "Renice":
+            uid = _caller_uid(connection, sender)
             invocation.return_value(
-                GLib.Variant("(b)", (renice(int(args[0]), int(args[1])),))
+                GLib.Variant("(b)", (renice(int(args[0]), int(args[1]), uid),))
             )
         elif method_name == "GetPowerLimits":
             pl1, pl2 = get_power_limits()

@@ -211,7 +211,7 @@ class GamesPage(Adw.PreferencesPage):
         # -- Power limit nested expander (needs the helper) --
         pw = Adw.ExpanderRow(
             title="CPU power limits (RAPL)",
-            subtitle="Raise PL1/PL2 to fight Dell G7 downclocking — 0 keeps firmware default",
+            subtitle="Raise PL1/PL2 to counter sustained-load downclocking — 0 keeps the firmware value",
         )
         pw.set_show_enable_switch(True)
         pw.set_enable_expansion(bool(p.get("power_limit_enabled", False)))

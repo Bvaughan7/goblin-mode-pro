@@ -10,8 +10,29 @@ Each rule maps a regex to a plain-language diagnosis and a fix. Used two ways:
 
 from __future__ import annotations
 
+import getpass
+import os
 import re
 from dataclasses import dataclass
+
+_HOME = os.path.expanduser("~")
+try:
+    _USER = getpass.getuser()
+except Exception:  # noqa: BLE001
+    _USER = ""
+
+
+def redact(text: str) -> str:
+    """Strip the home path and login name from a line before it leaves the machine."""
+    if not text:
+        return text
+    if _HOME and _HOME != "~":
+        text = text.replace(_HOME, "~")
+    text = re.sub(r"/home/[^/\s\"']+", "/home/<user>", text)
+    text = re.sub(r"([\\/])users([\\/])[^\\/\s\"']+", r"\1users\2<user>", text, flags=re.I)
+    if _USER and len(_USER) > 2:
+        text = re.sub(rf"\b{re.escape(_USER)}\b", "<user>", text)
+    return text
 
 
 @dataclass(frozen=True)

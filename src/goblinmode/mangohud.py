@@ -67,7 +67,9 @@ class _Conf:
 
 def _target_path(profile: GameProfile) -> Path:
     if profile.per_game_mangohud:
-        return MANGOHUD_DIR / f"{profile.exe}.conf"
+        from goblinmode.config import slug
+
+        return MANGOHUD_DIR / f"{slug(profile.exe)}.conf"
     return MANGOHUD_CONF
 
 

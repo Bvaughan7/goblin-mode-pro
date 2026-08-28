@@ -4,21 +4,39 @@
  "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
 <policyconfig>
   <vendor>Goblin Mode Pro</vendor>
-  <vendor_url>https://example.invalid/goblin-mode-pro</vendor_url>
+  <vendor_url>https://github.com/Bvaughan7/goblin-mode-pro</vendor_url>
 
+  <!--
+    Runtime performance knobs: CPU governor / EPP, process priority (renice, only
+    ever toward higher priority and only for a process the caller owns), and the
+    RAPL PL1/PL2 power limits (clamped to the firmware maximum). allow_active=yes
+    means no password prompt while you are the logged-in session, so a boost can
+    be applied the moment a game launches. To require a prompt, change
+    allow_active to auth_admin_keep and run `sudo systemctl reload polkit`.
+  -->
   <action id="com.goblinmode.pro.manage-performance">
-    <description>Manage CPU governor, process priority and power limits</description>
-    <message>Goblin Mode Pro needs authorization to tune system performance</message>
-    <!--
-      allow_active=yes: no password prompt while you are the active session, so
-      optimizations can be applied silently the moment a game launches. This is
-      the trade-off requested for a gaming tool. To require a prompt instead,
-      change this to auth_admin_keep and run `sudo systemctl reload polkit`.
-    -->
+    <description>Tune CPU governor, process priority and power limits</description>
+    <message>Authentication is required to tune system performance for a game</message>
     <defaults>
       <allow_any>no</allow_any>
       <allow_inactive>auth_admin</allow_inactive>
       <allow_active>yes</allow_active>
+    </defaults>
+  </action>
+
+  <!--
+    Persistent kernel tunables applied from the pre-flight check
+    (vm.max_map_count, vm.swappiness, vm.compaction_proactiveness,
+    kernel.split_lock_mitigate - each range-checked). These change system
+    behaviour beyond the current game, so they always prompt for admin auth.
+  -->
+  <action id="com.goblinmode.pro.manage-kernel-tunables">
+    <description>Set a game-related kernel tunable (sysctl)</description>
+    <message>Authentication is required to change a kernel tunable</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
     </defaults>
   </action>
 </policyconfig>
