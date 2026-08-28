@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "goblin-mode-pro"
+dynamic = ["version"]
+description = "Fantasy-themed native Linux gaming performance tinkerer for MMORPGs"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Bryan Vaughan", email = "bryanvaughan07@gmail.com" }]
+
+# NOTE: On Arch/CachyOS these are installed via pacman, not pip:
+#   python-gobject python-psutil python-pillow python-pystray gtk4 libadwaita wl-clipboard
+# They are listed here for documentation / non-Arch installs only.
+dependencies = [
+    "psutil>=5.9",
+    "pystray>=0.19",
+    "Pillow>=10",
+    "PyGObject>=3.46",
+]
+
+[project.scripts]
+goblin-mode-pro-daemon = "goblinmode.daemon:main"
+goblin-mode-pro = "goblinmode.gui.app:main"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.dynamic]
+version = { attr = "goblinmode.__about__.__version__" }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

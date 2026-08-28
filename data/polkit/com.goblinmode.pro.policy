@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC
+ "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<policyconfig>
+  <vendor>Goblin Mode Pro</vendor>
+  <vendor_url>https://example.invalid/goblin-mode-pro</vendor_url>
+
+  <action id="com.goblinmode.pro.manage-performance">
+    <description>Manage CPU governor, process priority and power limits</description>
+    <message>Goblin Mode Pro needs authorization to tune system performance</message>
+    <!--
+      allow_active=yes: no password prompt while you are the active session, so
+      optimizations can be applied silently the moment a game launches. This is
+      the trade-off requested for a gaming tool. To require a prompt instead,
+      change this to auth_admin_keep and run `sudo systemctl reload polkit`.
+    -->
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>yes</allow_active>
+    </defaults>
+  </action>
+</policyconfig>

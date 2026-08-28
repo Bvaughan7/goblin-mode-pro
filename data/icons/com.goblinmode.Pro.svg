@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <radialGradient id="plate" cx="30%" cy="20%" r="110%">
+      <stop offset="0%" stop-color="#2b3a1f"/>
+      <stop offset="100%" stop-color="#182111"/>
+    </radialGradient>
+    <radialGradient id="gskin" cx="42%" cy="32%" r="78%">
+      <stop offset="0%" stop-color="#8fc75a"/>
+      <stop offset="55%" stop-color="#6ba43c"/>
+      <stop offset="100%" stop-color="#4a7826"/>
+    </radialGradient>
+    <linearGradient id="gglass" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#abe9f1"/>
+      <stop offset="100%" stop-color="#57bccb"/>
+    </linearGradient>
+    <style>
+      .gk  { stroke:#231a0d; stroke-width:7;   stroke-linejoin:round; stroke-linecap:round; }
+      .gk4 { stroke:#231a0d; stroke-width:4.5; stroke-linejoin:round; }
+    </style>
+  </defs>
+
+  <rect x="4" y="4" width="248" height="248" rx="54" fill="url(#plate)"/>
+  <rect x="4" y="4" width="248" height="248" rx="54" fill="none" stroke="#0e150a" stroke-width="4"/>
+
+  <g transform="translate(0 14) scale(0.9) translate(14 4) rotate(-5 128 132)">
+    <path class="gk" fill="url(#gskin)" d="M70 116 C40 108 16 96 4 40 C6 34 12 32 18 34 C58 46 84 74 96 104 Z"/>
+    <path class="gk" fill="url(#gskin)" d="M188 112 C214 100 236 86 248 44 C246 38 240 36 234 38 C198 52 176 78 168 104 Z"/>
+    <path fill="#3f6a20" d="M64 104 C46 96 30 86 20 54 C44 66 62 82 76 106 Z"/>
+    <path fill="#3f6a20" d="M190 100 C206 90 220 80 228 56 C206 66 194 80 186 100 Z"/>
+
+    <path class="gk" fill="url(#gskin)" d="M128 30 C182 30 214 66 218 116 C220 142 214 166 198 188 C182 210 156 230 128 230 C100 230 74 210 58 188 C42 166 36 142 38 116 C42 66 74 30 128 30 Z"/>
+    <path fill="#3f6a20" opacity="0.55" d="M128 230 C156 230 182 210 198 188 C214 166 220 142 218 116 C216 150 202 186 178 206 C160 221 144 228 128 230 Z"/>
+    <path fill="#a6d873" opacity="0.5" d="M84 56 C104 40 150 38 170 50 C142 46 112 52 92 72 Z"/>
+
+    <path class="gk" fill="#3f6a20" d="M52 118 C74 100 104 100 122 112 C112 122 92 122 76 118 C64 116 56 118 50 124 Z"/>
+    <path class="gk" fill="#3f6a20" d="M206 110 C186 94 156 96 140 110 C150 118 170 116 184 114 C196 112 200 114 206 118 Z"/>
+
+    <path class="gk" fill="url(#gskin)" d="M128 110 C140 112 152 126 154 144 C154 158 145 165 128 163 C116 161 109 150 109 138 C109 124 117 110 128 110 Z"/>
+    <ellipse cx="121" cy="153" rx="4.5" ry="6.5" fill="#241a0e"/>
+    <ellipse cx="137" cy="152" rx="4.5" ry="6.5" fill="#241a0e"/>
+
+    <path class="gk" fill="#3a1c18" d="M60 150 C86 144 108 148 128 150 C150 152 176 150 198 142 C196 182 166 214 124 212 C86 210 60 184 60 150 Z"/>
+    <path fill="#f1e9cf" stroke="#231a0d" stroke-width="4.5" stroke-linejoin="round" d="M70 152 L84 172 L98 153 L112 173 L126 153 L140 172 L154 152 L169 170 L184 148 C182 158 176 164 168 164 L84 166 C76 164 71 158 70 152 Z"/>
+    <path class="gk4" fill="#f1e9cf" d="M98 202 C92 188 92 170 100 162 C112 172 116 192 110 208 C106 210 101 208 98 202 Z"/>
+    <path class="gk4" fill="#f1e9cf" d="M150 176 C146 164 148 152 156 148 C164 156 164 172 158 182 C154 184 151 182 150 176 Z"/>
+    <path fill="#c15a45" d="M112 206 C106 192 118 182 130 182 C144 182 154 194 148 208 C138 214 122 214 112 206 Z"/>
+
+    <path class="gk" fill="#f6f0dc" d="M56 130 C64 108 100 102 118 118 C128 128 126 150 112 158 C86 172 50 156 52 134 Z"/>
+    <circle cx="88" cy="134" r="17" fill="#e3a838"/>
+    <circle cx="88" cy="134" r="9" fill="#231a0d"/>
+    <circle cx="83" cy="128" r="4.5" fill="#fff"/>
+    <path class="gk" fill="#f6f0dc" d="M148 126 C166 114 196 118 202 136 C204 148 192 158 172 158 C148 158 138 138 148 126 Z"/>
+    <path fill="#4a7826" d="M148 126 C166 114 196 118 202 136 C203 141 200 145 194 148 C196 140 190 130 178 127 C167 124 156 128 150 136 C147 131 146 129 148 126 Z"/>
+    <circle cx="176" cy="138" r="12" fill="#e3a838"/>
+    <circle cx="176" cy="138" r="7" fill="#231a0d"/>
+    <circle cx="172" cy="134" r="3.5" fill="#fff"/>
+
+    <circle cx="52" cy="164" r="6" fill="#3f6a20"/>
+    <circle cx="206" cy="160" r="5" fill="#3f6a20"/>
+    <circle cx="126" cy="220" r="5" fill="#3f6a20"/>
+
+    <path d="M36 68 C70 42 188 42 222 68" fill="none" stroke="#7f6129" stroke-width="13" stroke-linecap="round"/>
+    <g class="gk4">
+      <circle cx="90" cy="56" r="28" fill="#c9a054"/>
+      <circle cx="164" cy="52" r="28" fill="#c9a054"/>
+    </g>
+    <circle cx="90" cy="56" r="18" fill="url(#gglass)"/>
+    <circle cx="164" cy="52" r="18" fill="url(#gglass)"/>
+    <path d="M78 47 C85 40 97 40 104 46 C95 48 86 54 82 63 C77 59 74 52 78 47 Z" fill="#d9f4f8"/>
+    <path d="M152 43 C159 36 171 36 178 42 C169 44 160 50 156 59 C151 55 148 48 152 43 Z" fill="#d9f4f8"/>
+    <rect x="114" y="46" width="26" height="12" rx="5" fill="#7f6129" stroke="#231a0d" stroke-width="5"/>
+  </g>
+</svg>

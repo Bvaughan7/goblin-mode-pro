@@ -1,0 +1,19 @@
+[Unit]
+Description=Goblin Mode Pro - game performance observer daemon
+After=graphical-session.target
+# NOTE: no PartOf=graphical-session.target - we don't want a session-target
+# reload to stop the daemon mid-game.
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/goblin-mode-pro-daemon
+ExecStop=/usr/bin/goblin-mode-pro-daemon --revert
+Restart=on-failure
+RestartSec=3
+# Keep the footprint honest.
+MemoryHigh=120M
+Nice=5
+
+[Install]
+WantedBy=default.target

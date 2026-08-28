@@ -1,0 +1,28 @@
+[Unit]
+Description=Goblin Mode Pro privileged helper (CPU governor / renice / RAPL)
+
+[Service]
+Type=dbus
+BusName=com.goblinmode.ProHelper
+ExecStart=/usr/bin/python3 /usr/lib/goblin-mode-pro/goblin_helper.py
+ExecStopPost=/usr/bin/python3 /usr/lib/goblin-mode-pro/goblin_helper.py --revert
+Restart=on-failure
+RestartSec=2
+
+# The helper only ever touches these paths.
+RuntimeDirectory=goblin-mode-pro
+RuntimeDirectoryMode=0700
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/sys/devices/system/cpu /sys/class/powercap /sys/devices/virtual/powercap
+PrivateTmp=yes
+NoNewPrivileges=no
+CapabilityBoundingSet=CAP_SYS_NICE CAP_DAC_OVERRIDE
+RestrictAddressFamilies=AF_UNIX
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+MemoryDenyWriteExecute=yes
+LockPersonality=yes
+
+[Install]
+WantedBy=multi-user.target
