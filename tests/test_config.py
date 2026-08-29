@@ -40,6 +40,32 @@ class GameProfileValidation(unittest.TestCase):
     def test_exe_strips_quotes(self):
         self.assertEqual(config.GameProfile(exe='"Wow.exe"').exe, "Wow.exe")
 
+    def test_steam_app_id_is_digits_only(self):
+        self.assertEqual(config.GameProfile(exe="a", steam_app_id="appid: 12_345x").steam_app_id,
+                         "12345")
+
+    def test_notes_are_capped(self):
+        self.assertLessEqual(len(config.GameProfile(exe="a", notes="x" * 5000).notes), 500)
+
+
+class EnvAssignments(unittest.TestCase):
+    def test_gpu_tuning_radv_perftest_values_are_comma_joined(self):
+        p = config.GameProfile(exe="a", gpu_tuning={"radv_gpl": True, "radv_nggc": True,
+                                                    "radv_rt": False})
+        env = p.env_assignments()
+        self.assertIn("RADV_PERFTEST", env)
+        self.assertEqual(sorted(env["RADV_PERFTEST"].split(",")), ["gpl", "nggc"])
+
+    def test_gpu_tuning_off_adds_nothing(self):
+        self.assertNotIn("RADV_PERFTEST", config.GameProfile(exe="a").env_assignments())
+
+    def test_runner_and_gpu_tuning_merge(self):
+        p = config.GameProfile(exe="a", runner_vars={"dxvk_async": True},
+                               gpu_tuning={"threaded_gl": True})
+        env = p.env_assignments()
+        self.assertEqual(env.get("DXVK_ASYNC"), "1")            # from runner_vars
+        self.assertEqual(env.get("__GL_THREADED_OPTIMIZATIONS"), "1")  # from gpu_tuning
+
 
 class SettingsRoundTrip(unittest.TestCase):
     def test_poll_interval_clamped(self):
