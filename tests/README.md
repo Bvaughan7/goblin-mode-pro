@@ -1,7 +1,7 @@
 # Tests
 
-Stdlib `unittest` only — no third-party dependency, so it runs on the same
-system Python the daemon uses:
+Plain `unittest` — the only import beyond the stdlib is `psutil` (which a few of
+the modules under test pull in at load time):
 
 ```sh
 python -m unittest discover -s tests

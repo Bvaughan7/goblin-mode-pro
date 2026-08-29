@@ -1,7 +1,7 @@
 # Maintainer: Bryan Vaughan <bryanvaughan07@gmail.com>
 pkgname=goblin-mode-pro-git
 _pkgname=goblin-mode-pro
-pkgver=0.1.0.r0.g0000000
+pkgver=1.0.0.r0.g0000000
 pkgrel=1
 pkgdesc="One-switch performance helper for Linux gaming: auto-detects a game, tunes CPU/compositor/Proton, reverts on exit, diagnoses crashes and FPS drops"
 arch=('any')

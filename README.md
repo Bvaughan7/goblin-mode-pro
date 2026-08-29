@@ -11,7 +11,13 @@ Goblin Mode Pro notices when a game starts, flips your system settings to their
 then watches the temps, frame rate and Proton log and tells you, in plain
 language, why something broke.
 
-![version](https://img.shields.io/badge/version-0.1.0-e8952c)
+**MangoHud shows you the numbers; Mission Center shows you the system. Goblin
+Mode Pro *acts* on both** — it changes the CPU governor, process priority,
+compositor and power limits automatically per game and reverts them cleanly,
+and when your FPS falls off a cliff it captures the GPU state and names the
+cause. It's the missing piece between "I can see the problem" and "it's fixed."
+
+![version](https://img.shields.io/badge/version-1.0.0-2ea043)
 ![python](https://img.shields.io/badge/python-3.11+-3f7fbf)
 ![license](https://img.shields.io/badge/license-MIT-4E6A24)
 ![CI](https://github.com/Bvaughan7/goblin-mode-pro/actions/workflows/ci.yml/badge.svg)
@@ -149,27 +155,35 @@ You need Python 3, PyGObject, GTK 4, libadwaita, and `psutil`. Package names:
 
 `mangohud`, `gamemode` and `gamescope` are optional but recommended — the overlay,
 the frame-rate watchdog and the gamescope integration need them.
+`ryzenadj` (AUR / COPR) is needed for AMD-laptop TDP control.
+
+### Before you file a "not working" issue
+
+- **`polkit` must be installed** — the root helper is inert without it, and CPU
+  speed / power tuning silently drop to "limited mode."
+- **Kernel ≥ 5.16** for `WINEFSYNC` (anything current is fine; the pre-flight
+  check flags it).
+- **User namespaces must be enabled** — some hardened Debian/Ubuntu kernels ship
+  `kernel.unprivileged_userns_clone=0`, which breaks the Steam Linux Runtime and
+  EAC/BattlEye games. The System Check catches this and offers a fix.
+- **The esync FD-limit fix needs a re-login** — raising `DefaultLimitNOFILE`
+  won't take effect until you log out and back in.
+- **KDE:** if the app icon looks stale after install, run
+  `kbuildsycoca6 --noincremental` and restart Plasma (or log out/in).
 
 ---
 
 ## Using it
 
 1. The daemon starts automatically with your desktop session.
-2. Open **Goblin Mode Pro** from your app menu (or the tray icon).
-3. **Games** page → add your game's executable, turn on the tweaks you want.
-   Auto-detect is on by default, so most games get picked up without you adding
-   anything.
-4. **For Steam games**, set the game's **Launch Options** to:
-
-   ```
-   goblin-run %command%
-   ```
-
-   This lets Goblin Mode Pro pass the Proton/Wine switches to the game and
-   capture the log for the crash analyzer. (It also runs the game through
-   `gamemoderun` automatically.)
-
-5. **For Lutris / Heroic**, add `goblin-run` as a command prefix / wrapper.
+2. **Set your game's launch wrapper** — this is the important step; without it
+   nothing captures the Proton log and env-var injection is skipped:
+   - **Steam:** game → Properties → **Launch Options** → `goblin-run %command%`
+   - **Lutris:** game → Configure → System options → **Command prefix** → `goblin-run`
+   - **Heroic:** Settings → **Wrapper command** → `goblin-run`
+3. Open **Goblin Mode Pro** from your app menu (or the tray icon).
+4. **Games** page → the game should already be listed (auto-detect is on). Turn on
+   the tweaks you want, or add an executable by hand.
 
 ### Sharing a profile with a friend
 

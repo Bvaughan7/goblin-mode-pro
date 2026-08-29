@@ -15,10 +15,14 @@ jobs:
         with:
           python-version: "3.11"
 
+      # the suite is stdlib-only except that goblinmode.diagnostics /
+      # observer / gamedetect import psutil at module load
+      - run: pip install "psutil>=5.9"
+
       - name: Compile-check every module
         run: python -m compileall -q src helper
 
-      - name: Unit tests (stdlib unittest, no third-party deps)
+      - name: Unit tests
         run: python -m unittest discover -s tests -v
 
       - name: Shell syntax check
