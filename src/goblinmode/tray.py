@@ -66,8 +66,9 @@ class TrayCallbacks:
 
 
 def _draw_icon(boosting: bool) -> Image.Image:
-    """A little headset goblin, matching data/icons/goblin-mark.svg; the eyes
-    glow ember-orange and a ring lights up while boosting."""
+    """A little hand-drawn headset goblin - the pre-rebrand mark, kept only as
+    a last-resort fallback if goblin-tray.png can't be loaded; the eyes glow
+    ember-orange and a ring lights up while boosting."""
     # supersample then downscale for smooth edges at 64 px
     ss = 4
     n = _SIZE * ss
