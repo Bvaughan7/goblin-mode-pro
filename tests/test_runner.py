@@ -1,0 +1,87 @@
+import unittest
+
+from tests._support import _SRC  # noqa: F401
+
+from goblinmode import runner
+from goblinmode.config import GameProfile, Settings
+
+
+class Basename(unittest.TestCase):
+    def test_splits_unix_and_windows_paths(self):
+        self.assertEqual(runner._basename("/opt/games/Wow.exe"), "Wow.exe")
+        self.assertEqual(runner._basename(r"C:\\Games\\Wow.exe"), "Wow.exe")
+        self.assertEqual(runner._basename('"rs2client"'), "rs2client")
+
+
+class ProfileResolution(unittest.TestCase):
+    def _settings(self):
+        return Settings(profiles=[
+            GameProfile(exe="Wow.exe", match_mode="exact"),
+            GameProfile(exe="rs2client", match_mode="substring"),
+        ])
+
+    def test_exact_match_on_basename(self):
+        p = runner.resolve_profile_for_argv(["/x/Wow.exe", "-opengl"], self._settings())
+        self.assertIsNotNone(p)
+        self.assertEqual(p.exe, "Wow.exe")
+
+    def test_substring_match_anywhere(self):
+        p = runner.resolve_profile_for_argv(["/usr/bin/env", "run-rs2client-thing"], self._settings())
+        self.assertEqual(p.exe, "rs2client")
+
+    def test_no_match_returns_none(self):
+        self.assertIsNone(runner.resolve_profile_for_argv(["/bin/true"], self._settings()))
+
+
+class EnvPrinting(unittest.TestCase):
+    def test_print_env_for_emits_validated_lines(self):
+        s = Settings(profiles=[GameProfile(
+            exe="Wow.exe",
+            runner_vars={"nvapi": True, "fsync": True, "no_esync": False, "dxvk_async": False},
+        )])
+        out = runner.print_env_for(["/x/Wow.exe"], s)
+        lines = dict(l.split("=", 1) for l in out.splitlines())
+        self.assertEqual(lines["WINEFSYNC"], "1")
+        self.assertEqual(lines["PROTON_ENABLE_NVAPI"], "1")
+        self.assertNotIn("PROTON_NO_ESYNC", lines)
+
+    def test_env_names_and_values_are_shell_safe(self):
+        # the regexes that gate what the wrapper is allowed to export
+        self.assertTrue(runner._ENV_NAME_RE.match("PROTON_LOG"))
+        self.assertFalse(runner._ENV_NAME_RE.match("bad name"))
+        self.assertFalse(runner._ENV_NAME_RE.match("2FOO"))
+        self.assertFalse(runner._ENV_VALUE_RE.match("has\nnewline"))
+
+
+class GamescopeArgs(unittest.TestCase):
+    def test_disabled_returns_empty(self):
+        self.assertEqual(runner.gamescope_args(GameProfile(exe="a")), [])
+
+    def test_full_arg_line(self):
+        p = GameProfile(exe="a", gamescope_enabled=True, gamescope={
+            "w": 1920, "h": 1080, "refresh": 60, "upscale": "fsr",
+            "hdr": False, "borderless": True, "steam_overlay": True,
+        })
+        args = runner.gamescope_args(p)
+        self.assertEqual(args[:6], ["-W", "1920", "-H", "1080", "-r", "60"])
+        self.assertIn("-F", args)
+        self.assertIn("fsr", args)
+        self.assertIn("-b", args)
+        self.assertIn("-e", args)
+
+    def test_wrapper_template_never_evals_or_sources(self):
+        for line in runner._WRAPPER_TEMPLATE.splitlines():
+            stripped = line.strip()
+            if stripped.startswith("#"):
+                continue
+            self.assertFalseStartsWith(stripped, "eval ")
+            self.assertFalseStartsWith(stripped, "source ")
+            self.assertNotIn("| sh", stripped)
+        self.assertIn("goblin-mode-pro-daemon --print-gamescope", runner._WRAPPER_TEMPLATE)
+
+    def assertFalseStartsWith(self, text, prefix):
+        self.assertFalse(text.startswith(prefix), f"{text!r} starts with {prefix!r}")
+
+
+if __name__ == "__main__":
+    unittest.main()

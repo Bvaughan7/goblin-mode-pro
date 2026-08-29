@@ -29,6 +29,11 @@ dependencies = [
     "PyGObject>=3.46",
 ]
 
+[project.optional-dependencies]
+# The suite itself is stdlib-only (`python -m unittest discover -s tests`);
+# pytest is optional and just gives nicer output / selection.
+test = ["pytest>=7"]
+
 [project.urls]
 Homepage = "https://github.com/Bvaughan7/goblin-mode-pro"
 Source = "https://github.com/Bvaughan7/goblin-mode-pro"
@@ -49,3 +54,6 @@ where = ["src"]
 
 [tool.setuptools.dynamic]
 version = { attr = "goblinmode.__about__.__version__" }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

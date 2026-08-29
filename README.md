@@ -14,6 +14,7 @@ language, why something broke.
 ![version](https://img.shields.io/badge/version-0.1.0-e8952c)
 ![python](https://img.shields.io/badge/python-3.11+-3f7fbf)
 ![license](https://img.shields.io/badge/license-MIT-4E6A24)
+![CI](https://github.com/Bvaughan7/goblin-mode-pro/actions/workflows/ci.yml/badge.svg)
 ![helper](https://img.shields.io/badge/root_helper-polkit_hardened-4E6A24)
 ![distros](https://img.shields.io/badge/distros-any_systemd-266F64)
 
@@ -276,6 +277,17 @@ goblin-mode-pro-daemon --revert
 Source is under `src/goblinmode/`; `daemon.py` wires the components together,
 `payload.py` orchestrates apply/revert, and the privileged helper is
 `helper/goblin_helper.py`.
+
+Tests are stdlib `unittest` (no third-party dependency):
+
+```sh
+python -m unittest discover -s tests
+```
+
+They cover the pure logic — config validation, capability parsing, the session
+/ regression maths, the CSV and MangoHud parsers, env-var filtering, gamescope
+args, the community-fetch host guard. GitHub Actions also import-checks every
+module and validates the `profiles/` JSON on each push.
 
 </details>
 

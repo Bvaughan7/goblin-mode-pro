@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Compile-check every module
+        run: python -m compileall -q src helper
+
+      - name: Unit tests (stdlib unittest, no third-party deps)
+        run: python -m unittest discover -s tests -v
+
+      - name: Shell syntax check
+        run: bash -n install.sh
+
+      - name: Validate the community profile JSON
+        run: |
+          python - <<'PY'
+          import json, pathlib, sys
+          idx = json.loads(pathlib.Path("profiles/index.json").read_text())
+          assert isinstance(idx, list) and idx, "index.json must be a non-empty list"
+          for entry in idx:
+              slug = entry["slug"]
+              data = json.loads(pathlib.Path(f"profiles/{slug}.json").read_text())
+              assert data.get("exe"), f"{slug}.json has no exe"
+          print(f"{len(idx)} community profiles OK")
+          PY
+
+  gui-import:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install GTK4 / libadwaita introspection
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 python3-psutil
+      - name: Import every GUI module
+        run: |
+          python - <<'PY'
+          import importlib, pkgutil, sys
+          sys.path.insert(0, "src")
+          import goblinmode.gui as gui
+          for m in pkgutil.walk_packages(gui.__path__, "goblinmode.gui."):
+              importlib.import_module(m.name)
+              print("imported", m.name)
+          PY
