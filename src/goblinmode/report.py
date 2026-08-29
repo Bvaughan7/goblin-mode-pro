@@ -181,6 +181,67 @@ def as_llm_prompt(rep: dict) -> str:
     return _LLM_PROMPT + "\n\n```json\n" + json.dumps(rep, indent=2, default=str) + "\n```\n"
 
 
+def build_setup_report(settings) -> str:
+    """A full, shareable snapshot of the machine + every profile - for "help me"
+    threads or reproducing a setup elsewhere. No incident, no log."""
+    from goblinmode import capabilities, config as _config, proton
+
+    s = _system_info()
+    s.update(_desktop())
+    s["ram_gb"] = _ram_gb()
+    s["mesa_gl"] = _mesa_version()
+    caps = capabilities.detect()
+
+    L = [f"# Goblin Mode Pro setup — {datetime.now(timezone.utc).isoformat()[:19]}Z",
+         "", "## System",
+         f"- CPU: {s.get('cpu','?')}  ({caps.get('cpufreq_driver','?')})",
+         f"- GPU: {s.get('gpu','?')}  ·  {', '.join(caps.get('gpu_vendors') or [])}",
+         f"- Kernel: {caps.get('kernel_release','?')}  ({caps.get('kernel_flavor','?')})",
+         f"- Distro: {caps.get('distro_id','?')}  ·  {s.get('desktop','?')} / {s.get('session_type','?')}",
+         f"- RAM: {s.get('ram_gb','?')} GB  ·  GMP {__version__}",
+         f"- Handheld: {caps.get('handheld') or 'no'}"]
+
+    builds = proton.installed_builds()
+    if builds:
+        L += ["", "## Custom Proton / Wine builds"]
+        L += [f"- {b['name']}  ({b['kind']})" for b in builds[:20]]
+
+    caches = proton.shader_caches()
+    if caches:
+        L += ["", "## Shader caches"]
+        L += [f"- {c['label']}: {c['bytes'] / (1024**2):.0f} MB" for c in caches]
+
+    pf = preflight.run_all()
+    flags = [r for r in pf if r["status"] in ("warn", "fail")]
+    n = preflight.summary(pf)
+    L += ["", f"## Pre-flight  ({n.get('ok',0)} ok · {n.get('warn',0)} warn · {n.get('fail',0)} fail)"]
+    L += [f"- **{r['status'].upper()}** {r['title']} = `{r['value']}`" for r in flags] or ["- all clear"]
+
+    L += ["", "## Game profiles"]
+    for p in settings.profiles:
+        if p.exe == "__forced__":
+            continue
+        d = p.__dict__
+        on = [k for k in ("renice_enabled", "governor_boost", "tearing_enabled",
+                          "adaptive_sync_enabled", "focus_mode", "fps_watchdog",
+                          "gamescope_enabled", "power_limit_enabled") if d.get(k)]
+        rv = [k for k, v in (d.get("runner_vars") or {}).items() if v]
+        gt = [k for k, v in (d.get("gpu_tuning") or {}).items() if v]
+        L.append(f"\n### {p.display_name}  (`{p.exe}`, match: {p.match_mode})")
+        L.append(f"- on: {', '.join(on) or 'nothing'}")
+        if p.core_pin != "off":
+            L.append(f"- core pin: {p.core_pin}")
+        if rv:
+            L.append(f"- runner vars: {', '.join(rv)}")
+        if gt:
+            L.append(f"- gpu tuning: {', '.join(gt)}")
+        if p.steam_app_id:
+            L.append(f"- steam appid: {p.steam_app_id}")
+        if p.notes:
+            L.append(f"- notes: {_redact(p.notes)}")
+    return "\n".join(L) + "\n"
+
+
 def github_issue_url(rep: dict, repo: str = "Bvaughan7/goblin-mode-pro") -> str:
     body = as_markdown(rep)
     if len(body) > 6000:

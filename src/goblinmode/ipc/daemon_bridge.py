@@ -76,6 +76,16 @@ INTROSPECTION_XML = f"""
     <method name="GetSessionHistory">
       <arg type="s" name="exe" direction="in"/><arg type="s" name="json" direction="out"/>
     </method>
+    <method name="GetHealth"><arg type="s" name="json" direction="out"/></method>
+    <method name="ArmBenchmark">
+      <arg type="s" name="exe" direction="in"/><arg type="b" name="ok" direction="out"/>
+    </method>
+    <method name="GetSystemInfo"><arg type="s" name="json" direction="out"/></method>
+    <method name="GetProtonInfo"><arg type="s" name="json" direction="out"/></method>
+    <method name="ClearShaderCache">
+      <arg type="s" name="path" direction="in"/><arg type="s" name="json" direction="out"/>
+    </method>
+    <method name="ExportSetup"><arg type="s" name="markdown" direction="out"/></method>
     <signal name="StatusChanged"><arg type="s" name="json"/></signal>
     <signal name="MetricsUpdated"><arg type="s" name="json"/></signal>
     <signal name="IncidentLogged"><arg type="s" name="json"/></signal>
@@ -105,6 +115,12 @@ class DaemonHandler(Protocol):
     def analyze_log(self) -> list[dict[str, Any]]: ...
     def get_sessions(self) -> list[dict[str, Any]]: ...
     def get_session_history(self, exe: str) -> list[dict[str, Any]]: ...
+    def get_health(self) -> dict[str, Any]: ...
+    def arm_benchmark(self, exe: str) -> bool: ...
+    def get_system_info(self) -> dict[str, Any]: ...
+    def get_proton_info(self) -> dict[str, Any]: ...
+    def clear_shader_cache(self, path: str) -> dict[str, Any]: ...
+    def export_setup(self) -> str: ...
 
 
 # --------------------------------------------------------------------------
@@ -202,6 +218,23 @@ class DaemonBridge:
                 invocation.return_value(
                     GLib.Variant("(s)", (json.dumps(self._handler.get_session_history(exe)),))
                 )
+            elif method == "GetHealth":
+                invocation.return_value(
+                    GLib.Variant("(s)", (json.dumps(self._handler.get_health()),))
+                )
+            elif method == "ArmBenchmark":
+                invocation.return_value(
+                    GLib.Variant("(b)", (self._handler.arm_benchmark(params.unpack()[0]),))
+                )
+            elif method == "GetSystemInfo":
+                self._async_str(invocation, lambda: json.dumps(self._handler.get_system_info()))
+            elif method == "GetProtonInfo":
+                self._async_str(invocation, lambda: json.dumps(self._handler.get_proton_info()))
+            elif method == "ClearShaderCache":
+                p = params.unpack()[0]
+                self._async_str(invocation, lambda: json.dumps(self._handler.clear_shader_cache(p)))
+            elif method == "ExportSetup":
+                self._async_str(invocation, lambda: self._handler.export_setup())
             else:
                 invocation.return_dbus_error(
                     "org.freedesktop.DBus.Error.UnknownMethod", method
@@ -407,3 +440,31 @@ class BridgeClient:
     def get_sessions_async(self, on_done: Callable[[list | None, object], None]) -> None:
         self._call_async("GetSessions", None, lambda out, err: on_done(
             json.loads(out[0]) if out else None, err), timeout_ms=8000)
+
+    # -- roadmap additions ----------------------------------------------
+    def get_health(self) -> dict:
+        return json.loads(self._call("GetHealth")[0])
+
+    def get_health_async(self, on_done: Callable[[dict | None, object], None]) -> None:
+        self._call_async("GetHealth", None, lambda out, err: on_done(
+            json.loads(out[0]) if out else None, err), timeout_ms=8000)
+
+    def arm_benchmark(self, exe: str) -> bool:
+        return bool(self._call("ArmBenchmark", GLib.Variant("(s)", (exe,)))[0])
+
+    def get_system_info_async(self, on_done: Callable[[dict | None, object], None]) -> None:
+        self._call_async("GetSystemInfo", None, lambda out, err: on_done(
+            json.loads(out[0]) if out else None, err))
+
+    def get_proton_info_async(self, on_done: Callable[[dict | None, object], None]) -> None:
+        self._call_async("GetProtonInfo", None, lambda out, err: on_done(
+            json.loads(out[0]) if out else None, err))
+
+    def clear_shader_cache_async(self, path: str,
+                                 on_done: Callable[[dict | None, object], None]) -> None:
+        self._call_async("ClearShaderCache", GLib.Variant("(s)", (path,)),
+                         lambda out, err: on_done(json.loads(out[0]) if out else None, err))
+
+    def export_setup_async(self, on_done: Callable[[str | None, object], None]) -> None:
+        self._call_async("ExportSetup", None,
+                         lambda out, err: on_done(out[0] if out else None, err))

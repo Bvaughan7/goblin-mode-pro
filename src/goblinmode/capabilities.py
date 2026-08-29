@@ -21,10 +21,13 @@ from __future__ import annotations
 import functools
 import glob
 import os
+import platform
+import re
 import shutil
 from pathlib import Path
 
 _CPU = Path("/sys/devices/system/cpu")
+_DMI = Path("/sys/class/dmi/id")
 
 
 def _read(path: str | Path) -> str:
@@ -166,6 +169,41 @@ def _distro_id() -> str:
     return ""
 
 
+def _kernel_flavor() -> str:
+    """A rough classification of the running kernel: gaming-oriented builds get
+    named, everything else is 'generic'. Used for a gentle upgrade nudge only."""
+    rel = platform.release().lower()
+    for tag in ("cachyos", "xanmod", "liquorix", "lqx", "zen", "tkg",
+                "nobara", "bazzite", "clear", "xero"):
+        if tag in rel:
+            return "lqx" if tag == "liquorix" else tag
+    if "-lts" in rel or rel.endswith("-lts"):
+        return "lts"
+    return "generic"
+
+
+def _handheld() -> str | None:
+    """Steam Deck / ROG Ally / Legion Go / other known handhelds, from DMI."""
+    board = (_read(_DMI / "product_name") + " " + _read(_DMI / "board_name") + " "
+             + _read(_DMI / "sys_vendor")).lower()
+    if "jupiter" in board or "galileo" in board or "valve" in board and "steam" in board:
+        return "steamdeck"
+    if "rog ally" in board or "rc71" in board or "rc72" in board:
+        return "rog_ally"
+    if "83e1" in board or "legion go" in board:
+        return "legion_go"
+    if "aokzoe" in board or "onexplayer" in board or "aya neo" in board or "ayaneo" in board:
+        return "other_handheld"
+    return None
+
+
+def _session_recorder() -> str | None:
+    for tool in ("gpu-screen-recorder", "wf-recorder", "obs", "spectacle"):
+        if shutil.which(tool):
+            return tool
+    return None
+
+
 @functools.lru_cache(maxsize=1)
 def detect() -> dict:
     driver = _cpufreq_driver()
@@ -193,4 +231,51 @@ def detect() -> dict:
         "distro_id": _distro_id(),
         "package_manager": _package_manager(),
         "core_layout": _core_layout(),
+        "kernel_release": platform.release(),
+        "kernel_flavor": _kernel_flavor(),
+        "handheld": _handheld(),
+        "undervolt": "intel-undervolt" if (
+            _cpu_vendor() == "intel" and shutil.which("intel-undervolt")) else None,
+        "session_recorder": _session_recorder(),
+        "vkbasalt": shutil.which("vkBasalt") is not None or Path(
+            "/usr/share/vulkan/implicit_layer.d/vkBasalt.json").exists(),
     }
+
+
+# --------------------------------------------------------------------------
+# dynamic probes (not cached - state can change while the daemon runs)
+# --------------------------------------------------------------------------
+_PAD_RE = re.compile(r"gamepad|controller|x-?box|dualshock|dualsense|joy-?con|"
+                     r"joystick|steam ?(deck )?controller|ally|8bitdo", re.I)
+
+
+def controllers() -> list[str]:
+    """Connected game-controller names, from /proc/bus/input/devices."""
+    blob = _read("/proc/bus/input/devices")
+    if not blob:
+        return []
+    out: list[str] = []
+    for block in blob.split("\n\n"):
+        m = re.search(r'N: Name="([^"]+)"', block)
+        if not m:
+            continue
+        name = m.group(1)
+        handlers = re.search(r"H: Handlers=([^\n]+)", block)
+        # a kernel joystick handler (jsN) is the reliable "this is a pad" signal
+        is_js = bool(handlers and re.search(r"\bjs\d", handlers.group(1)))
+        if (is_js or _PAD_RE.search(name)) and name not in out:
+            out.append(name)
+    return out
+
+
+def gamemode_status() -> dict:
+    """What feralinteractive gamemode reports it is doing right now."""
+    if not shutil.which("gamemoded"):
+        return {"installed": False}
+    import subprocess
+    try:
+        out = subprocess.run(["gamemoded", "-s"], capture_output=True, text=True,
+                             timeout=4).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return {"installed": True, "active": None}
+    return {"installed": True, "active": "is active" in out, "detail": out[:200]}

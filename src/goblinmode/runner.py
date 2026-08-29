@@ -25,8 +25,10 @@ log = logging.getLogger(__name__)
 
 LAUNCH_OPTION = "goblin-run %command%"
 
-# environment names the wrapper is permitted to set from the daemon's output
-_ENV_NAME_RE = re.compile(r"^[A-Z_][A-Z0-9_]*$")
+# environment names the wrapper is permitted to set from the daemon's output.
+# Plain identifier characters only (a few Mesa vars are lowercase, e.g.
+# mesa_glthread) - still no shell metacharacters, so word-splitting is safe.
+_ENV_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _ENV_VALUE_RE = re.compile(r"^[^\x00-\x1f\x7f]{0,4096}$")
 
 _WRAPPER_TEMPLATE = f"""\
@@ -45,7 +47,7 @@ mkdir -p -- "$gmp_logdir"
 # NAME=VALUE that the daemon has already validated.
 while IFS='=' read -r gmp_k gmp_v; do
     case "$gmp_k" in
-        [A-Z_]*) export "$gmp_k=$gmp_v" ;;
+        [A-Za-z_]*) export "$gmp_k=$gmp_v" ;;
     esac
 done < <(goblin-mode-pro-daemon --print-env-for -- "$@" 2>/dev/null || true)
 

@@ -34,7 +34,7 @@ SHAREABLE = {
     "core_pin", "tearing_enabled", "adaptive_sync_enabled", "governor_boost",
     "focus_mode", "power_limit_enabled", "pl1_w", "pl2_w", "per_game_mangohud",
     "mangohud", "fps_watchdog", "fps_dip_floor", "fps_dip_ratio", "runner_vars",
-    "gamescope_enabled", "gamescope", "note",
+    "gamescope_enabled", "gamescope", "gpu_tuning", "steam_app_id", "notes", "note",
 }
 
 

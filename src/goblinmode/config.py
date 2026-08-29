@@ -51,6 +51,39 @@ RUNNER_VARS: dict[str, dict[str, str]] = {
     "dxvk_async": {"DXVK_ASYNC": "1"},
 }
 
+#: Vendor-specific graphics-driver tuning env vars. Keyed by vendor so the GUI
+#: only shows what applies. RADV_PERFTEST values are comma-joined if several are
+#: on (see ``env_assignments``).
+GPU_TUNING_VARS: dict[str, dict[str, tuple[str, dict[str, str]]]] = {
+    "nvidia": {
+        "threaded_gl": ("Threaded GL optimizations",
+                        {"__GL_THREADED_OPTIMIZATIONS": "1"}),
+        "shader_cache": ("Unlimited shader disk cache",
+                         {"__GL_SHADER_DISK_CACHE": "1",
+                          "__GL_SHADER_DISK_CACHE_SKIP_CLEANUP": "1"}),
+        "force_gsync": ("Force G-SYNC / VRR compatible",
+                        {"__GL_GSYNC_ALLOWED": "1", "__GL_VRR_ALLOWED": "1"}),
+        "max_fps_none": ("No driver frame cap",
+                         {"__GL_SYNC_TO_VBLANK": "0"}),
+    },
+    "amd": {
+        "glthread": ("Mesa glthread (extra CPU thread for GL)",
+                     {"mesa_glthread": "true"}),
+        "radv_gpl": ("RADV pipeline library — faster shader compile",
+                     {"RADV_PERFTEST": "gpl"}),
+        "radv_nggc": ("RADV NGG culling",
+                      {"RADV_PERFTEST": "nggc"}),
+        "radv_rt": ("RADV ray-tracing (experimental)",
+                    {"RADV_PERFTEST": "rt"}),
+    },
+    "intel": {
+        "anv_gpl": ("ANV pipeline library",
+                    {"ANV_GPL": "true"}),
+        "glthread": ("Mesa glthread",
+                     {"mesa_glthread": "true"}),
+    },
+}
+
 # MangoHud toggle key -> the MangoHud.conf token(s) it controls.
 MANGOHUD_TOGGLES: dict[str, tuple[str, ...]] = {
     "enabled": ("no_display",),  # inverted: enabled -> no_display=0
@@ -131,6 +164,15 @@ class GameProfile:
     gamescope_enabled: bool = False
     gamescope: dict = field(default_factory=_default_gamescope)
 
+    # Vendor GPU-driver tuning (see GPU_TUNING_VARS). Flat {key: bool}; the GUI
+    # only shows keys for the detected GPU vendor.
+    gpu_tuning: dict[str, bool] = field(default_factory=dict)
+
+    # Steam AppID, if known - powers the ProtonDB / anti-cheat lookups.
+    steam_app_id: str = ""
+    # Free-form user note (also carried by shared / community profiles).
+    notes: str = ""
+
     def __post_init__(self) -> None:
         self.exe = sanitize_exe(self.exe)
         if not self.display_name:
@@ -156,13 +198,31 @@ class GameProfile:
             self.gamescope[k] = max(0, min(10000, int(self.gamescope.get(k, 0) or 0)))
         if self.gamescope.get("upscale") not in GAMESCOPE_UPSCALERS:
             self.gamescope["upscale"] = "off"
+        # steam_app_id must be a bare number if set
+        self.steam_app_id = re.sub(r"\D", "", str(self.steam_app_id or ""))[:12]
+        self.notes = str(self.notes or "")[:500]
+        self.gpu_tuning = {k: bool(v) for k, v in dict(self.gpu_tuning or {}).items()
+                           if isinstance(k, str) and len(k) < 40}
 
     def env_assignments(self) -> dict[str, str]:
-        """Resolve the enabled runner toggles into concrete env vars."""
+        """Resolve the enabled runner + GPU-tuning toggles into concrete env vars."""
         out: dict[str, str] = {}
         for key, on in self.runner_vars.items():
             if on and key in RUNNER_VARS:
                 out.update(RUNNER_VARS[key])
+        # GPU tuning: RADV_PERFTEST is a comma-list, so collect then join.
+        radv: set[str] = set()
+        for vendor in GPU_TUNING_VARS.values():
+            for key, (_label, env) in vendor.items():
+                if not self.gpu_tuning.get(key):
+                    continue
+                for var, val in env.items():
+                    if var == "RADV_PERFTEST":
+                        radv.add(val)
+                    else:
+                        out[var] = val
+        if radv:
+            out["RADV_PERFTEST"] = ",".join(sorted(radv))
         return out
 
 

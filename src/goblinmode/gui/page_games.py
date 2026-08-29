@@ -19,7 +19,7 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, Gio, GLib, Gtk  # noqa: E402
 
-from goblinmode.config import MANGOHUD_TOGGLES, RUNNER_VARS
+from goblinmode.config import GPU_TUNING_VARS, MANGOHUD_TOGGLES, RUNNER_VARS
 from goblinmode.ipc.daemon_bridge import BridgeClient
 from goblinmode.runner import LAUNCH_OPTION
 
@@ -378,6 +378,43 @@ class GamesPage(Adw.PreferencesPage):
                                         lambda v: self._patch_gamescope(exe, "hdr", v)))
         exp.add_row(gs)
 
+        # -- GPU driver tuning (vendor-specific) --
+        vendors = [v for v in (self._caps.get("gpu_vendors") or []) if v in GPU_TUNING_VARS]
+        if vendors:
+            gt = Adw.ExpanderRow(
+                title="GPU driver tuning",
+                subtitle="Extra " + " / ".join(v.upper() if v == "amd" else v.title()
+                                               for v in vendors) + " driver knobs",
+            )
+            tuning = dict(p.get("gpu_tuning", {}))
+            for vendor in vendors:
+                for key, (label, _env) in GPU_TUNING_VARS[vendor].items():
+                    gt.add_row(self._switch_row(
+                        label, bool(tuning.get(key)),
+                        lambda v, k=key: self._patch_dict(exe, "gpu_tuning", k, v),
+                    ))
+            exp.add_row(gt)
+
+        # -- Compatibility: Steam AppID + ProtonDB / anti-cheat --
+        comp = Adw.ExpanderRow(
+            title="Compatibility check",
+            subtitle="ProtonDB rating and anti-cheat status for this game",
+        )
+        appid = Adw.EntryRow(title="Steam AppID (optional)")
+        appid.set_text(str(p.get("steam_app_id", "")))
+        appid.connect("changed", lambda r: self._patch(
+            exe, steam_app_id="".join(c for c in r.get_text() if c.isdigit())[:12]))
+        comp.add_row(appid)
+        check = Adw.ButtonRow(title="Check this game")
+        check.set_start_icon_name("system-search-symbolic")
+        result = Adw.ActionRow(visible=False)
+        result.set_css_classes(["dim-label"])
+        result.set_title_lines(0)
+        check.connect("activated", lambda _r, e=exe, rr=result: self._on_compat_check(e, rr))
+        comp.add_row(check)
+        comp.add_row(result)
+        exp.add_row(comp)
+
         self._group.add(exp)
         return exp
 
@@ -419,14 +456,51 @@ class GamesPage(Adw.PreferencesPage):
         self._save(p)
 
     def _patch_gamescope(self, exe: str, key: str, value: Any) -> None:
+        self._patch_dict(exe, "gamescope", key, value)
+
+    def _patch_dict(self, exe: str, field: str, key: str, value: Any) -> None:
         if self._building:
             return
         p = dict(self._profiles.get(exe, {}))
-        g = dict(p.get("gamescope", {}))
-        g[key] = value
-        p["gamescope"] = g
+        d = dict(p.get(field, {}))
+        d[key] = value
+        p[field] = d
         self._profiles[exe] = p
         self._save(p)
+
+    # -- compatibility check (ProtonDB + anti-cheat) --------------
+    def _on_compat_check(self, exe: str, result_row: Adw.ActionRow) -> None:
+        p = self._profiles.get(exe, {})
+        app_id = p.get("steam_app_id", "")
+        name = p.get("display_name") or exe
+        result_row.set_visible(True)
+        result_row.set_title("Checking…")
+
+        def work() -> None:
+            from goblinmode import webdata
+            lines = []
+            try:
+                if app_id:
+                    t = webdata.protondb_tier(app_id)
+                    lines.append(f"ProtonDB: {str(t.get('tier','?')).title()} "
+                                 f"({t.get('total', 0)} reports, "
+                                 f"{t.get('confidence', '?')} confidence)")
+                else:
+                    lines.append("ProtonDB: add the Steam AppID above to check")
+            except Exception as exc:  # noqa: BLE001
+                lines.append(f"ProtonDB: {exc}")
+            try:
+                ac = webdata.anticheat_status(name=name, app_id=app_id)
+                if ac:
+                    lines.append(f"Anti-cheat: {ac['status']}"
+                                 + (f" — {', '.join(ac['anticheats'])}" if ac['anticheats'] else ""))
+                else:
+                    lines.append("Anti-cheat: not listed (likely none, or works fine)")
+            except Exception as exc:  # noqa: BLE001
+                lines.append(f"Anti-cheat: {exc}")
+            GLib.idle_add(lambda: result_row.set_title("\n".join(lines)) or False)
+
+        threading.Thread(target=work, name="gmp-compat", daemon=True).start()
 
     def _save(self, profile: dict[str, Any]) -> None:
         try:
@@ -485,7 +559,8 @@ class GamesPage(Adw.PreferencesPage):
 
     # -- profile sharing (export / import) ---------------------
     _SHARE_KEYS = (
-        "match_mode", "renice_enabled", "nice_value", "core_pin", "tearing_enabled",
+        "match_mode", "renice_enabled", "nice_value", "core_pin",
+        "gpu_tuning", "steam_app_id", "notes", "tearing_enabled",
         "adaptive_sync_enabled", "governor_boost", "focus_mode",
         "power_limit_enabled", "pl1_w", "pl2_w", "per_game_mangohud", "mangohud",
         "fps_watchdog", "fps_dip_floor", "fps_dip_ratio", "runner_vars",

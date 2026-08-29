@@ -61,6 +61,15 @@ class SessionSummary:
     kernel: str = ""
     tweaks: list[str] = field(default_factory=list)
 
+    # populated only for benchmark runs
+    benchmark: bool = False
+    fps_01low: float | None = None       # 0.1% low
+    fps_p95: float | None = None
+    frametime_ms_avg: float | None = None
+    frametime_stutter_pct: float | None = None   # % of frames > 2x the median frametime
+    cpu_temp_max: float | None = None
+    gpu_temp_max: float | None = None
+
     def as_dict(self) -> dict:
         return asdict(self)
 
@@ -105,12 +114,20 @@ def _percentile(values: list[float], q: float) -> float:
     return values[idx]
 
 
-def _parse_csv(path: Path) -> tuple[list[float], list[float], list[float]]:
-    """Return (fps, cpu_temp, gpu_temp) columns from one MangoHud CSV."""
+def _parse_csv(path: Path):
+    """Parse one MangoHud CSV. Returns ``(fps, cpu_temp, gpu_temp)`` for the
+    common case; call :func:`_parse_csv_full` when you also need frame times."""
+    fps, cpu, gpu, _ft = _parse_csv_full(path)
+    return fps, cpu, gpu
+
+
+def _parse_csv_full(path: Path):
+    """``(fps, cpu_temp, gpu_temp, frametime_ms)`` from one MangoHud CSV."""
     fps: list[float] = []
     cpu: list[float] = []
     gpu: list[float] = []
-    fps_i = cpu_i = gpu_i = None
+    ft: list[float] = []
+    fps_i = cpu_i = gpu_i = ft_i = None
     try:
         with open(path, "r", errors="replace") as fh:
             for raw in fh:
@@ -121,6 +138,7 @@ def _parse_csv(path: Path) -> tuple[list[float], list[float], list[float]]:
                         fps_i = low.index("fps")
                         cpu_i = low.index("cpu_temp") if "cpu_temp" in low else None
                         gpu_i = low.index("gpu_temp") if "gpu_temp" in low else None
+                        ft_i = low.index("frametime") if "frametime" in low else None
                     continue
                 if len(cells) <= fps_i:
                     continue
@@ -131,17 +149,18 @@ def _parse_csv(path: Path) -> tuple[list[float], list[float], list[float]]:
                 if not (0 < v < 1000):
                     continue
                 fps.append(v)
-                for col, sink in ((cpu_i, cpu), (gpu_i, gpu)):
+                for col, sink, lo, hi in ((cpu_i, cpu, 0, 200), (gpu_i, gpu, 0, 200),
+                                          (ft_i, ft, 0, 2000)):
                     if col is not None and len(cells) > col:
                         try:
-                            t = float(cells[col])
+                            x = float(cells[col])
                         except ValueError:
                             continue
-                        if 0 < t < 200:
-                            sink.append(t)
+                        if lo < x < hi:
+                            sink.append(x)
     except OSError as exc:
         log.warning("session: could not read %s: %s", path, exc)
-    return fps, cpu, gpu
+    return fps, cpu, gpu, ft
 
 
 def _logs_for_window(start_mono: float) -> list[Path]:
@@ -177,26 +196,29 @@ class SessionTracker:
     def cancel(self, exe: str) -> None:
         self._open.pop(exe, None)
 
-    def end(self, exe: str) -> tuple[SessionSummary, Regression | None] | None:
+    def end(self, exe: str, *, benchmark: bool = False
+            ) -> tuple[SessionSummary, Regression | None] | None:
         """Finalise the session for *exe*: summarise, persist, compare.
 
-        Returns ``None`` if there was no open session or it was too short to be
-        worth recording (< 60 s)."""
+        Returns ``None`` if there was no open session or it was too short
+        (< 60 s, or < 30 s for a benchmark)."""
         op = self._open.pop(exe, None)
         if op is None:
             return None
         duration = max(0.0, time.monotonic() - op.started_mono)
-        if duration < 60:
+        if duration < (30 if benchmark else 60):
             return None
 
         fps: list[float] = []
         cpu: list[float] = []
         gpu: list[float] = []
+        ft: list[float] = []
         for path in _logs_for_window(op.started_mono):
-            f, c, g = _parse_csv(path)
+            f, c, g, t = _parse_csv_full(path)
             fps += f
             cpu += c
             gpu += g
+            ft += t
 
         summary = SessionSummary(
             exe=op.exe,
@@ -206,6 +228,7 @@ class SessionTracker:
             duration_s=round(duration, 1),
             kernel=platform.release(),
             tweaks=op.tweaks,
+            benchmark=benchmark,
         )
         if len(fps) >= MIN_SAMPLES:
             s = sorted(fps)
@@ -214,10 +237,21 @@ class SessionTracker:
             summary.fps_median = round(_percentile(s, 0.5), 1)
             summary.fps_1low = round(_percentile(s, 0.01), 1)
             summary.fps_min = round(s[0], 1)
+            if benchmark:
+                summary.fps_01low = round(_percentile(s, 0.001), 1)
+                summary.fps_p95 = round(_percentile(s, 0.95), 1)
         if cpu:
             summary.cpu_temp_avg = round(sum(cpu) / len(cpu), 1)
+            summary.cpu_temp_max = round(max(cpu), 1) if benchmark else None
         if gpu:
             summary.gpu_temp_avg = round(sum(gpu) / len(gpu), 1)
+            summary.gpu_temp_max = round(max(gpu), 1) if benchmark else None
+        if benchmark and len(ft) >= MIN_SAMPLES:
+            fts = sorted(ft)
+            med = _percentile(fts, 0.5) or 1.0
+            summary.frametime_ms_avg = round(sum(ft) / len(ft), 2)
+            summary.frametime_stutter_pct = round(
+                100 * sum(1 for x in ft if x > 2 * med) / len(ft), 2)
 
         prior = self._history_for(op.exe)
         self._persist(summary)

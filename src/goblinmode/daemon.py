@@ -15,6 +15,7 @@ import os
 import signal
 import sys
 import threading
+import time
 from typing import Any
 
 import gi
@@ -74,6 +75,8 @@ class Daemon:
         self._diag_source_id: int | None = None
         self._poll_source_id: int | None = None
         self._fps_dip_seen = False          # any FPS dip this session?
+        self._health: dict = {}             # cached pre-flight score
+        self._benchmark: dict | None = None  # active benchmark run, if any
         self._dirty_profiles: set[str] = set()
         self._save_source_id: int | None = None
 
@@ -185,11 +188,15 @@ class Daemon:
         return out
 
     def _finish_session(self, exe: str, game: str) -> bool:
+        is_bench = bool(self._benchmark and self._benchmark.get("exe") == exe)
         try:
-            result = self.sessions.end(exe)
+            result = self.sessions.end(exe, benchmark=is_bench)
         except Exception:  # noqa: BLE001
             log.exception("session summary failed")
+            self._benchmark = None
             return GLib.SOURCE_REMOVE
+        if is_bench:
+            self._benchmark = None
         if result is None:
             return GLib.SOURCE_REMOVE
         summary, regression = result
@@ -198,11 +205,29 @@ class Daemon:
             "regression": regression.as_dict() if regression else None,
         }
         self.bridge.emit_session(payload)
+        if is_bench and summary.fps_avg is not None:
+            self._notify(
+                f"Benchmark: {game}",
+                f"avg {summary.fps_avg:.0f} · 1% low {summary.fps_1low:.0f} · "
+                f"0.1% low {summary.fps_01low or 0:.0f} fps",
+            )
         if regression is not None:
             log.info("%s", regression.headline(game))
             if regression.direction == "regression":
-                self.tray.notify("Performance regression", regression.headline(game))
+                self._notify("Performance regression", regression.headline(game))
         return GLib.SOURCE_REMOVE
+
+    def arm_benchmark(self, exe: str) -> bool:
+        """Mark the next session for *exe* as a benchmark run - it gets the full
+        report card (0.1% low, p95, frame-time stutter, thermal peaks)."""
+        self._benchmark = {"exe": exe, "armed_at": time.time()}
+        log.info("benchmark armed for %s", exe)
+        return True
+
+    def _notify(self, title: str, body: str = "") -> None:
+        from goblinmode import notify
+        notify.send(title, body)
+        self.tray.notify(title, body)
 
     def _adopt_detected_game(self, cand) -> "config.GameProfile | None":
         """Turn an auto-detected game into a (persistent) default profile and tell
@@ -227,7 +252,7 @@ class Daemon:
         config.save(self.settings)
         self.observer.update_settings(self.settings)
         log.info("adopted auto-detected game %s (%s)", cand.display_name, cand.source)
-        self.tray.notify(
+        self._notify(
             f"Optimizing {cand.display_name}",
             "Auto-detected via " + cand.source + ". Open Goblin Mode Pro to tune or ignore it.",
         )
@@ -389,6 +414,12 @@ class Daemon:
         )
         self.incidents.add(incident)
         self.bridge.emit_incident(incident.as_dict())
+        # a driver fault or a hard throttle is worth a desktop notification
+        if kind in ("gpu_fault", "thermal_throttle", "vram_not_freed"):
+            nice = {"gpu_fault": "GPU / driver fault",
+                    "thermal_throttle": "Thermal throttling",
+                    "vram_not_freed": "VRAM not released after exit"}[kind]
+            self._notify(nice, detail[:160], urgency=2)
 
     def _on_payload_incident(self, kind: str, detail: str) -> None:
         self._raise_incident(kind, detail)
@@ -431,11 +462,65 @@ class Daemon:
     def get_session_history(self, exe: str) -> list[dict[str, Any]]:
         return self.sessions.history(exe or None, limit=60)
 
+    def get_system_info(self) -> dict[str, Any]:
+        """Dynamic environment info for the dashboard / first-run: connected
+        controllers, GameMode status, kernel-flavour nudge."""
+        return {
+            "controllers": capabilities.controllers(),
+            "gamemode": capabilities.gamemode_status(),
+        }
+
+    def get_proton_info(self) -> dict[str, Any]:
+        from goblinmode import proton
+        return {
+            "builds": proton.installed_builds(),
+            "shader_caches": proton.shader_caches(),
+        }
+
+    def clear_shader_cache(self, path: str) -> dict[str, Any]:
+        from goblinmode import proton
+        ok, msg = proton.clear_cache(path)
+        return {"ok": ok, "message": msg}
+
+    def export_setup(self) -> str:
+        from goblinmode import report
+        return report.build_setup_report(self.settings)
+
     # -- pre-flight / report (roadmap) --------------------------------
     def run_preflight(self) -> list[dict[str, Any]]:
         from goblinmode import preflight
 
-        return preflight.run_all()
+        results = preflight.run_all()
+        self._cache_health(results)
+        return results
+
+    def _cache_health(self, results: list[dict]) -> None:
+        n = {"ok": 0, "warn": 0, "fail": 0, "info": 0, "unknown": 0}
+        for r in results:
+            n[r["status"]] = n.get(r["status"], 0) + 1
+        total = sum(n.values()) or 1
+        # score: fails hurt most, warns a little; info/unknown are neutral
+        penalty = n["fail"] * 2.0 + n["warn"] * 0.6
+        score = max(0, round(10 * (1 - penalty / (total * 1.4)), 1))
+        self._health = {
+            "score": score, "counts": n,
+            "worst": [r["title"] for r in results if r["status"] == "fail"][:3],
+            "checked_at": time.time(),
+        }
+
+    def get_health(self) -> dict[str, Any]:
+        """A cached 0-10 'is this box game-ready?' score for the dashboard.
+        Re-runs the pre-flight at most every 10 minutes."""
+        stale = (not self._health
+                 or time.time() - self._health.get("checked_at", 0) > 600)
+        if stale:
+            try:
+                from goblinmode import preflight
+                self._cache_health(preflight.run_all())
+            except Exception:  # noqa: BLE001
+                log.exception("health check failed")
+                return self._health or {"score": None}
+        return self._health
 
     def apply_preflight_fixes(self) -> dict[str, Any]:
         from goblinmode import preflight
