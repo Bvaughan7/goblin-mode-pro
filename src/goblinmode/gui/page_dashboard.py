@@ -296,23 +296,9 @@ class DashboardPage(Adw.PreferencesPage):
         tips: list[tuple[str, str]] = []
 
         if caps.get("kernel_flavor") == "generic":
-            kernel = {
-                "ubuntu": ("A gaming-tuned kernel smooths out frame pacing",
-                           "sudo add-apt-repository ppa:xanmod/stable && "
-                           "sudo apt update && sudo apt install linux-xanmod-x64v3"),
-                "pop": ("A gaming-tuned kernel smooths out frame pacing",
-                        "sudo apt install linux-xanmod-x64v3   # after adding the XanMod PPA"),
-                "debian": ("A gaming-tuned kernel smooths out frame pacing",
-                           "curl -s 'https://liquorix.net/install-liquorix.sh' | sudo bash"),
-                "fedora": ("A gaming-tuned kernel smooths out frame pacing",
-                           "sudo dnf copr enable bieszczaders/kernel-cachyos && "
-                           "sudo dnf install kernel-cachyos"),
-                "arch": ("linux-zen is in the official repos and helps with stutter",
-                         "sudo pacman -S linux-zen linux-zen-headers"),
-                "cachyos": ("", ""),
-                "manjaro": ("A -zen or -rt kernel helps with stutter",
-                            "sudo mhwd-kernel -i linux-zen"),
-            }.get(distro, ("A gaming-tuned kernel (Zen / XanMod / CachyOS) helps with stutter", ""))
+            from goblinmode.capabilities import kernel_upgrade_tip
+
+            kernel = kernel_upgrade_tip(distro)
             if kernel[1]:
                 tips.append(kernel)
 

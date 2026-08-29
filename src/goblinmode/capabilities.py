@@ -169,6 +169,65 @@ def _distro_id() -> str:
     return ""
 
 
+# Per-package-manager install command template and, where a package is named
+# differently, its per-manager name. Used to hand the user a copy-pasteable
+# install line instead of running anything as root ourselves.
+_INSTALL_CMD = {
+    "pacman": "sudo pacman -S --needed {pkgs}",
+    "apt": "sudo apt install {pkgs}",
+    "dnf": "sudo dnf install {pkgs}",
+    "zypper": "sudo zypper install {pkgs}",
+    "xbps-install": "sudo xbps-install {pkgs}",
+    "eopkg": "sudo eopkg install {pkgs}",
+    "emerge": "sudo emerge {pkgs}",
+}
+
+_PKG_NAMES = {
+    "mangohud": {"xbps-install": "MangoHud", "emerge": "games-util/mangohud"},
+    "gamemode": {"emerge": "games-util/gamemode"},
+}
+
+
+def install_command(package_manager: str | None, *pkgs: str) -> str | None:
+    """A copy-pasteable install command for ``pkgs`` on ``package_manager``,
+    or ``None`` if the manager is unknown. Never executed by us - handed to
+    the user to run themselves."""
+    tmpl = _INSTALL_CMD.get(package_manager or "")
+    if not tmpl or not pkgs:
+        return None
+    names = [_PKG_NAMES.get(p, {}).get(package_manager, p) for p in pkgs]
+    return tmpl.format(pkgs=" ".join(names))
+
+
+# distro -> (why, command) for a gaming-tuned kernel, or ("", "") when the
+# distro's stock kernel is already fine (e.g. CachyOS) - shared by the
+# Dashboard's setup tips and the first-run wizard's install step.
+_KERNEL_TIPS = {
+    "ubuntu": ("A gaming-tuned kernel smooths out frame pacing",
+               "sudo add-apt-repository ppa:xanmod/stable && "
+               "sudo apt update && sudo apt install linux-xanmod-x64v3"),
+    "pop": ("A gaming-tuned kernel smooths out frame pacing",
+            "sudo apt install linux-xanmod-x64v3   # after adding the XanMod PPA"),
+    "debian": ("A gaming-tuned kernel smooths out frame pacing",
+               "curl -s 'https://liquorix.net/install-liquorix.sh' | sudo bash"),
+    "fedora": ("A gaming-tuned kernel smooths out frame pacing",
+               "sudo dnf copr enable bieszczaders/kernel-cachyos && "
+               "sudo dnf install kernel-cachyos"),
+    "arch": ("linux-zen is in the official repos and helps with stutter",
+             "sudo pacman -S linux-zen linux-zen-headers"),
+    "cachyos": ("", ""),
+    "manjaro": ("A -zen or -rt kernel helps with stutter",
+                "sudo mhwd-kernel -i linux-zen"),
+}
+
+
+def kernel_upgrade_tip(distro: str) -> tuple[str, str]:
+    """``(why, command)`` for a gaming-tuned kernel on ``distro``, generic
+    fallback text with no command when the distro isn't in the table."""
+    return _KERNEL_TIPS.get(distro, (
+        "A gaming-tuned kernel (Zen / XanMod / CachyOS) helps with stutter", ""))
+
+
 def _kernel_flavor() -> str:
     """A rough classification of the running kernel: gaming-oriented builds get
     named, everything else is 'generic'. Used for a gentle upgrade nudge only."""

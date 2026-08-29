@@ -15,6 +15,8 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, Gdk, GLib, Gtk  # noqa: E402
 
+from goblinmode import capabilities
+from goblinmode.gui.widgets.snippet import command_row
 from goblinmode.i18n import _
 from goblinmode.paths import ONBOARDED_MARKER, ensure_user_dirs
 from goblinmode.runner import LAUNCH_OPTION
@@ -61,6 +63,7 @@ class FirstRunWizard(Adw.Window):
 
         self._stack.add_named(self._welcome_page(), "welcome")
         self._stack.add_named(self._check_page(), "check")
+        self._stack.add_named(self._install_page(), "install")
         self._stack.add_named(self._launcher_page(), "launcher")
         self._stack.add_named(self._done_page(), "done")
         self._go("welcome")
@@ -69,6 +72,8 @@ class FirstRunWizard(Adw.Window):
         self._stack.set_visible_child_name(name)
         if name == "check":
             self._run_check()
+        elif name == "install":
+            self._populate_install()
 
     # -- pages -----------------------------------------------------
     def _page(self, icon: str, title: str, body: str) -> Adw.StatusPage:
@@ -101,11 +106,72 @@ class FirstRunWizard(Adw.Window):
         self._fix_btn.connect("clicked", self._on_fix)
         nxt = Gtk.Button(label=_("Next"), halign=Gtk.Align.CENTER)
         nxt.add_css_class("pill")
-        nxt.connect("clicked", lambda _b: self._go("launcher"))
+        nxt.connect("clicked", lambda _b: self._go("install"))
         for w in (self._check_icon, self._check_title, self._check_detail,
                   self._fix_btn, nxt):
             box.append(w)
         return box
+
+    def _install_page(self) -> Gtk.Widget:
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12,
+                      margin_top=24, margin_bottom=24, margin_start=24, margin_end=24)
+        head = Gtk.Label(label=_("Missing pieces"))
+        head.add_css_class("title-1")
+        box.append(head)
+        self._install_sub = Gtk.Label(wrap=True, xalign=0)
+        self._install_sub.add_css_class("dim-label")
+        box.append(self._install_sub)
+        self._install_group = Adw.PreferencesGroup()
+        box.append(self._install_group)
+        self._install_rows: list[Adw.ActionRow] = []
+        nxt = Gtk.Button(label=_("Next"), halign=Gtk.Align.CENTER)
+        nxt.add_css_class("suggested-action")
+        nxt.add_css_class("pill")
+        nxt.connect("clicked", lambda _b: self._go("launcher"))
+        box.append(nxt)
+        return box
+
+    def _populate_install(self) -> None:
+        for r in self._install_rows:
+            self._install_group.remove(r)
+        self._install_rows.clear()
+
+        caps = capabilities.detect()
+        pm = caps.get("package_manager")
+        missing = []
+        if not caps.get("mangohud"):
+            missing.append(("mangohud", "The FPS overlay and frame-rate watchdog need it"))
+        if not caps.get("gamemode"):
+            missing.append(("gamemode", "Per-game governor/priority/GPU tuning most launchers expect"))
+
+        rows: list[tuple[str, str]] = []
+        for pkg, why in missing:
+            cmd = capabilities.install_command(pm, pkg)
+            if cmd:
+                rows.append((why, cmd))
+            else:
+                rows.append((f"{why} - install the '{pkg}' package for your distro.", ""))
+
+        if caps.get("kernel_flavor") == "generic":
+            why, cmd = capabilities.kernel_upgrade_tip((caps.get("distro_id") or "").lower())
+            if cmd:
+                rows.append((why, cmd))
+
+        if not rows:
+            self._install_sub.set_label(
+                "Nothing missing - MangoHud, GameMode and your kernel all look good.")
+        else:
+            self._install_sub.set_label(
+                "Copy these into a terminal when you get a chance. None of this runs "
+                "automatically - Goblin Mode Pro never installs packages on its own.")
+
+        for why, cmd in rows:
+            if cmd:
+                row = command_row(why, cmd)
+            else:
+                row = Adw.ActionRow(title=why)
+            self._install_group.add(row)
+            self._install_rows.append(row)
 
     def _launcher_page(self) -> Gtk.Widget:
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12,
