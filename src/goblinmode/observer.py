@@ -135,10 +135,14 @@ class Observer:
             if pid is not None:
                 found[profile.exe] = (pid, profile, None)
 
-        if self.settings.auto_detect and self.settings.master_enabled:
+        # The auto-detect sweep is the expensive part (per-process /proc/*/maps
+        # and fdinfo reads). Skip it entirely while a profiled game is already
+        # matched - detecting a *second* concurrent game is a rare case not worth
+        # the cost on every poll during normal play.
+        if self.settings.auto_detect and self.settings.master_enabled and not found:
             ignored = {g.lower() for g in self.settings.ignored_games}
             try:
-                for cand in gamedetect.detect_games():
+                for cand in gamedetect.detect_games(procs=procs):
                     key = cand.exe
                     if key in found or cand.exe.lower() in ignored:
                         continue

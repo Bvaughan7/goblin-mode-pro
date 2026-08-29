@@ -124,14 +124,27 @@ class FpsWatcher:
 
         self._hist.append((self._vclock, fps))
 
+    #: never read more than this per poll - keeps a poll cheap even if the daemon
+    #: fell behind and MangoHud wrote megabytes in the meantime (MangoHud logs
+    #: ~1 KB/s, so this is ~4 minutes of catch-up)
+    _MAX_READ = 256 * 1024
+
     def poll(self) -> FpsEvent | None:
         self._rotate()
         if not self._path or not self._path.exists():
             return None
         try:
+            size = self._path.stat().st_size
+            if size < self._pos:            # file was truncated / replaced
+                self._pos = 0
             with open(self._path, "r", errors="replace") as fh:
-                fh.seek(self._pos)
-                chunk = fh.read()
+                if size - self._pos > self._MAX_READ:
+                    # jump near the end; realign to the next full line
+                    fh.seek(size - self._MAX_READ)
+                    fh.readline()
+                else:
+                    fh.seek(self._pos)
+                chunk = fh.read(self._MAX_READ)
                 self._pos = fh.tell()
         except OSError:
             return None

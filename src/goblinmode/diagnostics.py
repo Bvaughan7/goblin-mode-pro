@@ -21,18 +21,23 @@ import shutil
 import subprocess
 import time
 from collections import deque
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Callable
 
 import psutil
 
 log = logging.getLogger(__name__)
 
 _HWMON = Path("/sys/class/hwmon")
-_RAPL = Path("/sys/class/powercap/intel-rapl/intel-rapl:0")
+_POWERCAP = Path("/sys/class/powercap")
 _CPU = Path("/sys/devices/system/cpu")
 
 HISTORY_SECONDS = 300
+
+#: hwmon "name" values that expose a whole-package CPU temperature, best first.
+#: coretemp = Intel; k10temp / zenpower = AMD; others are ARM/embedded.
+_CPU_HWMON_NAMES = ("coretemp", "k10temp", "zenpower", "cpu_thermal")
 
 
 @dataclass
@@ -67,20 +72,51 @@ class Sample:
         }
 
 
-def _resolve_coretemp_input() -> Path | None:
+def _resolve_cpu_temp_input() -> Path | None:
+    """The hwmon file that reports package/CPU temperature - Intel (coretemp),
+    AMD (k10temp / zenpower) or a generic cpu_thermal zone. Resolved by name so
+    the dynamic hwmon index doesn't matter."""
+    found: dict[str, Path] = {}
     for name_file in _HWMON.glob("hwmon*/name"):
         try:
-            if name_file.read_text().strip() == "coretemp":
-                hwmon = name_file.parent
-                # Prefer the "Package id 0" label; fall back to temp1_input.
-                for label in hwmon.glob("temp*_label"):
-                    if "package" in label.read_text().strip().lower():
-                        return hwmon / label.name.replace("_label", "_input")
-                cand = hwmon / "temp1_input"
-                return cand if cand.exists() else None
+            name = name_file.read_text().strip()
         except OSError:
             continue
+        if name in _CPU_HWMON_NAMES and name not in found:
+            found[name] = name_file.parent
+
+    for name in _CPU_HWMON_NAMES:               # honour the preference order
+        hwmon = found.get(name)
+        if hwmon is None:
+            continue
+        try:
+            # Prefer a "package"/"Tctl"/"Tdie" label, else temp1_input.
+            for label in sorted(hwmon.glob("temp*_label")):
+                lbl = label.read_text().strip().lower()
+                if any(k in lbl for k in ("package", "tctl", "tdie", "tccd")):
+                    cand = hwmon / label.name.replace("_label", "_input")
+                    if cand.exists():
+                        return cand
+        except OSError:
+            pass
+        cand = hwmon / "temp1_input"
+        if cand.exists():
+            return cand
     return None
+
+
+def _resolve_rapl_zone() -> Path | None:
+    """The powercap RAPL zone for the CPU package - ``intel-rapl:0`` on most
+    boxes, but resolved by the zone's ``name`` (``package-0``) so it also works
+    where enumeration differs or the AMD driver is in use."""
+    for zone in sorted(_POWERCAP.glob("*:*")):
+        try:
+            if zone.name.count(":") == 1 and zone.joinpath("name").read_text().strip().startswith("package-"):
+                return zone
+        except OSError:
+            continue
+    legacy = _POWERCAP / "intel-rapl" / "intel-rapl:0"
+    return legacy if legacy.exists() else None
 
 
 def _read_int(path: Path) -> int | None:
@@ -100,6 +136,9 @@ def _throttle_count() -> int:
 
 
 def _nvidia_smi() -> tuple[float | None, float | None, str]:
+    """One cheap nvidia-smi query. Blocks on a subprocess - the daemon injects a
+    non-blocking cached getter instead (see ``DiagnosticEngine`` / ``GpuMonitor``);
+    this direct form is kept for tests and one-off use."""
     if not shutil.which("nvidia-smi"):
         return None, None, ""
     try:
@@ -128,10 +167,16 @@ def _nvidia_smi() -> tuple[float | None, float | None, str]:
 
 
 class DiagnosticEngine:
-    def __init__(self, sample_interval: float = 1.0) -> None:
+    def __init__(
+        self,
+        sample_interval: float = 1.0,
+        gpu_probe: Callable[[], tuple[float | None, float | None, str]] | None = None,
+    ) -> None:
         self.sample_interval = sample_interval
+        self._gpu_probe = gpu_probe or _nvidia_smi
         self.history: deque[Sample] = deque(maxlen=int(HISTORY_SECONDS / max(sample_interval, 0.2)))
-        self._coretemp = _resolve_coretemp_input()
+        self._cpu_temp_input = _resolve_cpu_temp_input()
+        self._rapl = _resolve_rapl_zone()
         self._last_energy: tuple[float, int] | None = None  # (t, energy_uj)
         self._last_throttle = _throttle_count()
         self._incident_seen: dict[str, float] = {}  # kind -> last emitted (monotonic)
@@ -143,18 +188,18 @@ class DiagnosticEngine:
         now = time.monotonic()
 
         cpu_temp = None
-        if self._coretemp:
-            raw = _read_int(self._coretemp)
+        if self._cpu_temp_input:
+            raw = _read_int(self._cpu_temp_input)
             cpu_temp = raw / 1000.0 if raw is not None else None
 
         per_core = psutil.cpu_percent(percpu=True)
         agg = sum(per_core) / len(per_core) if per_core else 0.0
 
         pkg_power = self._package_power(now)
-        pl1 = _read_int(_RAPL / "constraint_0_power_limit_uw")
-        pl2 = _read_int(_RAPL / "constraint_1_power_limit_uw")
+        pl1 = _read_int(self._rapl / "constraint_0_power_limit_uw") if self._rapl else None
+        pl2 = _read_int(self._rapl / "constraint_1_power_limit_uw") if self._rapl else None
 
-        gpu_load, gpu_temp, gpu_reasons = _nvidia_smi()
+        gpu_load, gpu_temp, gpu_reasons = self._gpu_probe()
 
         tc = _throttle_count()
         cpu_throttled = tc > self._last_throttle
@@ -191,7 +236,9 @@ class DiagnosticEngine:
         return round((io.read_bytes - prev[1]) / (now - prev[0]) / 1_000_000, 1)
 
     def _package_power(self, now: float) -> float | None:
-        raw = _read_int(_RAPL / "energy_uj")
+        if self._rapl is None:
+            return None
+        raw = _read_int(self._rapl / "energy_uj")
         if raw is None:
             return None
         prev = self._last_energy
@@ -266,10 +313,6 @@ class DiagnosticEngine:
                 self._incident_seen[kind] = now
                 return (kind, detail)
         return None
-
-    def recent(self, seconds: int = 60) -> list[Sample]:
-        cutoff = time.monotonic() - seconds
-        return [s for s in self.history if s.t >= cutoff]
 
     def recent(self, seconds: int = 60) -> list[Sample]:
         cutoff = time.monotonic() - seconds

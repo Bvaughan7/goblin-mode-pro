@@ -361,6 +361,10 @@ def _ryzenadj_stapm_mw() -> int | None:
 def _snapshot_tdp() -> None:
     if not RYZENADJ:
         return
+    # Capture the full governor/EPP/RAPL baseline first - _snapshot() early-returns
+    # once state.json exists, so it must run before we add our own key or the
+    # governor's original value is never recorded and RevertAll can't restore it.
+    _snapshot()
     data = _load_state() or {}
     if "ryzenadj_stapm_mw" in data:
         return

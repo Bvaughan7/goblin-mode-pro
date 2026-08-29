@@ -1,12 +1,12 @@
 [Desktop Entry]
 Type=Application
 Name=Goblin Mode Pro
-GenericName=Game Performance Tinkerer
-Comment=Optimize CPU, priority and compositor for MMORPGs
+GenericName=Gaming Performance Helper
+Comment=Tune the CPU, priority and compositor while a game runs, and diagnose crashes and FPS drops
 Exec=goblin-mode-pro
 Icon=com.goblinmode.Pro
 Terminal=false
-Categories=Game;Utility;Settings;
-Keywords=performance;gaming;governor;mangohud;proton;wine;
+Categories=Utility;
+Keywords=performance;gaming;fps;game;governor;mangohud;proton;wine;thermal;tdp;
 StartupNotify=true
 X-GNOME-UsesNotifications=true

@@ -57,15 +57,25 @@ class LogWatcher:
     def tail_tail(self, n: int = CONTEXT_LINES) -> list[str]:
         return list(self._recent[-n:])
 
+    #: cap the per-poll read so a huge Proton log can't stall the daemon loop
+    _MAX_READ = 512 * 1024
+
     def poll(self) -> LogHit | None:
         """Read new lines; return the first critical hit (respecting cooldown)."""
         self._rotate_if_needed()
         if not self._path or not self._path.exists():
             return None
         try:
+            size = self._path.stat().st_size
+            if size < self._pos:                    # truncated / replaced
+                self._pos = 0
             with open(self._path, "r", errors="replace") as fh:
-                fh.seek(self._pos)
-                new = fh.read()
+                if size - self._pos > self._MAX_READ:
+                    fh.seek(size - self._MAX_READ)
+                    fh.readline()                  # realign to a line boundary
+                else:
+                    fh.seek(self._pos)
+                new = fh.read(self._MAX_READ)
                 self._pos = fh.tell()
         except OSError:
             return None

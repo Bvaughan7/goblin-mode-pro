@@ -14,7 +14,7 @@ import logging
 import os
 import signal
 import sys
-import time
+import threading
 from typing import Any
 
 import gi
@@ -45,7 +45,11 @@ class Daemon:
         self.payload = PerformancePayload(
             self.helper, on_incident=self._on_payload_incident
         )
-        self.diag = DiagnosticEngine(self.settings.diagnostics_sample_interval)
+        # nvidia-smi is polled on its own thread so the GLib loop never blocks
+        self.gpu_monitor = gpu.GpuMonitor(deep_interval=5.0)
+        self.diag = DiagnosticEngine(
+            self.settings.diagnostics_sample_interval, gpu_probe=self.gpu_monitor.light
+        )
         self.logwatch = LogWatcher()
         self.fpswatch = FpsWatcher()
         self.sessions = SessionTracker()
@@ -69,8 +73,6 @@ class Daemon:
         self._active_pids: dict[str, int] = {}
         self._diag_source_id: int | None = None
         self._poll_source_id: int | None = None
-        self._gpu_state: dict = {}          # refreshed on the diag tick
-        self._gpu_state_at = 0.0
         self._fps_dip_seen = False          # any FPS dip this session?
         self._dirty_profiles: set[str] = set()
         self._save_source_id: int | None = None
@@ -85,6 +87,7 @@ class Daemon:
 
         self.bridge.publish()
         self.tray.start()
+        self.gpu_monitor.start()
 
         self._poll_source_id = GLib.timeout_add_seconds(
             self.settings.poll_interval, self._poll_tick
@@ -114,6 +117,7 @@ class Daemon:
             self.payload.revert_all()
         except Exception:  # noqa: BLE001
             log.exception("error during revert on shutdown")
+        self.gpu_monitor.stop()
         self.tray.stop()
         if self._loop.is_running():
             self._loop.quit()
@@ -258,14 +262,25 @@ class Daemon:
         return True
 
     def _fps_post_mortem(self) -> bool:
+        """After the game exits: did the GPU actually release its VRAM? Needs a
+        *fresh* nvidia-smi, so it runs on a one-shot worker thread and reports
+        back on the loop."""
         self._fps_dip_seen = False
-        try:
-            idle = gpu.deep_state()
-            verdict = gpu.post_mortem(idle)
+
+        def work() -> None:
+            try:
+                idle = gpu.deep_state()
+                verdict = gpu.post_mortem(idle)
+            except Exception:  # noqa: BLE001
+                log.exception("fps post-mortem failed")
+                return
             if verdict:
-                self._raise_incident(verdict[0], verdict[1], gpu_state=idle)
-        except Exception:  # noqa: BLE001
-            log.exception("fps post-mortem failed")
+                GLib.idle_add(
+                    lambda: self._raise_incident(
+                        verdict[0], verdict[1], gpu_state=idle) or GLib.SOURCE_REMOVE
+                )
+
+        threading.Thread(target=work, name="gmp-postmortem", daemon=True).start()
         return GLib.SOURCE_REMOVE
 
     # -- diagnostics ------------------------------------------------
@@ -276,15 +291,21 @@ class Daemon:
             return
         interval_ms = max(200, int(self.settings.diagnostics_sample_interval * 1000))
         self._diag_source_id = GLib.timeout_add(interval_ms, self._diag_tick)
+        self.gpu_monitor.set_active(True)
         log.info("diagnostics sampler started")
 
     def _stop_diagnostics(self) -> None:
         if self._diag_source_id is not None:
             GLib.source_remove(self._diag_source_id)
             self._diag_source_id = None
+            self.gpu_monitor.set_active(False)
             log.info("diagnostics sampler stopped")
 
     def _diag_tick(self) -> bool:
+        """One sample. nvidia-smi is polled off-loop by ``gpu_monitor``, the
+        sysfs reads are microseconds and the log/CSV tails are position-capped
+        (see fpswatch / logwatch), so this stays cheap on the GLib loop - no
+        thread, no cross-thread races on the history deques."""
         try:
             sample = self.diag.sample()
             sdict = sample.as_dict()
@@ -292,11 +313,6 @@ class Daemon:
             if fps_now is not None:
                 sdict["fps"] = fps_now
             self.bridge.emit_metrics(sdict)
-
-            # cheap GPU state refresh ~ every 8 s for the dashboard / post-mortem
-            if time.monotonic() - self._gpu_state_at > 8:
-                self._gpu_state = gpu.deep_state()
-                self._gpu_state_at = time.monotonic()
 
             assessment = self.diag.assess(sample)
             if assessment:
@@ -323,7 +339,7 @@ class Daemon:
                 fps_trace=self.fpswatch.recent_trace(),
             )
             return
-        state = gpu.deep_state()
+        state = self.gpu_monitor.deep()  # cached (<=5 s old while a game runs)
 
         recent = self.diag.recent(6)
         cpu_load = max((s.cpu_load for s in recent), default=None)
@@ -381,10 +397,6 @@ class Daemon:
     def get_status(self) -> dict[str, Any]:
         tweaks = self.payload.status()
         latest = self.diag.history[-1].as_dict() if self.diag.history else None
-        # keep the dashboard's GPU panel populated even when no game is running
-        if not self._gpu_state and time.monotonic() - self._gpu_state_at > 15:
-            self._gpu_state = gpu.deep_state()
-            self._gpu_state_at = time.monotonic()
         return {
             "master_enabled": self.settings.master_enabled,
             "active_games": self.observer.active_exes,
@@ -399,7 +411,7 @@ class Daemon:
             "tweaks": tweaks.as_dict(),
             "latest_sample": latest,
             "fps": self.fpswatch.stats(),
-            "gpu": _gpu_summary(self._gpu_state),
+            "gpu": _gpu_summary(self.gpu_monitor.deep()),
             "capabilities": capabilities.detect(),
             "profiles": [_profile_dict(p) for p in self.settings.profiles],
         }
@@ -470,7 +482,10 @@ class Daemon:
         if not logs:
             return []
         try:
-            text = logs[0].read_text(errors="replace")[-200_000:]
+            with open(logs[0], "r", errors="replace") as fh:
+                fh.seek(0, 2)
+                fh.seek(max(0, fh.tell() - 200_000))
+                text = fh.read()
         except OSError:
             return []
         return [f.__dict__ for f in logrules.analyze_text(text)]
@@ -679,6 +694,9 @@ def main(argv: list[str] | None = None) -> int:
         level=logging.DEBUG if args.verbose else logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
+    # third-party libraries are noisy at DEBUG and never useful here
+    for noisy in ("PIL", "PIL.PngImagePlugin", "PIL.Image"):
+        logging.getLogger(noisy).setLevel(logging.INFO)
 
     if args.write_wrapper:
         print(runner.write_wrapper())

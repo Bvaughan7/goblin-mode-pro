@@ -19,7 +19,7 @@ import platform
 import re
 import shutil
 import subprocess
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 OK, WARN, FAIL, INFO, UNKNOWN = "ok", "warn", "fail", "info", "unknown"

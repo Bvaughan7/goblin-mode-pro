@@ -38,6 +38,8 @@ class MainWindow(Adw.PreferencesWindow):
             self.add(page)
         self.preflight.refresh()
 
+        self._metrics: list | None = None
+        self._incidents: list | None = None
         bridge.on_signal(self._on_signal)
         self._refresh_all()
         GLib.timeout_add_seconds(5, self._periodic_refresh)
@@ -58,42 +60,50 @@ class MainWindow(Adw.PreferencesWindow):
         elif name == "GameDetected" and payload:
             self.toast(f"Auto-detected {payload.get('display_name', 'a game')} "
                        f"via {payload.get('source', '?')}")
-            try:
-                self.games.load_profiles(self.bridge.get_status().get("profiles", []))
-            except Exception:  # noqa: BLE001
-                pass
+            self.bridge.get_status_async(
+                lambda s, _e: s and self.games.load_profiles(s.get("profiles", []))
+            )
 
     def _refresh_all(self) -> None:
-        try:
-            status = self.bridge.get_status()
-        except Exception as exc:  # noqa: BLE001
-            log.warning("status refresh failed: %s", exc)
+        # All reads are async so a busy daemon never freezes the window.
+        self.bridge.get_status_async(self._apply_status)
+        self._metrics = self._incidents = None
+        self.bridge.get_metrics_async(self._got_metrics)
+        self.bridge.get_incidents_async(self._got_incidents)
+        self.bridge.get_sessions_async(lambda s, e: s is not None
+                                       and self.diagnostics.load_sessions(s))
+
+    def _apply_status(self, status, err) -> None:
+        if not status:
+            if err:
+                log.debug("status refresh failed: %s", err)
             return
         self.dashboard.update_status(status)
         self.games.update_status(status)
         self.diagnostics.update_status(status)
         self.games.load_profiles(status.get("profiles", []))
-        try:
-            self.diagnostics.load_history(
-                self.bridge.get_metrics(), self.bridge.get_incidents()
-            )
-        except Exception as exc:  # noqa: BLE001
-            log.debug("history load failed: %s", exc)
-        try:
-            self.diagnostics.load_sessions(self.bridge.get_sessions())
-        except Exception as exc:  # noqa: BLE001
-            log.debug("session load failed: %s", exc)
+
+    def _got_metrics(self, metrics, _err) -> None:
+        self._metrics = metrics or []
+        self._maybe_load_history()
+
+    def _got_incidents(self, incidents, _err) -> None:
+        self._incidents = incidents or []
+        self._maybe_load_history()
+
+    def _maybe_load_history(self) -> None:
+        if self._metrics is not None and self._incidents is not None:
+            self.diagnostics.load_history(self._metrics, self._incidents)
 
     def _periodic_refresh(self) -> bool:
-        if not self.bridge.available:
-            return True
-        try:
-            status = self.bridge.get_status()
+        if self.bridge.available:
+            self.bridge.get_status_async(self._apply_periodic)
+        return True
+
+    def _apply_periodic(self, status, _err) -> None:
+        if status:
             self.dashboard.update_status(status)
             self.games.update_status(status)
-        except Exception:  # noqa: BLE001
-            pass
-        return True
 
     def toast(self, text: str) -> None:
         self.add_toast(Adw.Toast(title=text, timeout=3))

@@ -390,3 +390,20 @@ class BridgeClient:
 
     def get_session_history(self, exe: str) -> list[dict]:
         return json.loads(self._call("GetSessionHistory", GLib.Variant("(s)", (exe,)))[0])
+
+    # -- async reads (never block the GTK main loop) ----------------
+    def get_status_async(self, on_done: Callable[[dict | None, object], None]) -> None:
+        self._call_async("GetStatus", None, lambda out, err: on_done(
+            json.loads(out[0]) if out else None, err), timeout_ms=8000)
+
+    def get_metrics_async(self, on_done: Callable[[list | None, object], None]) -> None:
+        self._call_async("GetMetrics", None, lambda out, err: on_done(
+            json.loads(out[0]) if out else None, err), timeout_ms=8000)
+
+    def get_incidents_async(self, on_done: Callable[[list | None, object], None]) -> None:
+        self._call_async("GetIncidents", None, lambda out, err: on_done(
+            json.loads(out[0]) if out else None, err), timeout_ms=8000)
+
+    def get_sessions_async(self, on_done: Callable[[list | None, object], None]) -> None:
+        self._call_async("GetSessions", None, lambda out, err: on_done(
+            json.loads(out[0]) if out else None, err), timeout_ms=8000)

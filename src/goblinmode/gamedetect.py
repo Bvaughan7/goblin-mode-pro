@@ -212,13 +212,18 @@ def _score(name: str, exe: str, cmd: str, cmd_list: list[str], pid: int):
     return score, source, display, appid
 
 
-def detect_games(min_score: int = GAME_SCORE) -> list[GameCandidate]:
+def detect_games(
+    min_score: int = GAME_SCORE,
+    procs: list["psutil.Process"] | None = None,
+) -> list[GameCandidate]:
     """One sweep of the process table -> scored game candidates.
 
-    When a launcher tags a whole Proton tree, the reported pid is the fattest
-    non-infrastructure descendant (the actual game exe), not the wrapper.
+    Pass *procs* (from a ``psutil.process_iter`` the caller already did) to avoid
+    a second full walk. When a launcher tags a whole Proton tree, the reported
+    pid is the fattest non-infrastructure descendant, not the wrapper.
     """
-    procs = list(psutil.process_iter(["pid", "name", "exe", "cmdline", "ppid"]))
+    if procs is None:
+        procs = list(psutil.process_iter(["pid", "name", "exe", "cmdline", "ppid"]))
     by_pid = {p.info["pid"]: p for p in procs}
 
     hits: dict[int, GameCandidate] = {}

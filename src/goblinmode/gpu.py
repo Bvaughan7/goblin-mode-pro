@@ -16,6 +16,8 @@ from __future__ import annotations
 import logging
 import shutil
 import subprocess
+import threading
+import time
 
 log = logging.getLogger(__name__)
 
@@ -51,7 +53,13 @@ def _num(v: str):
             return v
 
 
+_LIGHT_QUERY = "utilization.gpu,temperature.gpu,clocks_event_reasons.active"
+
+
 def deep_state() -> dict:
+    """A full GPU snapshot. Runs two ``nvidia-smi`` subprocesses (~0.1-1 s, but
+    occasionally seconds under load) - **never call this from a GLib main loop**;
+    use :class:`GpuMonitor` for the polled case."""
     if not available():
         return {}
     try:
@@ -68,6 +76,98 @@ def deep_state() -> dict:
     state = {k: _num(parts[i]) for i, k in enumerate(_FIELDS) if i < len(parts)}
     state.update(_pcie_throughput())
     return state
+
+
+def light_state() -> tuple[float | None, float | None, str]:
+    """(gpu load %, temp °C, clock-event-reasons hex) - one cheap nvidia-smi."""
+    if not available():
+        return None, None, ""
+    try:
+        out = subprocess.run(
+            ["nvidia-smi", f"--query-gpu={_LIGHT_QUERY}", "--format=csv,noheader,nounits"],
+            capture_output=True, text=True, timeout=4,
+        ).stdout.strip().splitlines()
+    except (OSError, subprocess.SubprocessError):
+        return None, None, ""
+    if not out:
+        return None, None, ""
+    parts = [p.strip() for p in out[0].split(",")]
+    try:
+        return float(parts[0]), float(parts[1]), (parts[2] if len(parts) > 2 else "")
+    except (ValueError, IndexError):
+        return None, None, ""
+
+
+class GpuMonitor:
+    """Polls ``nvidia-smi`` on a background thread so the daemon's GLib loop
+    never blocks on it. Everything degrades to empty when there is no NVIDIA GPU.
+
+    * :meth:`light` - (load, temp, reasons), refreshed roughly every second
+    * :meth:`deep`  - the full snapshot dict, refreshed roughly every 8 s
+    """
+
+    #: (light interval, deep interval) seconds - idle first, then while a game runs
+    _IDLE = (6.0, 30.0)
+    _ACTIVE = (1.0, 5.0)
+
+    def __init__(self, deep_interval: float | None = None) -> None:
+        self._active = False
+        self._active_deep = deep_interval or self._ACTIVE[1]
+        self._lock = threading.Lock()
+        self._light: tuple[float | None, float | None, str] = (None, None, "")
+        self._deep: dict = {}
+        self._deep_at = 0.0
+        self._thread: threading.Thread | None = None
+        self._stop = threading.Event()
+        self._wake = threading.Event()
+
+    def start(self) -> None:
+        if not available() or (self._thread and self._thread.is_alive()):
+            return
+        self._stop.clear()
+        self._thread = threading.Thread(target=self._run, name="gmp-gpu", daemon=True)
+        self._thread.start()
+
+    def stop(self) -> None:
+        self._stop.set()
+        self._wake.set()
+
+    def set_active(self, active: bool) -> None:
+        """Poll fast while a game runs, slowly otherwise."""
+        if active != self._active:
+            self._active = active
+            self._wake.set()  # apply the new cadence immediately
+
+    def _run(self) -> None:
+        while not self._stop.is_set():
+            light_iv, deep_iv = self._ACTIVE if self._active else self._IDLE
+            deep_iv = self._active_deep if self._active else deep_iv
+            light = light_state()                      # subprocess - outside the lock
+            with self._lock:
+                self._light = light
+            if time.monotonic() - self._deep_at >= deep_iv:
+                deep = deep_state()                   # subprocess - outside the lock
+                with self._lock:
+                    self._deep = deep
+                    self._deep_at = time.monotonic()
+            self._wake.wait(light_iv)
+            self._wake.clear()
+
+    def light(self) -> tuple[float | None, float | None, str]:
+        with self._lock:
+            return self._light
+
+    def deep(self, *, force: bool = False) -> dict:
+        """Cached deep snapshot. ``force`` blocks for a fresh one - only call
+        that from a worker thread (e.g. the FPS-dip handler)."""
+        if force:
+            fresh = deep_state()
+            with self._lock:
+                self._deep = fresh
+                self._deep_at = time.monotonic()
+            return fresh
+        with self._lock:
+            return dict(self._deep)
 
 
 def _pcie_throughput() -> dict:
@@ -173,7 +273,10 @@ def assess(state: dict, *, fps: float | None = None, under_load: bool = True) ->
 
 
 def post_mortem(idle_state: dict) -> tuple[str, str] | None:
-    """After the game exits: did the GPU actually let go? Returns (kind, detail)."""
+    """After the game exits: did the GPU actually let go? Returns (kind, detail).
+
+    Only VRAM is checked - an idle PCIe down-train is normal ASPM, not a fault.
+    """
     used = idle_state.get("vram_used_mb")
     if used is not None and used > 900:
         return (
@@ -181,8 +284,4 @@ def post_mortem(idle_state: dict) -> tuple[str, str] | None:
             f"{used} MB of VRAM still allocated after the game exited - a "
             f"driver-side leak; a reboot clears it",
         )
-    gen, gen_max = idle_state.get("pcie_gen"), idle_state.get("pcie_gen_max")
-    if gen and gen_max and gen < gen_max and (idle_state.get("util_gpu") or 0) < 5:
-        # idle down-train is normal ASPM - only flag if it looks stuck oddly low
-        return None
     return None
