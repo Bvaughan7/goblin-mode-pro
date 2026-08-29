@@ -203,7 +203,13 @@ class PerformancePayload:
         want_power = bool(pl1_uw or pl2_uw)
         want_helper = want_governor or want_power
         want_tearing = any(p.tearing_enabled for p in self._active.values())
-        want_vrr = any(p.adaptive_sync_enabled for p in self._active.values())
+        vrr_wanting = [p for p in self._active.values() if p.adaptive_sync_enabled]
+        want_vrr = bool(vrr_wanting)
+        # Union of every wanting profile's restricted outputs; if any of them
+        # wants "all outputs" (an empty list), that wins - it's the broader ask.
+        vrr_outputs: list[str] | None = None
+        if vrr_wanting and all(p.vrr_outputs for p in vrr_wanting):
+            vrr_outputs = sorted({o for p in vrr_wanting for o in p.vrr_outputs})
 
         power: tuple[str, tuple[int, int]] | None = None
         if want_power:
@@ -226,7 +232,7 @@ class PerformancePayload:
             self._tearing_applied = False
 
         if want_vrr and not self._vrr_applied:
-            self._vrr_applied = self.compositor.enable_adaptive_sync()
+            self._vrr_applied = self.compositor.enable_adaptive_sync(outputs=vrr_outputs)
         elif not want_vrr and self._vrr_applied:
             self.compositor.restore_adaptive_sync()
             self._vrr_applied = False

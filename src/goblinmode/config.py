@@ -138,6 +138,10 @@ class GameProfile:
     core_pin: str = "off"        # off | performance | cache0  (see CORE_PIN_MODES)
     tearing_enabled: bool = True
     adaptive_sync_enabled: bool = False
+    # Which output(s) to enable VRR on; empty = every VRR-capable output (the
+    # old behavior). KDE only - see compositor.py's module docstring for why
+    # Hyprland has no per-output equivalent to restrict to.
+    vrr_outputs: list[str] = field(default_factory=list)
     governor_boost: bool = True
     focus_mode: bool = False   # quiet the desktop: pause the file indexer, DND, inhibit idle
 
@@ -199,6 +203,7 @@ class GameProfile:
         self.battery_pl2_w = max(0, min(500, int(self.battery_pl2_w)))
         self.fps_dip_floor = max(5, min(120, int(self.fps_dip_floor)))
         self.fps_dip_ratio = max(0.1, min(0.9, float(self.fps_dip_ratio)))
+        self.vrr_outputs = [str(o)[:64] for o in (self.vrr_outputs or [])][:16]
         # Fill in any keys added in newer versions.
         for k, v in _default_mangohud().items():
             self.mangohud.setdefault(k, v)

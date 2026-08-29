@@ -80,8 +80,8 @@ class _StubCompositor:
     def restore_tearing(self):
         self.tearing = False
 
-    def enable_adaptive_sync(self):
-        self.vrr = True; return True
+    def enable_adaptive_sync(self, policy="automatic", outputs=None):
+        self.vrr = True; self.vrr_outputs = outputs; return True
 
     def restore_adaptive_sync(self):
         self.vrr = False
