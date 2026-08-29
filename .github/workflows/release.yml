@@ -26,6 +26,9 @@ jobs:
   deb:
     needs: version
     runs-on: ubuntu-latest
+    env:
+      GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+      GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
     steps:
       - uses: actions/checkout@v4
 
@@ -45,10 +48,7 @@ jobs:
       # CONTRIBUTING.md "Signing releases". Skips cleanly (unsigned artifact,
       # same as today) when the secrets aren't set, e.g. on a fork's CI.
       - name: Sign the .deb
-        if: ${{ secrets.GPG_PRIVATE_KEY != '' }}
-        env:
-          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
-          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        if: ${{ env.GPG_PRIVATE_KEY != '' }}
         run: |
           sudo apt-get install -y dpkg-sig
           echo "$GPG_PRIVATE_KEY" | gpg --batch --import
@@ -67,6 +67,9 @@ jobs:
     needs: version
     runs-on: ubuntu-latest
     container: fedora:latest
+    env:
+      GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+      GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
     steps:
       - name: Install packaging tools
         run: dnf install -y rpm-build rpm-sign systemd-rpm-macros gnupg2 git python3 tar gzip
@@ -98,10 +101,7 @@ jobs:
       # Same key/secrets as the .deb job - see CONTRIBUTING.md "Signing
       # releases". Skips cleanly when the secrets aren't set.
       - name: Sign the .rpm
-        if: ${{ secrets.GPG_PRIVATE_KEY != '' }}
-        env:
-          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
-          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        if: ${{ env.GPG_PRIVATE_KEY != '' }}
         run: |
           echo "$GPG_PRIVATE_KEY" | gpg --batch --import
           key_id=$(gpg --list-secret-keys --with-colons | awk -F: '/^sec/{print $5; exit}')
