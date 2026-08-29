@@ -11,19 +11,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      # the suite is stdlib-only except that goblinmode.diagnostics /
-      # observer / gamedetect import psutil at module load
-      - run: pip install "psutil>=5.9"
+      # Use the runner's system python3 (like gui-import) so the apt-installed
+      # PyGObject is importable. The suite is stdlib-only except for psutil
+      # (diagnostics / observer / gamedetect) and PyGObject, which the payload
+      # and bridge integration tests pull in via the D-Bus client layer.
+      - name: Install test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-psutil python3-gi gir1.2-glib-2.0
 
       - name: Compile-check every module
-        run: python -m compileall -q src helper
+        run: python3 -m compileall -q src helper
 
       - name: Unit tests
-        run: python -m unittest discover -s tests -v
+        run: python3 -m unittest discover -s tests -v
 
       - name: Shell syntax check
         run: |
@@ -33,7 +34,7 @@ jobs:
 
       - name: Validate the community profile JSON
         run: |
-          python - <<'PY'
+          python3 - <<'PY'
           import json, pathlib, sys
           idx = json.loads(pathlib.Path("profiles/index.json").read_text())
           assert isinstance(idx, list) and idx, "index.json must be a non-empty list"
