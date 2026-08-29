@@ -83,5 +83,30 @@ class GamescopeArgs(unittest.TestCase):
         self.assertFalse(text.startswith(prefix), f"{text!r} starts with {prefix!r}")
 
 
+class GamescopeSessionArgv(unittest.TestCase):
+    def test_no_profile_defaults_to_steam_big_picture(self):
+        argv = runner.gamescope_session_argv(None)
+        self.assertEqual(argv[0], "gamescope")
+        self.assertIn("--", argv)
+        self.assertEqual(argv[argv.index("--") + 1:], runner.DEFAULT_SESSION_COMMAND)
+
+    def test_no_profile_uses_generic_borderless_args(self):
+        argv = runner.gamescope_session_argv(None)
+        self.assertIn("-b", argv[:argv.index("--")])
+        self.assertIn("-e", argv[:argv.index("--")])
+
+    def test_profile_args_are_reused_from_gamescope_args(self):
+        p = GameProfile(exe="a", gamescope_enabled=True,
+                         gamescope={"w": 1280, "h": 800, "refresh": 0,
+                                    "upscale": "off", "hdr": False,
+                                    "borderless": True, "steam_overlay": True})
+        argv = runner.gamescope_session_argv(p)
+        self.assertEqual(argv[1:argv.index("--")], runner.gamescope_args(p))
+
+    def test_explicit_command_overrides_default(self):
+        argv = runner.gamescope_session_argv(None, ["my-launcher", "--fullscreen"])
+        self.assertEqual(argv[argv.index("--") + 1:], ["my-launcher", "--fullscreen"])
+
+
 if __name__ == "__main__":
     unittest.main()

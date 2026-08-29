@@ -156,6 +156,8 @@ install_user_bits() {
     msg "Installing the desktop entry, icon and user service"
     sudo install -Dm0644 "$REPO_DIR/data/com.goblinmode.Pro.desktop" \
         "$PREFIX/share/applications/com.goblinmode.Pro.desktop"
+    sudo install -Dm0644 "$REPO_DIR/data/com.goblinmode.Pro.GamescopeSession.desktop" \
+        "$PREFIX/share/applications/com.goblinmode.Pro.GamescopeSession.desktop"
     sudo install -Dm0644 "$REPO_DIR/data/icons/com.goblinmode.Pro.svg" \
         "$PREFIX/share/icons/hicolor/scalable/apps/com.goblinmode.Pro.svg"
     sudo install -Dm0644 "$REPO_DIR/data/systemd/goblin-mode-pro.service" \
@@ -187,6 +189,7 @@ uninstall() {
         "$PREFIX/lib/systemd/system/goblin-mode-pro-helper.service" \
         "$PREFIX/lib/systemd/user/goblin-mode-pro.service" \
         "$PREFIX/share/applications/com.goblinmode.Pro.desktop" \
+        "$PREFIX/share/applications/com.goblinmode.Pro.GamescopeSession.desktop" \
         "$PREFIX/share/icons/hicolor/scalable/apps/com.goblinmode.Pro.svg" \
         /usr/bin/goblin-mode-pro-daemon /usr/bin/goblin-mode-pro /usr/bin/goblin-mode-pro-cli
     sudo rm -rf -- "$LIB_DIR" \

@@ -11,6 +11,7 @@ in a plain terminal or over SSH with no display.
     goblin-mode-pro-cli preflight [--fix]
     goblin-mode-pro-cli report [--issue]
     goblin-mode-pro-cli games
+    goblin-mode-pro-cli gamescope-session [--game NAME] [-- COMMAND...]
 """
 
 from __future__ import annotations
@@ -137,11 +138,44 @@ def cmd_setup(b: BridgeClient, _args) -> int:
     return 0
 
 
+def cmd_gamescope_session(b: BridgeClient, args) -> int:
+    """Launch a standalone gamescope session (Steam Big Picture by default,
+    or a specific game's profile) - gamescope becomes the top-level
+    compositor for it, replacing this process (os.execvp), rather than
+    nesting inside a single already-launching game the way the per-game
+    launch wrapper's embedded gamescope does."""
+    import os
+    import shutil
+
+    from goblinmode import runner
+    from goblinmode.config import GameProfile
+
+    if not shutil.which("gamescope"):
+        _p("gamescope is not installed")
+        return 1
+
+    profile = None
+    if args.game:
+        needle = args.game.lower()
+        for p in b.get_status().get("profiles") or []:
+            if needle in {(p.get("exe") or "").lower(), (p.get("display_name") or "").lower()}:
+                fields = {k: v for k, v in p.items() if k in GameProfile.__dataclass_fields__}
+                profile = GameProfile(**fields)
+                break
+        if profile is None:
+            _p(f"no profile matches {args.game!r} — run 'goblin-mode-pro-cli games' to list them")
+            return 1
+
+    argv = runner.gamescope_session_argv(profile, args.command or None)
+    _p("launching:", " ".join(argv))
+    os.execvp(argv[0], argv)  # noqa: S606 - fixed binary name, not user input
+
+
 _COMMANDS = {
     "status": cmd_status, "boost": cmd_boost, "unboost": cmd_unboost,
     "health": cmd_health, "sessions": cmd_sessions, "benchmark": cmd_benchmark,
     "preflight": cmd_preflight, "report": cmd_report, "games": cmd_games,
-    "setup": cmd_setup,
+    "setup": cmd_setup, "gamescope-session": cmd_gamescope_session,
 }
 
 
@@ -161,6 +195,11 @@ def main(argv: list[str] | None = None) -> int:
             sp.add_argument("--fix", action="store_true")
         if name == "report":
             sp.add_argument("--issue", action="store_true")
+        if name == "gamescope-session":
+            sp.add_argument("--game", default="", help="a game's exe or display name; "
+                             "default launches Steam Big Picture")
+            sp.add_argument("command", nargs="*", default=[],
+                             help="command to run instead of Steam, after --")
     args = ap.parse_args(argv)
     return _COMMANDS[args.cmd](_connect(), args)
 

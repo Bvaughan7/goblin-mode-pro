@@ -67,6 +67,7 @@ install -Dm0644 data/dbus/com.goblinmode.ProHelper.conf     %{buildroot}%{_datad
 install -Dm0644 data/systemd/goblin-mode-pro-helper.service %{buildroot}%{_unitdir}/goblin-mode-pro-helper.service
 install -Dm0644 data/systemd/goblin-mode-pro.service        %{buildroot}%{_userunitdir}/goblin-mode-pro.service
 install -Dm0644 data/com.goblinmode.Pro.desktop            %{buildroot}%{_datadir}/applications/com.goblinmode.Pro.desktop
+install -Dm0644 data/com.goblinmode.Pro.GamescopeSession.desktop %{buildroot}%{_datadir}/applications/com.goblinmode.Pro.GamescopeSession.desktop
 install -Dm0644 data/icons/com.goblinmode.Pro.svg          %{buildroot}%{_datadir}/icons/hicolor/scalable/apps/com.goblinmode.Pro.svg
 install -Dm0644 data/systemd/helper-amd-tdp.conf           %{buildroot}%{_datadir}/%{name}/helper-amd-tdp.conf
 install -Dm0644 data/systemd/helper-undervolt.conf         %{buildroot}%{_datadir}/%{name}/helper-undervolt.conf
@@ -94,6 +95,7 @@ install -Dm0644 data/systemd/helper-undervolt.conf         %{buildroot}%{_datadi
 %{_unitdir}/goblin-mode-pro-helper.service
 %{_userunitdir}/goblin-mode-pro.service
 %{_datadir}/applications/com.goblinmode.Pro.desktop
+%{_datadir}/applications/com.goblinmode.Pro.GamescopeSession.desktop
 %{_datadir}/icons/hicolor/scalable/apps/com.goblinmode.Pro.svg
 %{_datadir}/%{name}/
 

@@ -170,6 +170,24 @@ def print_gamescope(argv: list[str], settings: Settings) -> str:
     return " ".join(gamescope_args(profile))
 
 
+#: what a standalone gamescope session launches with no game specified -
+#: Steam's Big Picture / gamepad UI, the usual "session" content.
+DEFAULT_SESSION_COMMAND = ["steam", "-tenfoot"]
+
+
+def gamescope_session_argv(
+    profile: GameProfile | None, command: list[str] | None = None
+) -> list[str]:
+    """argv for a *standalone* gamescope session: gamescope becomes the
+    top-level compositor hosting ``command`` (default: Steam Big Picture),
+    instead of nesting inside a single already-launching game process the
+    way the per-launch wrapper's embedded gamescope does. Used by
+    ``goblin-mode-pro-cli gamescope-session`` and its matching .desktop
+    entry - not part of the ``goblin-run`` wrapper flow."""
+    args = gamescope_args(profile) if profile is not None else ["-b", "-e"]
+    return ["gamescope", *args, "--", *(command or DEFAULT_SESSION_COMMAND)]
+
+
 def latest_log_files(limit: int = 8) -> list[Path]:
     if not GAME_LOG_DIR.exists():
         return []

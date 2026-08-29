@@ -51,6 +51,8 @@ package() {
     "$pkgdir/usr/lib/systemd/user/goblin-mode-pro.service"
   install -Dm0644 data/com.goblinmode.Pro.desktop \
     "$pkgdir/usr/share/applications/com.goblinmode.Pro.desktop"
+  install -Dm0644 data/com.goblinmode.Pro.GamescopeSession.desktop \
+    "$pkgdir/usr/share/applications/com.goblinmode.Pro.GamescopeSession.desktop"
   install -Dm0644 data/icons/com.goblinmode.Pro.svg \
     "$pkgdir/usr/share/icons/hicolor/scalable/apps/com.goblinmode.Pro.svg"
   install -Dm0644 data/systemd/helper-amd-tdp.conf \

@@ -94,6 +94,44 @@ class CliDispatch(unittest.TestCase):
         self.assertIn("WoW", self._run("games"))
         self.assertIn("setup", self._run("setup"))
 
+    def test_gamescope_session_missing_binary(self):
+        from unittest.mock import patch
+
+        with patch("shutil.which", return_value=None):
+            buf = io.StringIO()
+            with redirect_stdout(buf):
+                rc = cli.main(["gamescope-session"])
+        self.assertEqual(rc, 1)
+        self.assertIn("not installed", buf.getvalue())
+
+    def test_gamescope_session_unknown_game(self):
+        from unittest.mock import patch
+
+        with patch("shutil.which", return_value="/usr/bin/gamescope"):
+            buf = io.StringIO()
+            with redirect_stdout(buf):
+                rc = cli.main(["gamescope-session", "--game", "NoSuchGame"])
+        self.assertEqual(rc, 1)
+        self.assertIn("no profile matches", buf.getvalue())
+
+    def test_gamescope_session_execs_with_resolved_profile(self):
+        from unittest.mock import patch
+
+        with patch("shutil.which", return_value="/usr/bin/gamescope"), \
+             patch("os.execvp") as execvp:
+            cli.main(["gamescope-session", "--game", "Wow.exe"])
+        self.assertEqual(execvp.call_args[0][0], "gamescope")
+        self.assertIn("gamescope", execvp.call_args[0][1])
+
+    def test_gamescope_session_default_launches_steam(self):
+        from unittest.mock import patch
+
+        with patch("shutil.which", return_value="/usr/bin/gamescope"), \
+             patch("os.execvp") as execvp:
+            cli.main(["gamescope-session"])
+        argv = execvp.call_args[0][1]
+        self.assertEqual(argv[argv.index("--") + 1:], ["steam", "-tenfoot"])
+
 
 if __name__ == "__main__":
     unittest.main()

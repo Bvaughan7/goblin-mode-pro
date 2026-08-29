@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Goblin Mode Pro (gamescope session)
+GenericName=Steam Big Picture in gamescope
+Comment=Launch Steam Big Picture as a standalone gamescope session, instead of nesting gamescope inside one game's launch wrapper
+Exec=goblin-mode-pro-cli gamescope-session
+Icon=com.goblinmode.Pro
+Terminal=false
+Categories=Utility;Game;
+Keywords=gamescope;steam;big picture;session;handheld;
+StartupNotify=true
