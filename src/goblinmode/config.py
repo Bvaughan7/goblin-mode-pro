@@ -242,6 +242,7 @@ class Settings:
     llm_model_hint: str = ""  # free-form note included in the export payload
     auto_detect: bool = True                       # detect any game, not just the profile list
     ignored_games: list[str] = field(default_factory=list)  # exe names the user said "ignore"
+    prometheus_textfile: str = ""  # path to write a node_exporter textfile collector .prom; "" = off
     profiles: list[GameProfile] = field(default_factory=list)
 
     def __post_init__(self) -> None:

@@ -82,6 +82,7 @@ class Daemon:
         self._benchmark: dict | None = None  # active benchmark run, if any
         self._dirty_profiles: set[str] = set()
         self._save_source_id: int | None = None
+        self._prom_exporter = None  # goblinmode.exporter.Exporter, created lazily
 
     # -- lifecycle ------------------------------------------------------
     def run(self) -> int:
@@ -748,6 +749,16 @@ class Daemon:
         status = self.get_status()
         self.bridge.emit_status(status)
         self.tray.update(status)
+        if self.settings.prometheus_textfile:
+            self._exporter().maybe_write(status)
+
+    def _exporter(self):
+        from goblinmode.exporter import Exporter
+
+        if getattr(self, "_prom_exporter", None) is None or \
+                self._prom_exporter.path != self.settings.prometheus_textfile:
+            self._prom_exporter = Exporter(self.settings.prometheus_textfile)
+        return self._prom_exporter
 
     def _export_and_notify(self) -> None:
         payload = self.export_last_incident()
