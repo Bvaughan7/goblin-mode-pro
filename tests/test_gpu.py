@@ -6,6 +6,26 @@ from tests._support import _SRC  # noqa: F401
 from goblinmode import gpu
 
 
+class NvidiaModuleState(unittest.TestCase):
+    def test_shape_is_always_the_same(self):
+        state = gpu.nvidia_module_state()
+        self.assertIn("present", state)
+        self.assertIn("modeset", state)
+        self.assertIn("gsp_firmware_version", state)
+        self.assertIsInstance(state["present"], bool)
+
+    def test_no_nvidia_drm_or_proc_entries_returns_all_none(self):
+        from unittest.mock import patch
+
+        with patch("pathlib.Path.exists", return_value=False), \
+             patch("pathlib.Path.read_text", side_effect=OSError), \
+             patch("pathlib.Path.iterdir", side_effect=OSError):
+            state = gpu.nvidia_module_state()
+        self.assertFalse(state["present"])
+        self.assertIsNone(state["modeset"])
+        self.assertIsNone(state["gsp_firmware_version"])
+
+
 class Assess(unittest.TestCase):
     def test_vram_exhaustion_flagged(self):
         state = {"util_gpu": 90, "vram_used_mb": 5900, "vram_total_mb": 6000, "vram_free_mb": 100}

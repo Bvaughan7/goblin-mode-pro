@@ -16,20 +16,20 @@ log = logging.getLogger(__name__)
 _HOME = Path.home()
 
 #: Steam library roots to probe (native, flatpak, snap, and the classic path).
-_STEAM_ROOTS = [
+STEAM_ROOTS = [
     _HOME / ".steam/steam",
     _HOME / ".local/share/Steam",
     _HOME / ".var/app/com.valvesoftware.Steam/data/Steam",
     _HOME / "snap/steam/common/.local/share/Steam",
 ]
 
-_COMPAT_DIRS = [r / "compatibilitytools.d" for r in _STEAM_ROOTS] + [
+_COMPAT_DIRS = [r / "compatibilitytools.d" for r in STEAM_ROOTS] + [
     _HOME / ".local/share/lutris/runners/proton",
 ]
 
 _CACHE_DIRS = {
     "DXVK state cache": [_HOME / ".cache/dxvk", _HOME / ".local/share/dxvk"],
-    "Steam shader cache": [r / "steamapps/shadercache" for r in _STEAM_ROOTS],
+    "Steam shader cache": [r / "steamapps/shadercache" for r in STEAM_ROOTS],
     "NVIDIA GL cache": [_HOME / ".cache/nvidia/GLCache"],
     "Mesa shader cache": [_HOME / ".cache/mesa_shader_cache",
                           _HOME / ".cache/mesa_shader_cache_db"],

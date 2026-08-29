@@ -40,6 +40,40 @@ def available() -> bool:
     return shutil.which("nvidia-smi") is not None
 
 
+def nvidia_module_state() -> dict:
+    """Read-only: the current ``nvidia_drm.modeset`` parameter and, if
+    present, the driver's reported GSP firmware version - both informational,
+    neither is writable at runtime (modeset is a boot-time modprobe option;
+    see ``helper.set_nvidia_modeset`` for changing the on-disk config)."""
+    from pathlib import Path
+
+    modeset_path = Path("/sys/module/nvidia_drm/parameters/modeset")
+    try:
+        modeset = modeset_path.read_text().strip() or None
+    except OSError:
+        modeset = None
+
+    gsp_version = None
+    gpus_dir = Path("/proc/driver/nvidia/gpus")
+    try:
+        for gpu_dir in gpus_dir.iterdir():
+            info = (gpu_dir / "information").read_text()
+            for line in info.splitlines():
+                if line.lower().startswith("gsp firmware version"):
+                    gsp_version = line.split(":", 1)[-1].strip()
+                    break
+            if gsp_version:
+                break
+    except OSError:
+        pass
+
+    return {
+        "present": modeset_path.exists() or gpus_dir.exists(),
+        "modeset": modeset,          # "Y" / "N" / None (unreadable or no nvidia_drm)
+        "gsp_firmware_version": gsp_version,  # None means GSP is off or unreported
+    }
+
+
 def _num(v: str):
     v = v.strip()
     if v in ("", "[N/A]", "N/A", "[Not Supported]"):

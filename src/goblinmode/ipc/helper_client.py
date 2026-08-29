@@ -131,6 +131,11 @@ class HelperClient:
     def apply_amd_undervolt(self) -> bool:
         return self._call("ApplyAmdUndervolt").unpack()[0]
 
+    def set_nvidia_modeset(self, enabled: bool) -> bool:
+        return self._call(
+            "SetNvidiaModeset", GLib.Variant("(b)", (bool(enabled),))
+        ).unpack()[0]
+
     def read_undervolt(self) -> str:
         try:
             return self._call("ReadUndervolt").unpack()[0]

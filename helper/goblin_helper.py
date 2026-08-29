@@ -77,6 +77,12 @@ AMD_UNDERVOLT_CONF = Path("/etc/goblin-mode-pro/amd-undervolt.conf")
 _AMD_UV_LINE = re.compile(r"^\s*(coall|coper(\d+))\s*=\s*(-?\d+)\s*$")
 _AMD_UV_RANGE = (-30, 0)  # the range every ryzenadj curve-optimizer guide uses
 
+#: nvidia-drm.modeset is a boot-time modprobe option - there is no runtime
+#: write path, only a persistent modprobe.d config + a reboot. This file's
+#: entire content is one of two fixed strings; nothing else is ever written
+#: to it.
+NVIDIA_MODESET_CONF = Path("/etc/modprobe.d/goblin-mode-pro-nvidia.conf")
+
 # sysctl keys the pre-flight check is allowed to set at runtime, each with an
 # accepted numeric range. Nothing outside this table can be touched.
 SYSCTL_ALLOW: dict[str, tuple[int, int]] = {
@@ -152,6 +158,10 @@ INTROSPECTION_XML = f"""
       <arg type="s" name="text" direction="out"/>
     </method>
     <method name="ApplyAmdUndervolt">
+      <arg type="b" name="ok" direction="out"/>
+    </method>
+    <method name="SetNvidiaModeset">
+      <arg type="b" name="enabled" direction="in"/>
       <arg type="b" name="ok" direction="out"/>
     </method>
   </interface>
@@ -362,6 +372,24 @@ def apply_amd_undervolt() -> bool:
         log.warning("ryzenadj curve-optimizer apply failed: %s", exc)
         return False
     log.info("re-applied AMD Curve Optimizer offsets: %s", offsets)
+    return True
+
+
+def set_nvidia_modeset(enabled: bool) -> bool:
+    """Write /etc/modprobe.d/goblin-mode-pro-nvidia.conf with a fixed
+    ``options nvidia_drm modeset=0|1`` line - never arbitrary content, always
+    exactly one of these two strings. Takes effect after a reboot (or
+    `initramfs` regen + reboot on distros that bake modprobe.d into it) -
+    there's no runtime toggle for this parameter."""
+    text = f"options nvidia_drm modeset={1 if enabled else 0}\n"
+    try:
+        NVIDIA_MODESET_CONF.parent.mkdir(parents=True, exist_ok=True)
+        _write(NVIDIA_MODESET_CONF, text)
+    except OSError as exc:
+        log.warning("could not write %s: %s", NVIDIA_MODESET_CONF, exc)
+        return False
+    log.info("wrote %s: modeset=%d (takes effect after reboot)",
+             NVIDIA_MODESET_CONF, 1 if enabled else 0)
     return True
 
 
@@ -663,6 +691,7 @@ _MUTATING = {
     "RevertSysctl",
     "ApplyUndervolt",
     "ApplyAmdUndervolt",
+    "SetNvidiaModeset",
 }
 
 
@@ -677,7 +706,8 @@ def _handle_call(
 ):
     try:
         if method_name in _MUTATING:
-            action = (POLKIT_KERNEL if method_name in ("SetSysctl", "RevertSysctl")
+            action = (POLKIT_KERNEL
+                      if method_name in ("SetSysctl", "RevertSysctl", "SetNvidiaModeset")
                       else POLKIT_PERF)
             if not _check_authorized(sender, action):
                 invocation.return_dbus_error(
@@ -724,6 +754,8 @@ def _handle_call(
             invocation.return_value(GLib.Variant("(s)", (read_undervolt(),)))
         elif method_name == "ApplyAmdUndervolt":
             invocation.return_value(GLib.Variant("(b)", (apply_amd_undervolt(),)))
+        elif method_name == "SetNvidiaModeset":
+            invocation.return_value(GLib.Variant("(b)", (set_nvidia_modeset(bool(args[0])),)))
         else:
             invocation.return_dbus_error(
                 "org.freedesktop.DBus.Error.UnknownMethod", method_name

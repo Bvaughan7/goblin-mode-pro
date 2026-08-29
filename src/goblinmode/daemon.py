@@ -187,6 +187,9 @@ class Daemon:
             if getattr(profile, "clip_on_incident", False):
                 threading.Thread(target=self.clip.start, name="gmp-clip-start",
                                  daemon=True).start()
+            if profile.steam_app_id:
+                threading.Thread(target=self._prewarm_shaders, args=(profile.steam_app_id,),
+                                 name="gmp-shader-prewarm", daemon=True).start()
         elif event.profile is not None:
             exe = event.profile.exe
             game = event.profile.display_name
@@ -208,6 +211,19 @@ class Daemon:
                     self._notify("Performance mode off",
                                  "Settings restored to normal.", urgency=0)
         self._broadcast_status()
+
+    def _prewarm_shaders(self, steam_app_id: str) -> None:
+        """Best-effort, runs off the GLib loop's thread - never blocks a
+        launch. See goblinmode.shadercache for what this actually does and
+        why a False/no-op result here is normal, not a problem."""
+        try:
+            from goblinmode import shadercache
+
+            ok, msg = shadercache.prewarm_shader_cache(steam_app_id)
+            log.info("shader pre-warm for AppID %s: %s", steam_app_id, msg) if ok \
+                else log.debug("shader pre-warm for AppID %s skipped: %s", steam_app_id, msg)
+        except Exception:  # noqa: BLE001 - background thread, must never crash the daemon
+            log.exception("shader pre-warm failed for AppID %s", steam_app_id)
 
     def _tweaks_fingerprint(self) -> list[str]:
         """A short, human-readable list of what's currently applied, stored with
