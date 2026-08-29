@@ -137,6 +137,11 @@ class GameProfile:
     nice_value: int = -5
     core_pin: str = "off"        # off | performance | cache0  (see CORE_PIN_MODES)
     tearing_enabled: bool = True
+    # Cap the internal panel's refresh rate for this game (Hz); 0 = leave it
+    # alone. Mainly for handhelds (Deck 40/50/60, Ally up to 120...) where a
+    # lower refresh rate trades smoothness for battery life on a per-game
+    # basis. No-ops if no matching mode is advertised - see compositor.py.
+    refresh_rate_hz: int = 0
     adaptive_sync_enabled: bool = False
     # Which output(s) to enable VRR on; empty = every VRR-capable output (the
     # old behavior). KDE only - see compositor.py's module docstring for why
@@ -160,6 +165,9 @@ class GameProfile:
     # /etc/goblin-mode-pro/amd-undervolt.conf (the user's own file - GMP
     # never chooses these either).
     amd_undervolt_reapply: bool = False
+    # Preemptive fan spin-up on launch, where the EC exposes a writable pwm
+    # control (most don't - see capabilities.py's "fan_control" probe).
+    fan_spinup_enabled: bool = False
 
     # Phase C - MangoHud
     per_game_mangohud: bool = False
@@ -205,6 +213,7 @@ class GameProfile:
         self.pl2_w = max(0, min(500, int(self.pl2_w)))
         self.battery_pl1_w = max(0, min(500, int(self.battery_pl1_w)))
         self.battery_pl2_w = max(0, min(500, int(self.battery_pl2_w)))
+        self.refresh_rate_hz = max(0, min(1000, int(self.refresh_rate_hz)))
         self.fps_dip_floor = max(5, min(120, int(self.fps_dip_floor)))
         self.fps_dip_ratio = max(0.1, min(0.9, float(self.fps_dip_ratio)))
         self.vrr_outputs = [str(o)[:64] for o in (self.vrr_outputs or [])][:16]

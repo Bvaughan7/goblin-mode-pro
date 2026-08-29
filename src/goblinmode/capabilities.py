@@ -292,6 +292,19 @@ def on_ac_power() -> bool | None:
     return None
 
 
+def _has_writable_pwm(base: Path = Path("/sys/class/hwmon")) -> bool:
+    """Whether any hwmon exposes the standard pwmN + pwmN_enable pair - most
+    laptops/handhelds don't (the EC/BIOS owns the fan curve); this is just
+    existence, not a write test, so it's safe to call unprivileged."""
+    if not base.is_dir():
+        return False
+    for hwmon in base.glob("hwmon*"):
+        for pwm in hwmon.glob("pwm[0-9]*"):
+            if re.fullmatch(r"pwm\d+", pwm.name) and (hwmon / f"{pwm.name}_enable").exists():
+                return True
+    return False
+
+
 def _session_recorder() -> str | None:
     for tool in ("gpu-screen-recorder", "wf-recorder", "obs", "spectacle"):
         if shutil.which(tool):
@@ -333,6 +346,7 @@ def detect() -> dict:
             _cpu_vendor() == "intel" and shutil.which("intel-undervolt")) else None,
         "amd_undervolt": "ryzenadj" if (
             _cpu_vendor() == "amd" and shutil.which("ryzenadj")) else None,
+        "fan_control": _has_writable_pwm(),
         "session_recorder": _session_recorder(),
         "vkbasalt": shutil.which("vkBasalt") is not None or Path(
             "/usr/share/vulkan/implicit_layer.d/vkBasalt.json").exists(),

@@ -73,6 +73,36 @@ class HandheldTdpPresets(unittest.TestCase):
             self.assertLessEqual(b2, ac2)
 
 
+class WritablePwmDetection(unittest.TestCase):
+    def test_no_hwmon_dir_returns_false(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as d:
+            missing = capabilities.Path(d) / "nonexistent"
+            self.assertFalse(capabilities._has_writable_pwm(missing))
+
+    def test_finds_pwm_with_matching_enable_file(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as d:
+            base = capabilities.Path(d)
+            hwmon = base / "hwmon3"
+            hwmon.mkdir()
+            (hwmon / "pwm1").write_text("128")
+            (hwmon / "pwm1_enable").write_text("2")
+            self.assertTrue(capabilities._has_writable_pwm(base))
+
+    def test_pwm_without_enable_sibling_is_ignored(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as d:
+            base = capabilities.Path(d)
+            hwmon = base / "hwmon0"
+            hwmon.mkdir()
+            (hwmon / "pwm1").write_text("128")  # no pwm1_enable
+            self.assertFalse(capabilities._has_writable_pwm(base))
+
+
 class DetectShape(unittest.TestCase):
     def test_detect_has_the_documented_keys(self):
         caps = capabilities.detect()

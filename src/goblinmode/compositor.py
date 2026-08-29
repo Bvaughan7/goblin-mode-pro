@@ -119,6 +119,75 @@ def _set_vrr(output: str, policy: str) -> bool:
 
 
 # --------------------------------------------------------------------------
+# Per-output refresh-rate cap via kscreen-doctor (mainly for a handheld's
+# internal panel: Deck 40/50/60 Hz, Ally 120 Hz, ...)
+# --------------------------------------------------------------------------
+_MODE_RE = re.compile(r"(\d+):(\d+)x(\d+)@(\d+)(!?)(\*?)")
+
+
+def _parse_output_modes(stdout: str) -> dict[str, dict]:
+    """``{output_name: {"modes": {mode_id: (w, h, hz)}, "current": mode_id}}``
+    from ``kscreen-doctor -o``'s ``Modes:`` line, e.g.
+    ``Modes: 87:1920x1080@144!*  88:1920x1080@60``  ('!' preferred, '*' active)."""
+    out: dict[str, dict] = {}
+    name: str | None = None
+    for line in stdout.splitlines():
+        m = re.match(r"^Output:\s+\d+\s+(\S+)", line.strip())
+        if m:
+            name = m.group(1)
+            out[name] = {"modes": {}, "current": None}
+            continue
+        if name and "Modes:" in line:
+            for mid, w, h, hz, _pref, active in _MODE_RE.findall(line):
+                out[name]["modes"][mid] = (int(w), int(h), int(hz))
+                if active:
+                    out[name]["current"] = mid
+    return out
+
+
+def _internal_panel_output() -> str | None:
+    """The laptop/handheld's built-in panel, if any (kscreen-doctor names it
+    eDP-* the way every other Linux display stack does)."""
+    cp = _run([_KSCREEN, "-o"])
+    if not cp or cp.returncode != 0:
+        return None
+    for name in _parse_output_modes(cp.stdout):
+        if name.startswith("eDP"):
+            return name
+    return None
+
+
+def _find_mode_id(modes: dict[str, tuple[int, int, int]], w: int, h: int, hz: int) -> str | None:
+    for mid, (mw, mh, mhz) in modes.items():
+        if mw == w and mh == h and mhz == hz:
+            return mid
+    return None
+
+
+def _set_refresh_rate(output: str, hz: int) -> tuple[bool, str | None]:
+    """Switch ``output`` to the same resolution at ``hz``, if such a mode
+    exists. Returns ``(ok, previous_mode_id)`` so the caller can restore it -
+    ``ok=False`` covers "no matching mode" as much as a real failure."""
+    cp = _run([_KSCREEN, "-o"])
+    if not cp or cp.returncode != 0:
+        return False, None
+    o = _parse_output_modes(cp.stdout).get(output)
+    if not o or o["current"] is None:
+        return False, None
+    cur_id = o["current"]
+    w, h, _ = o["modes"][cur_id]
+    target_id = _find_mode_id(o["modes"], w, h, hz)
+    if not target_id or target_id == cur_id:
+        return False, None
+    ok = bool(_run([_KSCREEN, f"output.{output}.mode.{target_id}"]))
+    return ok, (cur_id if ok else None)
+
+
+def _restore_mode(output: str, mode_id: str) -> bool:
+    return bool(_run([_KSCREEN, f"output.{output}.mode.{mode_id}"]))
+
+
+# --------------------------------------------------------------------------
 # Hyprland (hyprctl keyword) - compositor-wide, not per-output
 # --------------------------------------------------------------------------
 def _hyprctl_get_option(name: str) -> str | None:
@@ -148,6 +217,8 @@ class Compositor:
         self._vrr_saved_hyprland: str | None = None
         self._vrr_active = False
         self._x11_suspended = False
+        self._refresh_saved: dict[str, str] = {}  # output -> mode id to restore
+        self._refresh_active = False
 
     # -- capability --------------------------------------------------
     @property
@@ -272,6 +343,38 @@ class Compositor:
                 log.info("adaptive sync on %s restored to %s", name, prev)
         self._vrr_saved.clear()
         self._vrr_active = False
+        return ok
+
+    # -- refresh-rate cap (internal panel) ------------------------
+    def enable_refresh_cap(self, hz: int, output: str | None = None) -> bool:
+        """Cap ``output`` (default: the internal panel, if any) to ``hz`` -
+        KDE/kscreen-doctor only, and only if a mode at the same resolution
+        and that exact refresh rate is actually advertised."""
+        if self._refresh_active:
+            return True
+        if not (_is_kde() and shutil.which(_KSCREEN)):
+            return False
+        target = output or _internal_panel_output()
+        if not target:
+            return False
+        ok, prev_mode = _set_refresh_rate(target, hz)
+        if ok and prev_mode:
+            self._refresh_saved[target] = prev_mode
+            self._refresh_active = True
+            log.info("refresh rate on %s capped to %d Hz", target, hz)
+        return ok
+
+    def restore_refresh_cap(self) -> bool:
+        if not self._refresh_active:
+            return True
+        ok = True
+        for output, mode_id in self._refresh_saved.items():
+            if not _restore_mode(output, mode_id):
+                ok = False
+            else:
+                log.info("refresh rate on %s restored", output)
+        self._refresh_saved.clear()
+        self._refresh_active = False
         return ok
 
     def _enable_adaptive_sync_hyprland(self) -> bool:

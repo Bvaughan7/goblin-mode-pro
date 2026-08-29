@@ -83,6 +83,14 @@ _AMD_UV_RANGE = (-30, 0)  # the range every ryzenadj curve-optimizer guide uses
 #: to it.
 NVIDIA_MODESET_CONF = Path("/etc/modprobe.d/goblin-mode-pro-nvidia.conf")
 
+#: Preemptive fan spin-up on launch. Most laptops/handhelds don't expose a
+#: writable hwmon pwm control at all (the EC/BIOS owns the fan curve) - this
+#: is best-effort and no-ops cleanly wherever that's the case, which is most
+#: systems. Where it *is* exposed, hwmon's own convention is what's used:
+#: pwmN_enable=1 switches a channel to manual, pwmN is a 0-255 duty cycle.
+FAN_STATE_FILE = STATE_DIR / "fans.json"
+_HWMON_BASE = Path("/sys/class/hwmon")
+
 # sysctl keys the pre-flight check is allowed to set at runtime, each with an
 # accepted numeric range. Nothing outside this table can be touched.
 SYSCTL_ALLOW: dict[str, tuple[int, int]] = {
@@ -162,6 +170,13 @@ INTROSPECTION_XML = f"""
     </method>
     <method name="SetNvidiaModeset">
       <arg type="b" name="enabled" direction="in"/>
+      <arg type="b" name="ok" direction="out"/>
+    </method>
+    <method name="SpinUpFans">
+      <arg type="u" name="percent" direction="in"/>
+      <arg type="b" name="ok" direction="out"/>
+    </method>
+    <method name="ResetFans">
       <arg type="b" name="ok" direction="out"/>
     </method>
   </interface>
@@ -373,6 +388,88 @@ def apply_amd_undervolt() -> bool:
         return False
     log.info("re-applied AMD Curve Optimizer offsets: %s", offsets)
     return True
+
+
+def _pwm_controls() -> list[Path]:
+    """Every hwmon pwmN file that looks controllable - has the standard
+    adjacent pwmN_enable (mode switch: 1=manual, usually 2=automatic)."""
+    out = []
+    try:
+        hwmons = sorted(_HWMON_BASE.glob("hwmon*"))
+    except OSError:
+        return out
+    for hwmon in hwmons:
+        for pwm in sorted(hwmon.glob("pwm[0-9]*")):
+            if re.fullmatch(r"pwm\d+", pwm.name) and (hwmon / f"{pwm.name}_enable").exists():
+                out.append(pwm)
+    return out
+
+
+def spin_up_fans(percent: int) -> bool:
+    """Best-effort burst: switch every writable pwm control to manual and set
+    it to ``percent``% duty, snapshotting the prior enable/duty values first
+    (mirrors the TDP snapshot/revert pattern) so ResetFans / RevertAll can
+    put it back exactly as found. Returns False (not an error) wherever the
+    EC exposes no writable pwm control at all - most systems."""
+    pwms = _pwm_controls()
+    if not pwms:
+        return False
+    percent = max(0, min(100, int(percent)))
+    duty = round(percent / 100 * 255)
+
+    if not FAN_STATE_FILE.exists():
+        snapshot = {}
+        for pwm in pwms:
+            try:
+                snapshot[str(pwm)] = {
+                    "enable": _read(pwm.with_name(f"{pwm.name}_enable")),
+                    "pwm": _read(pwm),
+                }
+            except OSError:
+                continue
+        try:
+            STATE_DIR.mkdir(parents=True, exist_ok=True)
+            FAN_STATE_FILE.write_text(json.dumps(snapshot, indent=2))
+        except OSError as exc:
+            log.warning("could not snapshot fan state: %s", exc)
+
+    ok = False
+    for pwm in pwms:
+        try:
+            _write(pwm.with_name(f"{pwm.name}_enable"), "1")
+            _write(pwm, str(duty))
+            ok = True
+        except OSError as exc:
+            log.warning("fan spin-up write failed for %s: %s", pwm, exc)
+    if ok:
+        log.info("fans set to %d%% duty on %d control(s)", percent, len(pwms))
+    return ok
+
+
+def reset_fans() -> bool:
+    """Restore every pwm control this session touched to its snapshotted
+    enable/duty values (usually: back to automatic/EC control)."""
+    if not FAN_STATE_FILE.exists():
+        return True
+    try:
+        snapshot = json.loads(FAN_STATE_FILE.read_text())
+    except (OSError, json.JSONDecodeError):
+        FAN_STATE_FILE.unlink(missing_ok=True)
+        return True
+    ok = True
+    for path_str, saved in snapshot.items():
+        pwm = Path(path_str)
+        try:
+            if "pwm" in saved:
+                _write(pwm, str(saved["pwm"]))
+            if "enable" in saved:
+                _write(pwm.with_name(f"{pwm.name}_enable"), str(saved["enable"]))
+        except OSError as exc:
+            log.warning("fan reset failed for %s: %s", pwm, exc)
+            ok = False
+    FAN_STATE_FILE.unlink(missing_ok=True)
+    log.info("fan control reset (ok=%s)", ok)
+    return ok
 
 
 def set_nvidia_modeset(enabled: bool) -> bool:
@@ -617,6 +714,8 @@ def revert_all() -> bool:
         ok = False
     if data.get("ryzenadj_stapm_mw") and not reset_tdp():
         ok = False
+    if FAN_STATE_FILE.exists() and not reset_fans():
+        ok = False
     STATE_FILE.unlink(missing_ok=True)
     log.info("reverted to %s (ok=%s)", data, ok)
     return ok
@@ -692,6 +791,8 @@ _MUTATING = {
     "ApplyUndervolt",
     "ApplyAmdUndervolt",
     "SetNvidiaModeset",
+    "SpinUpFans",
+    "ResetFans",
 }
 
 
@@ -756,6 +857,10 @@ def _handle_call(
             invocation.return_value(GLib.Variant("(b)", (apply_amd_undervolt(),)))
         elif method_name == "SetNvidiaModeset":
             invocation.return_value(GLib.Variant("(b)", (set_nvidia_modeset(bool(args[0])),)))
+        elif method_name == "SpinUpFans":
+            invocation.return_value(GLib.Variant("(b)", (spin_up_fans(int(args[0])),)))
+        elif method_name == "ResetFans":
+            invocation.return_value(GLib.Variant("(b)", (reset_fans(),)))
         else:
             invocation.return_dbus_error(
                 "org.freedesktop.DBus.Error.UnknownMethod", method_name

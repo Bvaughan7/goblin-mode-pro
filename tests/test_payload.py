@@ -62,6 +62,9 @@ class FakeHelper:
     def apply_amd_undervolt(self):
         self._guard(); self.calls.append(("apply_amd_undervolt",)); return True
 
+    def spin_up_fans(self, percent):
+        self._guard(); self.calls.append(("spin_up_fans", percent)); return True
+
     def revert_all(self):
         self._guard(); self.calls.append(("revert_all",)); self.governor = "powersave"; self.pl_uw = (0, 0); return True
 
@@ -88,6 +91,12 @@ class _StubCompositor:
 
     def restore_adaptive_sync(self):
         self.vrr = False
+
+    def enable_refresh_cap(self, hz, output=None):
+        self.refresh_hz = hz; return True
+
+    def restore_refresh_cap(self):
+        self.refresh_hz = None
 
 
 class _StubFocus:
@@ -242,6 +251,35 @@ class PayloadRefcountTest(unittest.TestCase):
         with patch("goblinmode.capabilities.on_ac_power", return_value=True):
             self.pay.refresh_power_source()
             self.assertEqual(self.helper.pl_uw, (25_000_000, 30_000_000))
+
+    def test_refresh_cap_applies_first_requested_value_and_restores(self):
+        # Like tearing/VRR, once applied the cap isn't re-evaluated per
+        # profile join - it only changes on a full off->on transition.
+        a = _profile("A.exe"); a.refresh_rate_hz = 60
+        b = _profile("B.exe"); b.refresh_rate_hz = 40
+
+        self.pay.apply(a, pid=1)
+        self.assertEqual(self.pay.compositor.refresh_hz, 60)
+        self.pay.apply(b, pid=2)
+        self.assertEqual(self.pay.compositor.refresh_hz, 60)
+
+        self.pay.revert(a)
+        self.pay.revert(b)
+        self.assertIsNone(self.pay.compositor.refresh_hz)
+
+    def test_refresh_cap_off_when_no_profile_wants_it(self):
+        self.pay.apply(_profile("A.exe"), pid=1)
+        self.assertIsNone(getattr(self.pay.compositor, "refresh_hz", None))
+
+    def test_fan_spinup_requested_only_when_a_profile_opts_in(self):
+        p = _profile("A.exe")
+        p.fan_spinup_enabled = True
+        self.pay.apply(p, pid=1)
+        self.assertIn(("spin_up_fans", 100), self.helper.calls)
+
+    def test_fan_spinup_off_by_default(self):
+        self.pay.apply(_profile("A.exe"), pid=1)
+        self.assertNotIn(("spin_up_fans", 100), self.helper.calls)
 
     def test_battery_preset_falls_back_to_ac_value_when_unset(self):
         from unittest.mock import patch

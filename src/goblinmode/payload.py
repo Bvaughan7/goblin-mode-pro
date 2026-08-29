@@ -82,8 +82,10 @@ class PerformancePayload:
         self._governor_applied = False
         self._power_applied = False
         self._power_backend: str | None = None   # "rapl" | "ryzenadj"
+        self._fan_spinup_applied = False
         self._tearing_applied = False
         self._vrr_applied = False
+        self._refresh_cap_applied = False
         self._focus_applied = False
 
     # -- public API -------------------------------------------------------
@@ -208,7 +210,9 @@ class PerformancePayload:
         want_governor = any(p.governor_boost for p in self._active.values())
         pl1_uw, pl2_uw = self._desired_power_limits_uw()
         want_power = bool(pl1_uw or pl2_uw)
-        want_helper = want_governor or want_power
+        want_fan_spinup = any(getattr(p, "fan_spinup_enabled", False)
+                              for p in self._active.values())
+        want_helper = want_governor or want_power or want_fan_spinup
         want_tearing = any(p.tearing_enabled for p in self._active.values())
         vrr_wanting = [p for p in self._active.values() if p.adaptive_sync_enabled]
         want_vrr = bool(vrr_wanting)
@@ -228,7 +232,7 @@ class PerformancePayload:
 
         if want_helper:
             # (re)apply on every recompute so a changed profile set is picked up
-            self._apply_helper_tweaks(want_governor, power)
+            self._apply_helper_tweaks(want_governor, power, want_fan_spinup)
         elif self._helper_tweaks_applied:
             self._restore_helper_tweaks()
 
@@ -243,6 +247,14 @@ class PerformancePayload:
         elif not want_vrr and self._vrr_applied:
             self.compositor.restore_adaptive_sync()
             self._vrr_applied = False
+
+        refresh_wanting = [p.refresh_rate_hz for p in self._active.values() if p.refresh_rate_hz]
+        want_refresh_cap = bool(refresh_wanting)
+        if want_refresh_cap and not self._refresh_cap_applied:
+            self._refresh_cap_applied = self.compositor.enable_refresh_cap(min(refresh_wanting))
+        elif not want_refresh_cap and self._refresh_cap_applied:
+            self.compositor.restore_refresh_cap()
+            self._refresh_cap_applied = False
 
         want_focus = any(p.focus_mode for p in self._active.values())
         if want_focus and not self._focus_applied:
@@ -261,12 +273,16 @@ class PerformancePayload:
         if self._vrr_applied:
             self.compositor.restore_adaptive_sync()
             self._vrr_applied = False
+        if self._refresh_cap_applied:
+            self.compositor.restore_refresh_cap()
+            self._refresh_cap_applied = False
         if self._focus_applied:
             self.focus.exit()
             self._focus_applied = False
 
     def _apply_helper_tweaks(
-        self, want_governor: bool, power: tuple[str, tuple[int, int]] | None
+        self, want_governor: bool, power: tuple[str, tuple[int, int]] | None,
+        want_fan_spinup: bool = False,
     ) -> None:
         try:
             if want_governor:
@@ -287,6 +303,12 @@ class PerformancePayload:
                     self._power_backend = "rapl"
                     log.info("RAPL limits -> PL1=%.0fW PL2=%.0fW",
                              values[0] / 1e6, values[1] / 1e6)
+            if want_fan_spinup and not self._fan_spinup_applied:
+                # Best-effort: False just means no writable pwm on this EC,
+                # the overwhelming common case - not worth its own incident.
+                self._fan_spinup_applied = self.helper.spin_up_fans(100)
+                if self._fan_spinup_applied:
+                    log.info("fan spin-up requested")
             self._helper_tweaks_applied = True
         except HelperUnavailable as exc:
             self._incident(
@@ -304,6 +326,7 @@ class PerformancePayload:
         self._governor_applied = False
         self._power_applied = False
         self._power_backend = None
+        self._fan_spinup_applied = False
 
     def _renice(self, profile: GameProfile, pid: int) -> None:
         try:

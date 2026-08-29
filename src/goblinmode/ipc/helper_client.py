@@ -136,6 +136,14 @@ class HelperClient:
             "SetNvidiaModeset", GLib.Variant("(b)", (bool(enabled),))
         ).unpack()[0]
 
+    def spin_up_fans(self, percent: int) -> bool:
+        return self._call(
+            "SpinUpFans", GLib.Variant("(u)", (max(0, int(percent)),))
+        ).unpack()[0]
+
+    def reset_fans(self) -> bool:
+        return self._call("ResetFans").unpack()[0]
+
     def read_undervolt(self) -> str:
         try:
             return self._call("ReadUndervolt").unpack()[0]

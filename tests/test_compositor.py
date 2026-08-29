@@ -111,6 +111,81 @@ class HyprlandBackend(unittest.TestCase):
         set_opt.assert_called_with("misc:vrr", "1")
 
 
+_KSCREEN_MODES = """\
+Output: 1 eDP-1
+  Modes: 10:1280x800@60!*  11:1280x800@40
+Output: 2 DP-1
+  Modes: 20:1920x1080@144!*  21:1920x1080@60
+"""
+
+
+class RefreshRateModeParsing(unittest.TestCase):
+    def test_parses_modes_and_marks_active(self):
+        info = compositor._parse_output_modes(_KSCREEN_MODES)
+        self.assertEqual(info["eDP-1"]["current"], "10")
+        self.assertEqual(info["eDP-1"]["modes"]["11"], (1280, 800, 40))
+
+    def test_internal_panel_is_the_edp_output(self):
+        with patch("goblinmode.compositor._run", return_value=_cp(_KSCREEN_MODES)):
+            self.assertEqual(compositor._internal_panel_output(), "eDP-1")
+
+    def test_no_edp_output_returns_none(self):
+        no_edp = "Output: 1 DP-1\n  Modes: 20:1920x1080@144!*\n"
+        with patch("goblinmode.compositor._run", return_value=_cp(no_edp)):
+            self.assertIsNone(compositor._internal_panel_output())
+
+    def test_set_refresh_rate_finds_same_resolution_mode(self):
+        with patch("goblinmode.compositor._run", return_value=_cp(_KSCREEN_MODES)) as run:
+            ok, prev = compositor._set_refresh_rate("eDP-1", 40)
+        self.assertTrue(ok)
+        self.assertEqual(prev, "10")
+        self.assertEqual(run.call_args[0][0], ["kscreen-doctor", "output.eDP-1.mode.11"])
+
+    def test_set_refresh_rate_no_matching_mode(self):
+        with patch("goblinmode.compositor._run", return_value=_cp(_KSCREEN_MODES)):
+            ok, prev = compositor._set_refresh_rate("eDP-1", 144)
+        self.assertFalse(ok)
+        self.assertIsNone(prev)
+
+    def test_set_refresh_rate_same_as_current_is_a_noop(self):
+        with patch("goblinmode.compositor._run", return_value=_cp(_KSCREEN_MODES)):
+            ok, prev = compositor._set_refresh_rate("eDP-1", 60)
+        self.assertFalse(ok)
+
+
+class CompositorRefreshCap(unittest.TestCase):
+    def setUp(self):
+        self.c = compositor.Compositor()
+        self._patches = [
+            patch("goblinmode.compositor._is_kde", return_value=True),
+            patch("goblinmode.compositor.shutil.which", return_value="/usr/bin/kscreen-doctor"),
+        ]
+        for p in self._patches:
+            p.start()
+            self.addCleanup(p.stop)
+
+    def test_enable_and_restore_round_trip(self):
+        with patch("goblinmode.compositor._set_refresh_rate", return_value=(True, "10")):
+            self.assertTrue(self.c.enable_refresh_cap(40, output="eDP-1"))
+        with patch("goblinmode.compositor._restore_mode", return_value=True) as restore:
+            self.assertTrue(self.c.restore_refresh_cap())
+        restore.assert_called_once_with("eDP-1", "10")
+
+    def test_defaults_to_internal_panel_when_no_output_given(self):
+        with patch("goblinmode.compositor._internal_panel_output", return_value="eDP-1"), \
+             patch("goblinmode.compositor._set_refresh_rate", return_value=(True, "10")) as set_rr:
+            self.c.enable_refresh_cap(40)
+        set_rr.assert_called_once_with("eDP-1", 40)
+
+    def test_no_internal_panel_is_a_clean_noop(self):
+        with patch("goblinmode.compositor._internal_panel_output", return_value=None):
+            self.assertFalse(self.c.enable_refresh_cap(40))
+
+    def test_not_kde_is_unsupported(self):
+        with patch("goblinmode.compositor._is_kde", return_value=False):
+            self.assertFalse(self.c.enable_refresh_cap(40, output="eDP-1"))
+
+
 class HyprctlOptionParsing(unittest.TestCase):
     def test_get_option_parses_int_field(self):
         with patch("goblinmode.compositor._run", return_value=_cp('{"int": 1}')):
