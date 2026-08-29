@@ -41,6 +41,23 @@ jobs:
           mkdir -p dist
           mv ../goblin-mode-pro_*.deb dist/
 
+      # Signs with the maintainer's own key, added as repo secrets - see
+      # CONTRIBUTING.md "Signing releases". Skips cleanly (unsigned artifact,
+      # same as today) when the secrets aren't set, e.g. on a fork's CI.
+      - name: Sign the .deb
+        if: ${{ secrets.GPG_PRIVATE_KEY != '' }}
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          sudo apt-get install -y dpkg-sig
+          echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+          key_id=$(gpg --list-secret-keys --with-colons | awk -F: '/^sec/{print $5; exit}')
+          for f in dist/*.deb; do
+            dpkg-sig --gpg-options "--batch --passphrase $GPG_PASSPHRASE --pinentry-mode loopback" \
+              -k "$key_id" --sign builder "$f"
+          done
+
       - uses: actions/upload-artifact@v4
         with:
           name: deb-package
@@ -52,7 +69,7 @@ jobs:
     container: fedora:latest
     steps:
       - name: Install packaging tools
-        run: dnf install -y rpm-build systemd-rpm-macros git python3 tar gzip
+        run: dnf install -y rpm-build rpm-sign systemd-rpm-macros gnupg2 git python3 tar gzip
 
       # actions/checkout doesn't work inside every container image, and we
       # only need a plain source tree here - git clone it ourselves.
@@ -77,6 +94,25 @@ jobs:
             --define "_topdir $PWD/rpmbuild"
           mkdir -p dist
           find rpmbuild/RPMS -name '*.rpm' -exec mv {} dist/ \;
+
+      # Same key/secrets as the .deb job - see CONTRIBUTING.md "Signing
+      # releases". Skips cleanly when the secrets aren't set.
+      - name: Sign the .rpm
+        if: ${{ secrets.GPG_PRIVATE_KEY != '' }}
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+          key_id=$(gpg --list-secret-keys --with-colons | awk -F: '/^sec/{print $5; exit}')
+          name=$(gpg --list-secret-keys --with-colons | awk -F: '/^uid/{print $10; exit}')
+          cat > ~/.rpmmacros <<MACROS
+          %_signature gpg
+          %_gpg_name $name
+          MACROS
+          for f in dist/*.rpm; do
+            rpmsign --addsign --define "_gpg_pass $GPG_PASSPHRASE" "$f"
+          done
 
       - uses: actions/upload-artifact@v4
         with:
