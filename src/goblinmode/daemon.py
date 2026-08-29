@@ -172,6 +172,9 @@ class Daemon:
             out.append("vrr")
         if t.get("reniced"):
             out.append("renice")
+        for _exe, mode in (t.get("pinned") or {}).items():
+            out.append(f"pin:{mode}")
+            break
         plw = t.get("power_limits_w")
         if t.get("power_limited") and plw:
             out.append(f"pl:{plw[0]}/{plw[1]}")

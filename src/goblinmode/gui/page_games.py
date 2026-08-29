@@ -208,6 +208,23 @@ class GamesPage(Adw.PreferencesPage):
         nice.connect("notify::value", lambda r, _p: self._patch(exe, nice_value=int(r.get_value())))
         exp.add_row(nice)
 
+        layout = self._caps.get("core_layout") or {}
+        pin_opts = [("off", "Off — use every core")]
+        if layout.get("performance"):
+            pin_opts.append(("performance", f"Fast cores only ({len(layout['performance'])} of {len(layout.get('online', []))})"))
+        if layout.get("cache_groups"):
+            pin_opts.append(("cache0", f"One cache group / CCD ({len(layout['cache_groups'][0])} cores)"))
+        if len(pin_opts) > 1:
+            pin = Adw.ComboRow(title="Pin to CPU cores")
+            pin.set_subtitle("Keep the game's threads off the slow cores / the cross-CCD hop")
+            pin.set_model(Gtk.StringList.new([label for _k, label in pin_opts]))
+            keys = [k for k, _l in pin_opts]
+            cur = p.get("core_pin", "off")
+            pin.set_selected(keys.index(cur) if cur in keys else 0)
+            pin.connect("notify::selected",
+                        lambda r, _p: self._patch(exe, core_pin=keys[r.get_selected()]))
+            exp.add_row(pin)
+
         exp.add_row(self._switch_row(
             "CPU governor boost", p.get("governor_boost", True),
             lambda v: self._patch(exe, governor_boost=v),
@@ -439,7 +456,7 @@ class GamesPage(Adw.PreferencesPage):
 
     # -- profile sharing (export / import) ---------------------
     _SHARE_KEYS = (
-        "match_mode", "renice_enabled", "nice_value", "tearing_enabled",
+        "match_mode", "renice_enabled", "nice_value", "core_pin", "tearing_enabled",
         "adaptive_sync_enabled", "governor_boost", "focus_mode",
         "power_limit_enabled", "pl1_w", "pl2_w", "per_game_mangohud", "mangohud",
         "fps_watchdog", "fps_dip_floor", "fps_dip_ratio", "runner_vars",

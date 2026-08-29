@@ -81,6 +81,10 @@ def _default_runner_vars() -> dict[str, bool]:
 
 GAMESCOPE_UPSCALERS = ("off", "fsr", "nis", "integer")
 
+#: CPU-affinity modes for a game's process tree. "performance" = the fast cores
+#: on a hybrid CPU; "cache0" = the first L3 domain (one CCD on Ryzen).
+CORE_PIN_MODES = ("off", "performance", "cache0")
+
 
 def _default_gamescope() -> dict:
     return {"w": 0, "h": 0, "refresh": 0, "upscale": "off", "hdr": False,
@@ -98,6 +102,7 @@ class GameProfile:
     auto_created: bool = False   # added by the game auto-detector, not the user
     renice_enabled: bool = True
     nice_value: int = -5
+    core_pin: str = "off"        # off | performance | cache0  (see CORE_PIN_MODES)
     tearing_enabled: bool = True
     adaptive_sync_enabled: bool = False
     governor_boost: bool = True
@@ -133,6 +138,8 @@ class GameProfile:
         self.display_name = self.display_name[:200]
         if self.match_mode not in MATCH_MODES:
             self.match_mode = "exact"
+        if self.core_pin not in CORE_PIN_MODES:
+            self.core_pin = "off"
         self.nice_value = max(-10, min(19, int(self.nice_value)))
         self.pl1_w = max(0, min(500, int(self.pl1_w)))
         self.pl2_w = max(0, min(500, int(self.pl2_w)))

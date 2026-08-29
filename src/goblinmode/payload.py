@@ -16,7 +16,7 @@ import logging
 from dataclasses import dataclass
 from typing import Callable
 
-from goblinmode import mangohud
+from goblinmode import cpuset, mangohud
 from goblinmode.compositor import Compositor
 from goblinmode.config import GameProfile
 from goblinmode.focus import FocusMode
@@ -44,6 +44,7 @@ class TweakStatus:
     power_limited: bool = False
     power_limits_w: tuple[int, int] | None = None
     reniced: dict[str, int] | None = None
+    pinned: dict[str, str] | None = None      # exe -> mode
     mangohud_files: list[str] | None = None
     helper_available: bool = True
     limited_mode: bool = False
@@ -58,6 +59,7 @@ class TweakStatus:
             "power_limited": self.power_limited,
             "power_limits_w": list(self.power_limits_w) if self.power_limits_w else None,
             "reniced": self.reniced or {},
+            "pinned": self.pinned or {},
             "mangohud_files": self.mangohud_files or [],
             "helper_available": self.helper_available,
             "limited_mode": self.limited_mode,
@@ -74,6 +76,7 @@ class PerformancePayload:
         self._on_incident = on_incident
         self._active: dict[str, GameProfile] = {}   # exe -> profile
         self._reniced: dict[str, int] = {}          # exe -> pid
+        self._pinned: dict[str, tuple[int, str, list[int]]] = {}  # exe -> (pid, mode, orig cpus)
         self._mangohud_files: set[str] = set()
         self._helper_tweaks_applied = False   # governor/EPP and/or power limits
         self._governor_applied = False
@@ -91,6 +94,9 @@ class PerformancePayload:
 
         if profile.renice_enabled and pid:
             self._renice(profile, pid)
+
+        if profile.core_pin != "off" and pid:
+            self._pin_cores(profile, pid)
 
         if profile.exe != FORCED_EXE:
             try:
@@ -119,6 +125,7 @@ class PerformancePayload:
         log.info("reverting payload for %s", profile.exe)
         self._active.pop(profile.exe, None)
         self._reniced.pop(profile.exe, None)
+        self._unpin_cores(profile.exe)
 
         if profile.exe != FORCED_EXE:
             try:
@@ -132,6 +139,8 @@ class PerformancePayload:
     def revert_all(self) -> None:
         for profile in list(self._active.values()):
             self.revert(profile)
+        for exe in list(self._pinned):
+            self._unpin_cores(exe)
         # Belt and braces even if _active was already empty.
         self._restore_global()
 
@@ -234,6 +243,29 @@ class PerformancePayload:
                 "helper_unavailable", f"Cannot renice {profile.exe}: {exc}"
             )
 
+    def _pin_cores(self, profile: GameProfile, pid: int) -> None:
+        """Pin the game's threads to a CPU subset. No privilege needed - the game
+        is our own child - so this works even in limited mode."""
+        try:
+            from goblinmode import capabilities
+
+            layout = capabilities.detect().get("core_layout", {})
+            cpus = cpuset.target_cpus(profile.core_pin, layout)
+            if not cpus:
+                return
+            original = cpuset.current_affinity(pid) or list(layout.get("online", []))
+            if cpuset.pin(pid, cpus):
+                self._pinned[profile.exe] = (pid, profile.core_pin, original)
+        except Exception as exc:  # noqa: BLE001 - never let pinning break a launch
+            log.warning("core pinning failed for %s: %s", profile.exe, exc)
+
+    def _unpin_cores(self, exe: str) -> None:
+        entry = self._pinned.pop(exe, None)
+        if entry is None:
+            return
+        pid, _mode, original = entry
+        cpuset.restore(pid, original)
+
     # -- status ---------------------------------------------------------
     def status(self) -> TweakStatus:
         helper_ok = self.helper.available()
@@ -255,6 +287,7 @@ class PerformancePayload:
             power_limited=self._power_applied,
             power_limits_w=power_limits_w,
             reniced=dict(self._reniced),
+            pinned={exe: mode for exe, (_p, mode, _o) in self._pinned.items()},
             mangohud_files=sorted(self._mangohud_files),
             helper_available=helper_ok,
             limited_mode=not helper_ok,

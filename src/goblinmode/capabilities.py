@@ -66,6 +66,78 @@ def _gpu_vendors() -> list[str]:
     return sorted(v for v in out if v != "other") or ["unknown"]
 
 
+def _parse_cpu_list(spec: str) -> list[int]:
+    """Expand a Linux cpu-list ("0-3,8,10-11") into a sorted list of ints."""
+    out: set[int] = set()
+    for part in spec.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        if "-" in part:
+            a, b = part.split("-", 1)
+            try:
+                out.update(range(int(a), int(b) + 1))
+            except ValueError:
+                continue
+        else:
+            try:
+                out.add(int(part))
+            except ValueError:
+                continue
+    return sorted(out)
+
+
+def _online_cpus() -> list[int]:
+    spec = _read(_CPU / "online")
+    return _parse_cpu_list(spec) if spec else sorted(
+        int(p.name[3:]) for p in _CPU.glob("cpu[0-9]*") if p.name[3:].isdigit()
+    )
+
+
+def _core_layout() -> dict:
+    """Describe useful ways to pin a game's threads on this CPU.
+
+    * ``performance`` - the fast cores on a hybrid CPU (Intel P-cores, or a
+      big.LITTLE arrangement). ``None`` when every core is the same.
+    * ``cache_groups`` - cores that share an L3 slice; on Ryzen that is one
+      CCD, so pinning to the first group keeps a game off the cross-CCD
+      latency penalty. Omitted when there is only one group.
+    """
+    online = _online_cpus()
+    layout: dict = {"online": online}
+
+    # hybrid: prefer the kernel's own classification, fall back to max-freq.
+    core_mask = _read(_CPU / "types/intel_core/cpumap") or _read(_CPU / "types/intel_core/cpus")
+    if core_mask:
+        pcores = _parse_cpu_list(core_mask)
+    else:
+        freqs = {}
+        for c in online:
+            f = _read(_CPU / f"cpu{c}/cpufreq/cpuinfo_max_freq")
+            if f and f.isdigit():
+                freqs[c] = int(f)
+        if freqs and len(set(freqs.values())) > 1:
+            top = max(freqs.values())
+            pcores = sorted(c for c, f in freqs.items() if f >= top * 0.92)
+        else:
+            pcores = []
+    if pcores and 0 < len(pcores) < len(online):
+        layout["performance"] = pcores
+
+    # L3 cache domains (CCDs on Ryzen)
+    groups: list[list[int]] = []
+    for c in online:
+        lst = _read(_CPU / f"cpu{c}/cache/index3/shared_cpu_list")
+        if not lst:
+            continue
+        members = _parse_cpu_list(lst)
+        if members and members not in groups:
+            groups.append(members)
+    if len(groups) > 1:
+        layout["cache_groups"] = groups
+    return layout
+
+
 def _compositor() -> str:
     desktop = os.environ.get("XDG_CURRENT_DESKTOP", "").upper()
     session = os.environ.get("XDG_SESSION_TYPE", "")
@@ -120,4 +192,5 @@ def detect() -> dict:
         "compositor": _compositor(),
         "distro_id": _distro_id(),
         "package_manager": _package_manager(),
+        "core_layout": _core_layout(),
     }
