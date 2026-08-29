@@ -1,58 +1,86 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
   <defs>
-    <radialGradient id="skin" cx="42%" cy="32%" r="78%">
-      <stop offset="0%" stop-color="#8fc75a"/>
-      <stop offset="55%" stop-color="#6ba43c"/>
-      <stop offset="100%" stop-color="#4a7826"/>
+    <radialGradient id="skin" cx="40%" cy="28%" r="82%">
+      <stop offset="0%" stop-color="#92d15f"/>
+      <stop offset="55%" stop-color="#5f9c37"/>
+      <stop offset="100%" stop-color="#3d6a20"/>
     </radialGradient>
-    <linearGradient id="glass" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#abe9f1"/>
-      <stop offset="100%" stop-color="#57bccb"/>
+    <linearGradient id="cup" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#3d4147"/>
+      <stop offset="100%" stop-color="#21232a"/>
     </linearGradient>
     <style>
-      .ink  { stroke:#231a0d; stroke-width:7;   stroke-linejoin:round; stroke-linecap:round; }
-      .ink4 { stroke:#231a0d; stroke-width:4.5; stroke-linejoin:round; }
+      .ink  { stroke:#171105; stroke-width:7;   stroke-linejoin:round; stroke-linecap:round; }
+      .ink5 { stroke:#171105; stroke-width:5;   stroke-linejoin:round; stroke-linecap:round; }
     </style>
   </defs>
-  <g transform="rotate(-5 128 132)">
-    <path class="ink" fill="url(#skin)" d="M70 116 C40 108 16 96 4 40 C6 34 12 32 18 34 C58 46 84 74 96 104 Z"/>
-    <path class="ink" fill="url(#skin)" d="M188 112 C214 100 236 86 248 44 C246 38 240 36 234 38 C198 52 176 78 168 104 Z"/>
-    <path fill="#3f6a20" d="M64 104 C46 96 30 86 20 54 C44 66 62 82 76 106 Z"/>
-    <path fill="#3f6a20" d="M190 100 C206 90 220 80 228 56 C206 66 194 80 186 100 Z"/>
-    <path class="ink" fill="url(#skin)" d="M128 30 C182 30 214 66 218 116 C220 142 214 166 198 188 C182 210 156 230 128 230 C100 230 74 210 58 188 C42 166 36 142 38 116 C42 66 74 30 128 30 Z"/>
-    <path fill="#3f6a20" opacity="0.55" d="M128 230 C156 230 182 210 198 188 C214 166 220 142 218 116 C216 150 202 186 178 206 C160 221 144 228 128 230 Z"/>
-    <path fill="#a6d873" opacity="0.5" d="M84 56 C104 40 150 38 170 50 C142 46 112 52 92 72 Z"/>
-    <path class="ink" fill="#3f6a20" d="M52 118 C74 100 104 100 122 112 C112 122 92 122 76 118 C64 116 56 118 50 124 Z"/>
-    <path class="ink" fill="#3f6a20" d="M206 110 C186 94 156 96 140 110 C150 118 170 116 184 114 C196 112 200 114 206 118 Z"/>
-    <path class="ink" fill="url(#skin)" d="M128 110 C140 112 152 126 154 144 C154 158 145 165 128 163 C116 161 109 150 109 138 C109 124 117 110 128 110 Z"/>
-    <ellipse cx="121" cy="153" rx="4.5" ry="6.5" fill="#241a0e"/>
-    <ellipse cx="137" cy="152" rx="4.5" ry="6.5" fill="#241a0e"/>
-    <path class="ink" fill="#3a1c18" d="M60 150 C86 144 108 148 128 150 C150 152 176 150 198 142 C196 182 166 214 124 212 C86 210 60 184 60 150 Z"/>
-    <path fill="#f1e9cf" stroke="#231a0d" stroke-width="4.5" stroke-linejoin="round" d="M70 152 L84 172 L98 153 L112 173 L126 153 L140 172 L154 152 L169 170 L184 148 C182 158 176 164 168 164 L84 166 C76 164 71 158 70 152 Z"/>
-    <path class="ink4" fill="#f1e9cf" d="M98 202 C92 188 92 170 100 162 C112 172 116 192 110 208 C106 210 101 208 98 202 Z"/>
-    <path class="ink4" fill="#f1e9cf" d="M150 176 C146 164 148 152 156 148 C164 156 164 172 158 182 C154 184 151 182 150 176 Z"/>
-    <path fill="#c15a45" d="M112 206 C106 192 118 182 130 182 C144 182 154 194 148 208 C138 214 122 214 112 206 Z"/>
-    <path class="ink" fill="#f6f0dc" d="M56 130 C64 108 100 102 118 118 C128 128 126 150 112 158 C86 172 50 156 52 134 Z"/>
-    <circle cx="88" cy="134" r="17" fill="#e3a838"/>
-    <circle cx="88" cy="134" r="9" fill="#231a0d"/>
-    <circle cx="83" cy="128" r="4.5" fill="#fff"/>
-    <path class="ink" fill="#f6f0dc" d="M148 126 C166 114 196 118 202 136 C204 148 192 158 172 158 C148 158 138 138 148 126 Z"/>
-    <path fill="#4a7826" d="M148 126 C166 114 196 118 202 136 C203 141 200 145 194 148 C196 140 190 130 178 127 C167 124 156 128 150 136 C147 131 146 129 148 126 Z"/>
-    <circle cx="176" cy="138" r="12" fill="#e3a838"/>
-    <circle cx="176" cy="138" r="7" fill="#231a0d"/>
-    <circle cx="172" cy="134" r="3.5" fill="#fff"/>
-    <circle cx="52" cy="164" r="6" fill="#3f6a20"/>
-    <circle cx="206" cy="160" r="5" fill="#3f6a20"/>
-    <circle cx="126" cy="220" r="5" fill="#3f6a20"/>
-    <path d="M36 68 C70 42 188 42 222 68" fill="none" stroke="#7f6129" stroke-width="13" stroke-linecap="round"/>
-    <g class="ink4">
-      <circle cx="90" cy="56" r="28" fill="#c9a054"/>
-      <circle cx="164" cy="52" r="28" fill="#c9a054"/>
-    </g>
-    <circle cx="90" cy="56" r="18" fill="url(#glass)"/>
-    <circle cx="164" cy="52" r="18" fill="url(#glass)"/>
-    <path d="M78 47 C85 40 97 40 104 46 C95 48 86 54 82 63 C77 59 74 52 78 47 Z" fill="#d9f4f8"/>
-    <path d="M152 43 C159 36 171 36 178 42 C169 44 160 50 156 59 C151 55 148 48 152 43 Z" fill="#d9f4f8"/>
-    <rect x="114" y="46" width="26" height="12" rx="5" fill="#7f6129" stroke="#231a0d" stroke-width="5"/>
+  <g transform="rotate(-3 128 130)">
+    <!-- ears -->
+    <path class="ink" fill="url(#skin)" d="M86 128 C50 126 24 108 10 68 C8 58 15 52 25 55 C64 68 92 96 102 126 Z"/>
+    <path class="ink" fill="url(#skin)" d="M170 126 C206 124 232 106 246 66 C248 56 241 50 231 53 C192 66 164 94 154 124 Z"/>
+    <path fill="#3d6a20" d="M82 116 C58 108 40 92 30 68 C56 84 74 100 90 124 Z"/>
+    <path fill="#3d6a20" d="M174 114 C198 106 214 92 224 68 C198 82 182 98 166 120 Z"/>
+
+    <!-- head -->
+    <path class="ink" fill="url(#skin)" d="M128 42
+      C177 42 207 73 209 118
+      C210 150 199 179 178 199
+      C162 215 146 223 128 223
+      C110 223 94 215 78 199
+      C57 179 46 150 47 118
+      C49 73 79 42 128 42 Z"/>
+    <path fill="#3d6a20" opacity="0.5" d="M128 223 C146 223 162 215 178 199 C199 179 210 150 209 118 C207 153 193 187 170 205 C154 217 140 221 128 223 Z"/>
+    <path fill="#a9db76" opacity="0.55" d="M94 60 C114 46 148 46 166 58 C142 54 116 58 98 76 Z"/>
+
+    <!-- brows: two matched angry wedges, no bridge -->
+    <path class="ink5" fill="#3d6a20" d="M70 120 C82 107 102 107 116 115 C105 120 92 119 82 120 C76 121 72 123 68 127 Z"/>
+    <path class="ink5" fill="#3d6a20" d="M186 116 C174 103 154 103 140 111 C151 116 164 115 174 116 C180 117 184 119 188 123 Z"/>
+
+    <!-- eyes: round, wide-set, goblin-gold, looking ahead -->
+    <circle class="ink5" cx="97" cy="134" r="17" fill="#f2ecd6"/>
+    <circle class="ink5" cx="159" cy="131" r="17" fill="#f2ecd6"/>
+    <circle cx="98" cy="135" r="10.5" fill="#e8a92c"/>
+    <circle cx="158" cy="132" r="10.5" fill="#e8a92c"/>
+    <circle cx="99" cy="135" r="5" fill="#171105"/>
+    <circle cx="157" cy="132" r="5" fill="#171105"/>
+    <circle cx="95" cy="131" r="2.6" fill="#fff"/>
+    <circle cx="153" cy="128" r="2.6" fill="#fff"/>
+
+    <!-- nose -->
+    <path class="ink" fill="url(#skin)" d="M128 122 C137 126 145 140 146 154 C146 166 138 172 126 170 C117 168 112 159 114 149 C116 135 120 122 128 122 Z"/>
+    <ellipse cx="122" cy="159" rx="3.7" ry="5.4" fill="#201810"/>
+    <ellipse cx="134" cy="158" rx="3.7" ry="5.4" fill="#201810"/>
+
+    <!-- grin -->
+    <path class="ink" fill="#3a1f1c" d="M88 178 C106 174 118 178 128 180 C140 182 154 180 170 174 C168 202 149 217 126 215 C99 213 86 197 88 178 Z"/>
+    <path fill="#f2ecd6" stroke="#171105" stroke-width="4" stroke-linejoin="round"
+      d="M94 180 L104 195 L115 181 L127 196 L139 181 L150 194 L162 178
+         C160 188 154 193 145 193 L105 193 C97 192 94 187 94 180 Z"/>
+    <path class="ink5" fill="#f2ecd6" d="M139 180 C137 168 140 158 147 156 C154 162 154 176 149 184 C145 186 141 185 139 180 Z"/>
+
+    <!-- warts -->
+    <circle cx="62" cy="150" r="5" fill="#3d6a20"/>
+    <circle cx="196" cy="146" r="4.5" fill="#3d6a20"/>
+    <circle cx="128" cy="205" r="4.5" fill="#3d6a20"/>
+
+    <!-- ================= gaming headset ================= -->
+    <path d="M60 92 C78 48 178 48 196 92" fill="none" stroke="#171105" stroke-width="21" stroke-linecap="round"/>
+    <path d="M60 92 C78 53 178 53 196 92" fill="none" stroke="#34383e" stroke-width="12" stroke-linecap="round"/>
+    <path d="M66 74 C92 58 164 58 190 74" fill="none" stroke="#4c5057" stroke-width="4" stroke-linecap="round" opacity="0.8"/>
+
+    <!-- left ear cup -->
+    <rect class="ink" x="28" y="102" width="46" height="60" rx="19" fill="url(#cup)"/>
+    <rect x="39" y="113" width="24" height="38" rx="11" fill="#4c5057"/>
+    <circle cx="51" cy="132" r="4" fill="#e8a92c"/>
+
+    <!-- right ear cup -->
+    <rect class="ink" x="182" y="98" width="46" height="60" rx="19" fill="url(#cup)"/>
+    <rect x="193" y="109" width="24" height="38" rx="11" fill="#4c5057"/>
+    <circle cx="205" cy="128" r="4" fill="#e8a92c"/>
+
+    <!-- boom mic to the corner of the mouth -->
+    <path d="M36 156 C28 186 40 206 74 200" fill="none" stroke="#171105" stroke-width="13" stroke-linecap="round"/>
+    <path d="M36 156 C28 186 40 204 74 198" fill="none" stroke="#34383e" stroke-width="6" stroke-linecap="round"/>
+    <circle class="ink5" cx="80" cy="196" r="11" fill="#e8a92c"/>
   </g>
 </svg>

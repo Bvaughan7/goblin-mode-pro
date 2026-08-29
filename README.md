@@ -11,6 +11,13 @@ It also keeps an eye on things while you play — temperatures, frame rate, and 
 Proton/Wine log — and if something goes wrong it can hand you a plain-language
 explanation (or a ready-to-paste report for a forum thread).
 
+| | |
+|---|---|
+| ![Dashboard](docs/screenshots/dashboard.png) | ![Games](docs/screenshots/games.png) |
+| **Dashboard** — what your machine can be tuned for, plus live CPU/GPU stats | **Games** — per-game switches, in plain language |
+| ![System Check](docs/screenshots/system-check.png) | ![Diagnostics](docs/screenshots/diagnostics.png) |
+| **System Check** — the kernel settings that make Linux games crash or stutter | **Diagnostics** — temp/FPS history, crash-log analysis, one-click report |
+
 ---
 
 ## What it actually does to boost your FPS

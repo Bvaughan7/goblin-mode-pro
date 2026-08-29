@@ -43,21 +43,56 @@ class TrayCallbacks:
 
 
 def _draw_icon(boosting: bool) -> Image.Image:
-    """A little goblin-green disc; ember-red ring while boosting."""
-    img = Image.new("RGBA", (_SIZE, _SIZE), (0, 0, 0, 0))
+    """A little headset goblin, matching data/icons/goblin-mark.svg; the eyes
+    glow ember-orange and a ring lights up while boosting."""
+    # supersample then downscale for smooth edges at 64 px
+    ss = 4
+    n = _SIZE * ss
+    img = Image.new("RGBA", (n, n), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
-    body = (86, 158, 63, 255) if not boosting else (110, 190, 70, 255)
-    d.ellipse((6, 6, _SIZE - 6, _SIZE - 6), fill=body)
+
+    def box(cx, cy, rx, ry):
+        return (int((cx - rx) * ss), int((cy - ry) * ss),
+                int((cx + rx) * ss), int((cy + ry) * ss))
+
+    skin = (95, 156, 55, 255) if not boosting else (120, 190, 70, 255)
+    skin_dk = (61, 106, 32, 255)
+    ink = (23, 17, 5, 255)
+    graphite = (52, 56, 62, 255)
+    eye_c = (232, 169, 44, 255) if not boosting else (255, 150, 40, 255)
+
     # ears
-    d.polygon([(10, 26), (2, 10), (22, 18)], fill=body)
-    d.polygon([(_SIZE - 10, 26), (_SIZE - 2, 10), (_SIZE - 22, 18)], fill=body)
+    for pts in ([(9, 30), (3, 9), (26, 24)], [(55, 30), (61, 9), (38, 24)]):
+        d.polygon([(x * ss, y * ss) for x, y in pts], fill=skin, outline=ink, width=ss)
+    # head
+    d.ellipse(box(32, 34, 25, 26), fill=skin, outline=ink, width=ss)
+    # headset band
+    d.arc(box(32, 33, 26, 24), 200, 340, fill=graphite, width=5 * ss)
+    # ear cups
+    d.rounded_rectangle(box(8, 33, 7, 10), radius=5 * ss, fill=graphite, outline=ink, width=ss)
+    d.rounded_rectangle(box(56, 33, 7, 10), radius=5 * ss, fill=graphite, outline=ink, width=ss)
+    # brows
+    d.line([(16 * ss, 28 * ss), (28 * ss, 25 * ss)], fill=skin_dk, width=3 * ss)
+    d.line([(48 * ss, 28 * ss), (36 * ss, 25 * ss)], fill=skin_dk, width=3 * ss)
     # eyes
-    eye = (20, 20, 20, 255)
-    d.ellipse((22, 28, 30, 36), fill=eye)
-    d.ellipse((34, 28, 42, 36), fill=eye)
+    for ex in (24, 41):
+        d.ellipse(box(ex, 33, 6, 6), fill=(242, 236, 214, 255), outline=ink, width=ss)
+        d.ellipse(box(ex, 33, 3.6, 3.6), fill=eye_c)
+        d.ellipse(box(ex, 33, 1.7, 1.7), fill=ink)
+    # nose
+    d.polygon([(32 * ss, 32 * ss), (35 * ss, 42 * ss), (30 * ss, 42 * ss)], fill=skin_dk)
+    # grin
+    d.chord(box(32, 40, 12, 11), 15, 165, fill=(58, 31, 28, 255), outline=ink, width=ss)
+    d.polygon([(26 * ss, 44 * ss), (29 * ss, 49 * ss), (32 * ss, 44 * ss),
+               (35 * ss, 49 * ss), (38 * ss, 44 * ss)], fill=(242, 236, 214, 255))
+    # boom mic
+    d.arc(box(20, 42, 14, 12), 60, 170, fill=graphite, width=3 * ss)
+    d.ellipse(box(20, 49, 3, 3), fill=eye_c, outline=ink, width=ss)
+
     if boosting:
-        d.ellipse((3, 3, _SIZE - 3, _SIZE - 3), outline=(220, 70, 40, 255), width=4)
-    return img
+        d.ellipse(box(32, 32, 30, 30), outline=(226, 88, 42, 255), width=3 * ss)
+
+    return img.resize((_SIZE, _SIZE), Image.LANCZOS)
 
 
 class Tray:
