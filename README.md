@@ -1,15 +1,27 @@
+<div align="center">
+
+<img src="docs/logo.png" alt="Goblin Mode Pro" width="360">
+
 # Goblin Mode Pro
 
-**A one-switch performance helper for Linux gaming.**
+### A one-switch performance helper for Linux gaming.
 
-You start a game, Goblin Mode Pro notices, flips a bunch of system settings to
-their "I'm gaming now" positions, and puts every one of them back the moment you
-quit. No launch scripts to maintain, nothing left running in a weird state after
-you're done.
+Goblin Mode Pro notices when a game starts, flips your system settings to their
+"I'm gaming now" positions, and puts every one of them back the moment you quit —
+then watches the temps, frame rate and Proton log and tells you, in plain
+language, why something broke.
 
-It also keeps an eye on things while you play — temperatures, frame rate, and the
-Proton/Wine log — and if something goes wrong it can hand you a plain-language
-explanation (or a ready-to-paste report for a forum thread).
+![version](https://img.shields.io/badge/version-0.1.0-e8952c)
+![python](https://img.shields.io/badge/python-3.11+-3f7fbf)
+![license](https://img.shields.io/badge/license-MIT-4E6A24)
+![helper](https://img.shields.io/badge/root_helper-polkit_hardened-4E6A24)
+![distros](https://img.shields.io/badge/distros-any_systemd-266F64)
+
+</div>
+
+---
+
+<div align="center">
 
 | | |
 |---|---|
@@ -17,6 +29,8 @@ explanation (or a ready-to-paste report for a forum thread).
 | **Dashboard** — what your machine can be tuned for, plus live CPU/GPU stats | **Games** — per-game switches, in plain language |
 | ![System Check](docs/screenshots/system-check.png) | ![Diagnostics](docs/screenshots/diagnostics.png) |
 | **System Check** — the kernel settings that make Linux games crash or stutter | **Diagnostics** — temp/FPS history, crash-log analysis, one-click report |
+
+</div>
 
 ---
 
