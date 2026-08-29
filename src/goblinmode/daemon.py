@@ -33,7 +33,7 @@ from goblinmode.ipc.helper_client import HelperClient
 from goblinmode.logwatch import LogWatcher
 from goblinmode.observer import GameEvent, Observer
 from goblinmode.payload import PerformancePayload
-from goblinmode.paths import ensure_user_dirs
+from goblinmode.paths import ONBOARDED_MARKER, ensure_user_dirs
 
 log = logging.getLogger("goblinmode.daemon")
 
@@ -94,6 +94,14 @@ class Daemon:
         self.bridge.publish()
         self.tray.start()
         self.gpu_monitor.start()
+
+        if self.tray.available and not ONBOARDED_MARKER.exists():
+            self._notify(
+                "Goblin Mode Pro is running",
+                "Click the tray icon any time to check your system readiness "
+                "and wire up your launcher — takes about a minute.",
+                tag="onboarding",
+            )
 
         self._poll_source_id = GLib.timeout_add_seconds(
             self.settings.poll_interval, self._poll_tick
@@ -474,6 +482,8 @@ class Daemon:
             "gpu": _gpu_summary(self.gpu_monitor.deep()),
             "capabilities": capabilities.detect(),
             "profiles": [_profile_dict(p) for p in self.settings.profiles],
+            "health": self.get_health(),
+            "onboarded": ONBOARDED_MARKER.exists(),
         }
 
     def get_metrics(self) -> list[dict[str, Any]]:

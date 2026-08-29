@@ -124,6 +124,8 @@ class Tray:
         self._status_text = "Idle"
         self._master_enabled = True
         self._boosting = False
+        self._health_score: float | None = None
+        self._onboarded = True
         self._icon = None
         if _TRAY_AVAILABLE:
             self._icon = pystray.Icon(
@@ -179,6 +181,8 @@ class Tray:
             self._status_text = "Idle"
         if status.get("limited_mode"):
             self._status_text += "  (limited - helper down)"
+        self._health_score = (status.get("health") or {}).get("score")
+        self._onboarded = status.get("onboarded", True)
         if self._icon is None:
             return
         try:
@@ -190,10 +194,16 @@ class Tray:
             log.debug("tray update skipped (icon not ready)")
 
     # -- menu ---------------------------------------------------------
+    def _score_text(self) -> str:
+        if self._health_score is None:
+            return "Readiness: checking…"
+        return f"Readiness: {self._health_score:g}/10"
+
     def _build_menu(self) -> "pystray.Menu":
         M = pystray.MenuItem
-        return pystray.Menu(
+        items = [
             M(lambda _: self._status_text, None, enabled=False),
+            M(lambda _: self._score_text(), lambda: self._cb.open_gui(), enabled=True),
             pystray.Menu.SEPARATOR,
             M(
                 "Optimizations enabled",
@@ -206,8 +216,13 @@ class Tray:
                 checked=lambda _: self._boosting,
             ),
             pystray.Menu.SEPARATOR,
+        ]
+        if not self._onboarded:
+            items.append(M("Finish setup (1 min)", lambda: self._cb.open_gui()))
+        items.extend([
             M("Open Goblin Mode Pro", lambda: self._cb.open_gui()),
             M("Export last incident for AI", lambda: self._cb.export_incident()),
             pystray.Menu.SEPARATOR,
             M("Quit", lambda: self._cb.quit()),
-        )
+        ])
+        return pystray.Menu(*items)
