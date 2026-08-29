@@ -1,0 +1,101 @@
+name: Release packages
+
+# Builds the .deb and .rpm described in packaging/README.md and attaches them
+# to the GitHub Release. Triggered by publishing a release, or manually (as a
+# workflow_dispatch smoke test - artifacts are uploaded either way, only the
+# "publish" job needs an actual release to attach to).
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: ver
+        run: |
+          v=$(python3 -c "import re; print(re.search(r'\"([^\"]+)\"', open('src/goblinmode/__about__.py').read()).group(1))")
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "building packages for v$v"
+
+  deb:
+    needs: version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install packaging tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y debhelper dpkg-dev fakeroot
+
+      - name: Build the .deb
+        run: |
+          cp -r packaging/debian .   # dpkg-buildpackage expects ./debian
+          dpkg-buildpackage -us -uc -b
+          mkdir -p dist
+          mv ../goblin-mode-pro_*.deb dist/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deb-package
+          path: dist/*.deb
+
+  rpm:
+    needs: version
+    runs-on: ubuntu-latest
+    container: fedora:latest
+    steps:
+      - name: Install packaging tools
+        run: dnf install -y rpm-build systemd-rpm-macros git python3 tar gzip
+
+      # actions/checkout doesn't work inside every container image, and we
+      # only need a plain source tree here - git clone it ourselves.
+      - name: Checkout
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git clone --depth 1 --branch "${GITHUB_REF_NAME:-main}" \
+            "https://github.com/${GITHUB_REPOSITORY}.git" src-checkout || \
+          git clone --depth 50 "https://github.com/${GITHUB_REPOSITORY}.git" src-checkout
+          cd src-checkout && git checkout "${GITHUB_SHA}"
+
+      - name: Build the .rpm
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          mkdir -p rpmbuild/{SOURCES,SPECS,BUILD,RPMS,SRPMS}
+          cd src-checkout
+          git archive --prefix="goblin-mode-pro-${VERSION}/" \
+            -o "../rpmbuild/SOURCES/goblin-mode-pro-${VERSION}.tar.gz" HEAD
+          cd ..
+          rpmbuild -bb src-checkout/packaging/rpm/goblin-mode-pro.spec \
+            --define "_topdir $PWD/rpmbuild"
+          mkdir -p dist
+          find rpmbuild/RPMS -name '*.rpm' -exec mv {} dist/ \;
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rpm-package
+          path: dist/*.rpm
+
+  publish:
+    if: github.event_name == 'release'
+    needs: [deb, rpm]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: "*-package"
+          path: dist
+          merge-multiple: true
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
