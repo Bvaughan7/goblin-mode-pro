@@ -93,8 +93,14 @@ new one if you want to see it (or build it).
 
 - [ ] **Ship the `.deb` / `.rpm` from CI.** The packaging dirs exist; wire an
       OBS project or a `dpkg-buildpackage` GitHub Action + release attachment.
-- [ ] **Publish to Flathub** *only if* the sandboxed-GUI-to-host-daemon path
-      proves worth it (see `packaging/README.md`).
+- [x] **Publish to Flathub** *only if* the sandboxed-GUI-to-host-daemon path
+      proves worth it — **decided: not pursuing.** The helper needs raw
+      `/sys/devices/system/cpu` access and a root systemd service; neither
+      fits the sandbox, and a sandboxed-GUI-only Flatpak still requires the
+      daemon installed on the host regardless, so it saves nothing over the
+      existing native packages. Revisit only if a distro ships the daemon
+      without the GUI. See `packaging/README.md` → "Flatpak — not provided,
+      on purpose".
 - [ ] 🟢 **More `profiles/`** — community starter profiles for the top 50 Proton
       games.
 - [ ] **Restore coverage further** — a GUI smoke test under a headless
