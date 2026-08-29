@@ -31,7 +31,9 @@ import json
 import logging
 import os
 import re
+import shutil
 import signal
+import subprocess
 import sys
 from pathlib import Path
 
@@ -53,6 +55,12 @@ CPU_BASE = Path("/sys/devices/system/cpu")
 RAPL_BASE = Path("/sys/class/powercap/intel-rapl/intel-rapl:0")
 
 NICE_FLOOR = -10  # never let a caller push a process below this
+
+#: AMD laptop TDP control. ``ryzenadj`` writes the APU's SMU power limits; it is
+#: the AMD counterpart to Intel RAPL. Absent on most systems - the methods below
+#: no-op when it isn't installed.
+RYZENADJ = shutil.which("ryzenadj")
+TDP_MIN_W, TDP_MAX_W = 4, 120
 
 # sysctl keys the pre-flight check is allowed to set at runtime, each with an
 # accepted numeric range. Nothing outside this table can be touched.
@@ -99,6 +107,16 @@ INTROSPECTION_XML = f"""
     </method>
     <method name="ResetPowerLimits">
       <arg type="b" name="ok" direction="out"/>
+    </method>
+    <method name="SetTDP">
+      <arg type="u" name="watts" direction="in"/>
+      <arg type="b" name="ok" direction="out"/>
+    </method>
+    <method name="ResetTDP">
+      <arg type="b" name="ok" direction="out"/>
+    </method>
+    <method name="HasTDPControl">
+      <arg type="b" name="available" direction="out"/>
     </method>
     <method name="RevertAll">
       <arg type="b" name="ok" direction="out"/>
@@ -313,6 +331,87 @@ def reset_power_limits() -> bool:
     return ok
 
 
+# --------------------------------------------------------------------------
+# AMD TDP (ryzenadj)
+# --------------------------------------------------------------------------
+def _ryzenadj(*args: str) -> str:
+    """Run ryzenadj with *args*; return stdout, raise on failure."""
+    out = subprocess.run(
+        [RYZENADJ, *args], capture_output=True, text=True, timeout=8, check=True
+    )
+    return out.stdout
+
+
+def _ryzenadj_stapm_mw() -> int | None:
+    """Current STAPM (sustained) limit in mW, parsed from `ryzenadj --info`."""
+    try:
+        info = _ryzenadj("--info")
+    except (OSError, subprocess.SubprocessError):
+        return None
+    for line in info.splitlines():
+        # rows look like:  | STAPM LIMIT        |    25000.000 |  stapm-limit |
+        if "STAPM LIMIT" in line.upper():
+            m = re.search(r"([0-9]+(?:\.[0-9]+)?)", line.split("|", 2)[-1] if "|" in line else line)
+            if m:
+                val = float(m.group(1))
+                return int(val if val > 1000 else val * 1000)  # W or mW -> mW
+    return None
+
+
+def _snapshot_tdp() -> None:
+    if not RYZENADJ:
+        return
+    data = _load_state() or {}
+    if "ryzenadj_stapm_mw" in data:
+        return
+    stapm = _ryzenadj_stapm_mw()
+    if stapm:
+        STATE_DIR.mkdir(parents=True, exist_ok=True)
+        data["ryzenadj_stapm_mw"] = stapm
+        STATE_FILE.write_text(json.dumps(data, indent=2))
+        log.info("ryzenadj snapshot: stapm=%d mW", stapm)
+
+
+def set_tdp(watts: int) -> bool:
+    if not RYZENADJ:
+        log.warning("SetTDP: ryzenadj is not installed")
+        return False
+    watts = max(TDP_MIN_W, min(TDP_MAX_W, int(watts)))
+    _snapshot_tdp()
+    mw = watts * 1000
+    fast = min(TDP_MAX_W, watts + 8) * 1000  # a little short-burst headroom
+    try:
+        _ryzenadj(
+            f"--stapm-limit={mw}", f"--slow-limit={mw}", f"--fast-limit={fast}"
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        log.warning("ryzenadj SetTDP(%dW) failed: %s", watts, exc)
+        return False
+    log.info("AMD TDP set to %d W (fast %d W) via ryzenadj", watts, fast // 1000)
+    return True
+
+
+def reset_tdp() -> bool:
+    if not RYZENADJ:
+        return True
+    data = _load_state() or {}
+    stapm = data.get("ryzenadj_stapm_mw")
+    if not stapm:
+        log.info("ResetTDP: no snapshot; leaving current limits (cleared on reboot)")
+        return True
+    try:
+        _ryzenadj(
+            f"--stapm-limit={int(stapm)}",
+            f"--slow-limit={int(stapm)}",
+            f"--fast-limit={int(stapm)}",
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        log.warning("ryzenadj ResetTDP failed: %s", exc)
+        return False
+    log.info("AMD TDP restored to %d W", int(stapm) // 1000)
+    return True
+
+
 def revert_all() -> bool:
     data = _load_state()
     if data is None:
@@ -334,6 +433,8 @@ def revert_all() -> bool:
             except OSError:
                 ok = False
     if not _restore_power_limits(data):
+        ok = False
+    if data.get("ryzenadj_stapm_mw") and not reset_tdp():
         ok = False
     STATE_FILE.unlink(missing_ok=True)
     log.info("reverted to %s (ok=%s)", data, ok)
@@ -402,6 +503,8 @@ _MUTATING = {
     "Renice",
     "SetPowerLimits",
     "ResetPowerLimits",
+    "SetTDP",
+    "ResetTDP",
     "RevertAll",
     "SetSysctl",
 }
@@ -446,6 +549,12 @@ def _handle_call(
             )
         elif method_name == "ResetPowerLimits":
             invocation.return_value(GLib.Variant("(b)", (reset_power_limits(),)))
+        elif method_name == "SetTDP":
+            invocation.return_value(GLib.Variant("(b)", (set_tdp(int(args[0])),)))
+        elif method_name == "ResetTDP":
+            invocation.return_value(GLib.Variant("(b)", (reset_tdp(),)))
+        elif method_name == "HasTDPControl":
+            invocation.return_value(GLib.Variant("(b)", (RYZENADJ is not None,)))
         elif method_name == "RevertAll":
             invocation.return_value(GLib.Variant("(b)", (revert_all(),)))
         elif method_name == "SetSysctl":

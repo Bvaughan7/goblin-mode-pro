@@ -18,9 +18,15 @@ steps if you have them.
 - The helper re-validates every argument regardless of the caller: the CPU
   governor must be one the kernel advertises; `renice` only raises priority and
   only for a process owned by the calling uid; RAPL power-limit writes are clamped
-  to the firmware maximum; sysctl keys are a fixed allowlist, each with an
-  accepted numeric range; the sysctl target path is resolved and confirmed to be
-  under `/proc/sys/`.
+  to the firmware maximum; the AMD TDP figure is clamped to 4–120 W; sysctl keys
+  are a fixed allowlist, each with an accepted numeric range; the sysctl target
+  path is resolved and confirmed to be under `/proc/sys/`.
+- AMD laptop TDP control shells out to `ryzenadj`, which needs raw hardware
+  access the base unit denies. That access is granted **only** through a systemd
+  drop-in (`helper-amd-tdp.conf`) that the installer applies **only when
+  `ryzenadj` is present** — every Intel or `ryzenadj`-less system keeps the
+  fully locked-down unit (`CAP_SYS_NICE` only, `PrivateDevices=yes`,
+  `@raw-io` filtered).
 - The daemon is unprivileged and its GUI bridge lives on the per-user session
   bus. The helper's well-known name can only be owned by root (enforced by the
   D-Bus bus policy), so it cannot be impersonated.

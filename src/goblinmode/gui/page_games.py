@@ -244,32 +244,55 @@ class GamesPage(Adw.PreferencesPage):
         focus.set_subtitle("Pause the file indexer, turn on Do Not Disturb, inhibit idle")
         exp.add_row(focus)
 
-        # -- Power limit nested expander --
+        # -- Power limit / TDP nested expander --
         rapl_ok = self._caps.get("rapl_control", True)
+        tdp_backend = self._caps.get("tdp_control")  # "rapl" | "ryzenadj" | None
+        tdp_ok = rapl_ok or tdp_backend == "ryzenadj"
+        amd = tdp_backend == "ryzenadj" and not rapl_ok
         pw = Adw.ExpanderRow(
-            title="CPU power limit",
-            subtitle="Let the CPU draw more watts to hold its speed under load — "
-            "0 leaves the factory value" if rapl_ok else
-            "Not available on this processor (Intel only for now)",
+            title="TDP / power limit" if amd else "CPU power limit",
+            subtitle=(
+                "Set the wattage the APU may sustain — via ryzenadj (experimental)"
+                if amd else
+                "Let the CPU draw more watts to hold its speed under load"
+            ) if tdp_ok else "Not available on this processor",
         )
-        pw.set_sensitive(rapl_ok)
-        if rapl_ok:
+        pw.set_sensitive(tdp_ok)
+        if tdp_ok:
             pw.set_show_enable_switch(True)
             pw.set_enable_expansion(bool(p.get("power_limit_enabled", False)))
             pw.connect(
                 "notify::enable-expansion",
                 lambda r, _p: (not self._building) and self._patch(exe, power_limit_enabled=r.get_enable_expansion()),
             )
-            pl1 = Adw.SpinRow.new_with_range(0, 500, 5)
+            # Preset selector — sets both limits at once.
+            presets = [("Custom", 0), ("15 W", 15), ("25 W", 25),
+                       ("35 W", 35), ("45 W", 45), ("65 W", 65)]
+            combo = Adw.ComboRow(title="Preset")
+            combo.set_model(Gtk.StringList.new([lbl for lbl, _w in presets]))
+            cur_w = p.get("pl1_w", 0)
+            combo.set_selected(next((i for i, (_l, w) in enumerate(presets) if w == cur_w), 0))
+
+            pl1 = Adw.SpinRow.new_with_range(0, 250, 1)
             pl1.set_title("Sustained (watts)")
-            pl1.set_value(p.get("pl1_w", 0))
-            pl1.connect("notify::value", lambda r, _p: self._patch(exe, pl1_w=int(r.get_value())))
-            pl2 = Adw.SpinRow.new_with_range(0, 500, 5)
+            pl1.set_subtitle("0 leaves the factory value")
+            pl1.set_value(cur_w)
+            pl2 = Adw.SpinRow.new_with_range(0, 250, 1)
             pl2.set_title("Short burst (watts)")
             pl2.set_value(p.get("pl2_w", 0))
+
+            def _apply_preset(row, _p, _pl1=pl1, _pl2=pl2, _ps=presets):
+                w = _ps[row.get_selected()][1]
+                if w:
+                    _pl1.set_value(w)
+                    _pl2.set_value(min(250, w + 15))
+            combo.connect("notify::selected", _apply_preset)
+            pl1.connect("notify::value", lambda r, _p: self._patch(exe, pl1_w=int(r.get_value())))
             pl2.connect("notify::value", lambda r, _p: self._patch(exe, pl2_w=int(r.get_value())))
+            pw.add_row(combo)
             pw.add_row(pl1)
-            pw.add_row(pl2)
+            if not amd:  # ryzenadj takes a single sustained figure
+                pw.add_row(pl2)
         exp.add_row(pw)
 
         # -- MangoHud nested expander --

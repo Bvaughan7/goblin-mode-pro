@@ -47,7 +47,8 @@ while a game is running and reverts them afterwards. In plain terms:
 | **Energy hint ("EPP")** | Leans toward efficiency | Leans toward performance | The CPU stops second-guessing itself and holds higher clocks |
 | **Screen tearing** | Adds a small delay so the picture is always "clean" | Allows tearing while you game | Lower input lag — your mouse feels more connected |
 | **Adaptive sync / VRR** | Often left off | Turns it on for monitors that support it | The monitor matches the game's frame rate, killing a whole class of stutter |
-| **CPU power limit** *(Intel only)* | Caps the watts the CPU may draw | Optionally raises the cap (you choose the number) | If your cooling can keep up, the CPU holds its top speed for longer |
+| **CPU power limit / TDP** | Caps the watts the CPU may draw | Optionally raises the cap — a slider with 15/25/35/45 W presets. Intel via RAPL; AMD laptops via `ryzenadj` (experimental) | If your cooling can keep up, the CPU holds its top speed for longer |
+| **Core pinning** *(hybrid / chiplet CPUs)* | Threads run on any core | Optionally pins the game to the fast cores (Intel P-cores) or one CCD (Ryzen) | Keeps the game off the slow cores and the cross-CCD latency hop |
 | **Focus mode** | Indexer, notifications and screen-blanking all keep running | Pauses the file indexer, turns on Do Not Disturb, stops the screen sleeping | Removes the background hitches and the "screen dimmed mid-cutscene" problem |
 | **Proton/Wine switches** | Off unless you set them by hand | Flips the common ones (NVAPI, Fsync, async shaders) per game | The settings most Windows games need on Proton, without editing launch options |
 | **MangoHud overlay** | Not shown | Shows FPS / temps on screen if you want it | See what's actually happening |
@@ -86,7 +87,7 @@ apply — it never just fails silently.
 |---|---|
 | **Any systemd Linux** — Arch, CachyOS, Debian, Ubuntu, Fedora, Nobara, openSUSE, Pop!_OS… | Everything below that your hardware supports. The installer detects your package manager. |
 | **Intel CPU** | All CPU features, including the power-limit boost. |
-| **AMD CPU** | Everything **except** the Intel-only power-limit raise. Governor, energy hint, and priority all work normally. (Laptop TDP control works too if you install `ryzenadj`.) |
+| **AMD CPU** | Everything. Governor, energy hint and priority work exactly as on Intel; laptop TDP control works if you install `ryzenadj` (the installer then loosens the helper sandbox just enough for it). Core pinning uses your CCD layout. |
 | **NVIDIA GPU** | Everything, including the deep "why did my FPS drop" GPU snapshot. |
 | **AMD or Intel GPU** | Everything **except** that deep snapshot — you still get GPU temperature and load. |
 | **KDE Plasma** | Everything, including the tearing / VRR compositor tweaks. |
@@ -206,7 +207,8 @@ game logs: `~/.local/share/goblin-mode-pro/logs/`.
 |---|---|
 | **Observer** | `psutil` poll loop. Per-profile state machine: `ABSENT→PRESENT` applies, `PRESENT→ABSENT` reverts. Global tweaks are refcounted across concurrent games. |
 | **Auto-detect** | Recognises any game, not just the profile list — launcher tags (Steam/Lutris/Heroic) plus a signal stack (DRM `fdinfo` GPU activity, `libSDL2`/`libwine` links, a DE blocklist). New games get a default profile and a **Keep / Ignore** notification. |
-| **Performance Payload** | governor→`performance`, EPP→`performance`, optional RAPL PL1/PL2 raise, `renice` (default `-5`), KWin `AllowTearing` + VRR via `kscreen-doctor`, Focus mode, MangoHud config, runner env vars, gamescope. |
+| **Performance Payload** | governor→`performance`, EPP→`performance`, TDP raise (RAPL PL1/PL2 or `ryzenadj`), `renice` (default `-5`), CPU-affinity pinning (P-cores / CCD), KWin `AllowTearing` + VRR via `kscreen-doctor`, Focus mode, MangoHud config, runner env vars, gamescope. |
+| **Regression tracking** | On each game exit, summarises the MangoHud frame log (avg / median / 1% low FPS, duration, active tweaks) into `sessions.jsonl` and compares it to the recent history for that game. A >10% swing in the 1% low or average is flagged on the Diagnostics page. |
 | **Capabilities** | One-time hardware probe (CPU vendor, cpufreq driver, EPP/RAPL availability, GPU vendors, `nvidia-smi`, compositor, distro, package manager). Attached to daemon status so the GUI labels or hides features that don't apply. |
 | **System Check** | Pre-flight panel: `vm.max_map_count`, esync FD limit, split-lock mitigation, `nvidia-drm.modeset`, THP, `compaction_proactiveness`, swappiness, kernel fsync support, user namespaces (Steam Runtime + anti-cheat), Vulkan ICD, gamemode/MangoHud presence, plus an anti-cheat status note. Safe fixes are one-click; the `sysctl.d` / kernel-param text is shown for permanence. |
 | **Proton log analyzer** | ~16 known failure patterns → plain-language cause + fix, run on the captured Wine/Proton log. |
@@ -220,7 +222,7 @@ game logs: `~/.local/share/goblin-mode-pro/logs/`.
 
 | polkit action | covers | default on the active session |
 |---|---|---|
-| `com.goblinmode.pro.manage-performance` | governor, EPP, renice, RAPL PL1/PL2 | allowed without a prompt |
+| `com.goblinmode.pro.manage-performance` | governor, EPP, renice, RAPL PL1/PL2, ryzenadj TDP | allowed without a prompt |
 | `com.goblinmode.pro.manage-kernel-tunables` | persistent sysctls from the System Check | prompts for admin auth |
 
 `manage-performance` is silent on the active session so a boost applies the

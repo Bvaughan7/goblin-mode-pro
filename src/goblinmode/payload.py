@@ -81,6 +81,7 @@ class PerformancePayload:
         self._helper_tweaks_applied = False   # governor/EPP and/or power limits
         self._governor_applied = False
         self._power_applied = False
+        self._power_backend: str | None = None   # "rapl" | "ryzenadj"
         self._tearing_applied = False
         self._vrr_applied = False
         self._focus_applied = False
@@ -155,6 +156,15 @@ class PerformancePayload:
         pl2 = max((p.pl2_w for p in wanting), default=0)
         return pl1 * 1_000_000, pl2 * 1_000_000
 
+    def _tdp_backend(self) -> str | None:
+        """'rapl' (Intel), 'ryzenadj' (AMD laptop) or None."""
+        try:
+            from goblinmode import capabilities
+
+            return capabilities.detect().get("tdp_control")
+        except Exception:  # noqa: BLE001
+            return None
+
     def _recompute_global(self) -> None:
         want_governor = any(p.governor_boost for p in self._active.values())
         pl1_uw, pl2_uw = self._desired_power_limits_uw()
@@ -163,9 +173,17 @@ class PerformancePayload:
         want_tearing = any(p.tearing_enabled for p in self._active.values())
         want_vrr = any(p.adaptive_sync_enabled for p in self._active.values())
 
+        power: tuple[str, tuple[int, int]] | None = None
+        if want_power:
+            if self._tdp_backend() == "ryzenadj":
+                watts = max(round(pl1_uw / 1_000_000), round(pl2_uw / 1_000_000))
+                power = ("ryzenadj", (watts, 0))
+            else:
+                power = ("rapl", (pl1_uw, pl2_uw))
+
         if want_helper:
             # (re)apply on every recompute so a changed profile set is picked up
-            self._apply_helper_tweaks(want_governor, (pl1_uw, pl2_uw) if want_power else None)
+            self._apply_helper_tweaks(want_governor, power)
         elif self._helper_tweaks_applied:
             self._restore_helper_tweaks()
 
@@ -203,7 +221,7 @@ class PerformancePayload:
             self._focus_applied = False
 
     def _apply_helper_tweaks(
-        self, want_governor: bool, power_uw: tuple[int, int] | None
+        self, want_governor: bool, power: tuple[str, tuple[int, int]] | None
     ) -> None:
         try:
             if want_governor:
@@ -211,11 +229,19 @@ class PerformancePayload:
                 self.helper.set_epp(PERFORMANCE_EPP)
                 self._governor_applied = True
                 log.info("CPU governor -> %s", PERFORMANCE_GOVERNOR)
-            if power_uw is not None:
-                self.helper.set_power_limits(power_uw[0], power_uw[1])
-                self._power_applied = True
-                log.info("RAPL limits -> PL1=%.0fW PL2=%.0fW",
-                         power_uw[0] / 1e6, power_uw[1] / 1e6)
+            if power is not None:
+                kind, values = power
+                if kind == "ryzenadj":
+                    if values[0] and self.helper.set_tdp(values[0]):
+                        self._power_applied = True
+                        self._power_backend = "ryzenadj"
+                        log.info("AMD TDP -> %dW (ryzenadj)", values[0])
+                else:
+                    self.helper.set_power_limits(values[0], values[1])
+                    self._power_applied = True
+                    self._power_backend = "rapl"
+                    log.info("RAPL limits -> PL1=%.0fW PL2=%.0fW",
+                             values[0] / 1e6, values[1] / 1e6)
             self._helper_tweaks_applied = True
         except HelperUnavailable as exc:
             self._incident(
@@ -232,6 +258,7 @@ class PerformancePayload:
         self._helper_tweaks_applied = False
         self._governor_applied = False
         self._power_applied = False
+        self._power_backend = None
 
     def _renice(self, profile: GameProfile, pid: int) -> None:
         try:

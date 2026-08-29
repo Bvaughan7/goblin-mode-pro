@@ -130,6 +130,17 @@ install_helper() {
         "$PREFIX/share/dbus-1/system.d/com.goblinmode.ProHelper.conf"
     sudo install -Dm0644 "$REPO_DIR/data/systemd/goblin-mode-pro-helper.service" \
         "$PREFIX/lib/systemd/system/goblin-mode-pro-helper.service"
+
+    # AMD laptop TDP control needs a looser sandbox for ryzenadj; only apply the
+    # drop-in when ryzenadj is actually installed.
+    local dropin="/etc/systemd/system/goblin-mode-pro-helper.service.d/amd-tdp.conf"
+    if need_cmd ryzenadj; then
+        msg "ryzenadj found - enabling AMD TDP control (looser helper sandbox)"
+        sudo install -Dm0644 "$REPO_DIR/data/systemd/helper-amd-tdp.conf" "$dropin"
+    else
+        sudo rm -f -- "$dropin"
+    fi
+
     sudo systemctl daemon-reload
     sudo systemctl enable --now goblin-mode-pro-helper.service
 }
@@ -160,7 +171,8 @@ uninstall() {
         "$PREFIX/share/applications/com.goblinmode.Pro.desktop" \
         "$PREFIX/share/icons/hicolor/scalable/apps/com.goblinmode.Pro.svg" \
         /usr/bin/goblin-mode-pro-daemon /usr/bin/goblin-mode-pro
-    sudo rm -rf -- "$LIB_DIR"
+    sudo rm -rf -- "$LIB_DIR" \
+        /etc/systemd/system/goblin-mode-pro-helper.service.d
     sudo systemctl daemon-reload
     systemctl --user daemon-reload
     rm -f -- "$HOME/.local/bin/goblin-run"

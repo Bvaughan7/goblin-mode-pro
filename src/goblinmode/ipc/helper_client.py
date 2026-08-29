@@ -99,6 +99,19 @@ class HelperClient:
     def reset_power_limits(self) -> bool:
         return self._call("ResetPowerLimits").unpack()[0]
 
+    # -- AMD TDP (ryzenadj) -------------------------------------------
+    def has_tdp_control(self) -> bool:
+        try:
+            return bool(self._call("HasTDPControl").unpack()[0])
+        except HelperUnavailable:
+            return False
+
+    def set_tdp(self, watts: int) -> bool:
+        return self._call("SetTDP", GLib.Variant("(u)", (int(watts),))).unpack()[0]
+
+    def reset_tdp(self) -> bool:
+        return self._call("ResetTDP").unpack()[0]
+
     # -- global revert --------------------------------------------------
     def revert_all(self) -> bool:
         return self._call("RevertAll").unpack()[0]
