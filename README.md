@@ -24,6 +24,10 @@ cause. It's the missing piece between "I can see the problem" and "it's fixed."
 ![helper](https://img.shields.io/badge/root_helper-polkit_hardened-4E6A24)
 ![distros](https://img.shields.io/badge/distros-any_systemd-266F64)
 
+<img src="docs/demo.gif" alt="A game launches, the CPU locks to performance and the power ramps up; Diagnostics catches a temperature climb and a flagged FPS regression; the game exits and everything reverts and cools." width="620">
+
+<sub><i>Game launches → CPU locks to <code>performance</code>, power ramps → Diagnostics catches the temp climb and a −30% 1%-low regression → game exits → everything reverts and cools.</i></sub>
+
 </div>
 
 ---
@@ -312,6 +316,10 @@ They cover the pure logic — config validation, capability parsing, the session
 / regression maths, the CSV and MangoHud parsers, env-var filtering, gamescope
 args, the community-fetch host guard. GitHub Actions also import-checks every
 module and validates the `profiles/` JSON on each push.
+
+`docs/make-screenshots.py` and `docs/make-demo.py` regenerate the README visuals
+by rendering the real GUI off-screen (needs a running daemon; `make-demo.py`
+also needs `ffmpeg`).
 
 </details>
 
