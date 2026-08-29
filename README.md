@@ -325,6 +325,16 @@ also needs `ffmpeg`).
 
 ---
 
+## Contributing & what's next
+
+Ideas, bug reports and PRs are welcome. [`ROADMAP.md`](ROADMAP.md) is the menu of
+where this could go — a first-run wizard, a system health score, ProtonDB
+lookup, NVIDIA/AMD tuning presets, a benchmark mode, a CLI, handheld profiles.
+👍 an item on the [issue tracker](https://github.com/Bvaughan7/goblin-mode-pro/issues)
+or open a new one.
+
+See [CHANGELOG.md](CHANGELOG.md) for release history.
+
 ## Reporting a security issue
 
 Please use the repository's **Security advisories** page ("Report a
