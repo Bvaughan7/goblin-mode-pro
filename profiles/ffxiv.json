@@ -1,0 +1,15 @@
+{
+  "exe": "ffxiv_dx11.exe",
+  "display_name": "Final Fantasy XIV",
+  "match_mode": "exact",
+  "note": "Starter default, not a measured recommendation. Community-style default, similar to the WoW profile.",
+  "renice_enabled": true,
+  "nice_value": -5,
+  "governor_boost": true,
+  "tearing_enabled": true,
+  "adaptive_sync_enabled": true,
+  "focus_mode": true,
+  "runner_vars": {"nvapi": false, "fsync": true, "no_esync": false, "dxvk_async": true},
+  "mangohud": {"enabled": false, "fps": true, "cpu_temp": true, "gpu_temp": true},
+  "fps_watchdog": false
+}

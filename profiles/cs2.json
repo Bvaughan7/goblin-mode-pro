@@ -1,0 +1,15 @@
+{
+  "exe": "cs2.exe",
+  "display_name": "Counter-Strike 2",
+  "match_mode": "exact",
+  "note": "Starter default, not a measured recommendation. Competitive shooter - tearing on for lower input latency; frame cap is usually set in-game.",
+  "renice_enabled": true,
+  "nice_value": -5,
+  "governor_boost": true,
+  "tearing_enabled": true,
+  "adaptive_sync_enabled": true,
+  "focus_mode": true,
+  "runner_vars": {"nvapi": false, "fsync": true, "no_esync": false, "dxvk_async": true},
+  "fps_watchdog": true,
+  "fps_dip_floor": 60
+}

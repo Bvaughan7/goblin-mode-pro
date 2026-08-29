@@ -16,5 +16,125 @@
     "exe": "Cyberpunk2077.exe",
     "display_name": "Cyberpunk 2077",
     "note": "Tearing + VRR + DXVK async; frame-rate watchdog on for VKD3D stalls."
+  },
+  {
+    "slug": "eldenring",
+    "exe": "eldenring.exe",
+    "display_name": "Elden Ring",
+    "note": "Tearing + VRR + async shaders for frame pacing during boss fights."
+  },
+  {
+    "slug": "bg3",
+    "exe": "bg3_dx11.exe",
+    "display_name": "Baldur's Gate 3",
+    "note": "DXVK async shaders help with Act 3's compile stutter."
+  },
+  {
+    "slug": "rdr2",
+    "exe": "RDR2.exe",
+    "display_name": "Red Dead Redemption 2",
+    "note": "CPU-heavy in towns; renice + governor boost help most."
+  },
+  {
+    "slug": "godofwar",
+    "exe": "GoW.exe",
+    "display_name": "God of War",
+    "note": "Standard AAA single-player defaults."
+  },
+  {
+    "slug": "hogwartslegacy",
+    "exe": "HogwartsLegacy.exe",
+    "display_name": "Hogwarts Legacy",
+    "note": "Known for traversal stutter - DXVK async and a lower watchdog floor."
+  },
+  {
+    "slug": "starcitizen",
+    "exe": "StarCitizen.exe",
+    "display_name": "Star Citizen",
+    "note": "Run the pre-flight check first - needs a high vm.max_map_count to launch."
+  },
+  {
+    "slug": "apexlegends",
+    "exe": "r5apex.exe",
+    "display_name": "Apex Legends",
+    "note": "Competitive shooter - tearing + VRR favor lower input latency."
+  },
+  {
+    "slug": "cs2",
+    "exe": "cs2.exe",
+    "display_name": "Counter-Strike 2",
+    "note": "Competitive shooter - tearing on for lower input latency."
+  },
+  {
+    "slug": "destiny2",
+    "exe": "destiny2.exe",
+    "display_name": "Destiny 2",
+    "note": "Standard competitive-shooter defaults."
+  },
+  {
+    "slug": "ffxiv",
+    "exe": "ffxiv_dx11.exe",
+    "display_name": "Final Fantasy XIV",
+    "note": "Community-style default, similar to the WoW profile."
+  },
+  {
+    "slug": "pathofexile2",
+    "exe": "PathOfExile2.exe",
+    "display_name": "Path of Exile 2",
+    "note": "Busy juiced maps are CPU-bound - renice + governor boost matter most."
+  },
+  {
+    "slug": "diablo4",
+    "exe": "Diablo IV.exe",
+    "display_name": "Diablo IV",
+    "note": "Standard ARPG defaults."
+  },
+  {
+    "slug": "monsterhunterwilds",
+    "exe": "MonsterHunterWilds.exe",
+    "display_name": "Monster Hunter Wilds",
+    "note": "Heavy engine - DXVK async and a lower watchdog floor for large fights."
+  },
+  {
+    "slug": "helldivers2",
+    "exe": "helldivers2.exe",
+    "display_name": "Helldivers 2",
+    "note": "Standard co-op shooter defaults."
+  },
+  {
+    "slug": "nomanssky",
+    "exe": "NMS.exe",
+    "display_name": "No Man's Sky",
+    "note": "Standard open-world defaults."
+  },
+  {
+    "slug": "stardewvalley",
+    "exe": "Stardew Valley.exe",
+    "display_name": "Stardew Valley",
+    "note": "Light: governor + renice only, like the RuneScape profile."
+  },
+  {
+    "slug": "terraria",
+    "exe": "Terraria.exe",
+    "display_name": "Terraria",
+    "note": "Light: governor + renice only."
+  },
+  {
+    "slug": "valheim",
+    "exe": "valheim.exe",
+    "display_name": "Valheim",
+    "note": "Standard co-op survival defaults."
+  },
+  {
+    "slug": "seaofthieves",
+    "exe": "SoTGame.exe",
+    "display_name": "Sea of Thieves",
+    "note": "Uses EAC - check areweanticheatyet.com if it won't launch."
+  },
+  {
+    "slug": "warframe",
+    "exe": "Warframe.x64.exe",
+    "display_name": "Warframe",
+    "note": "Fast-paced - tearing + VRR for lower input latency."
   }
 ]

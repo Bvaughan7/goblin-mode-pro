@@ -1,0 +1,15 @@
+{
+  "exe": "StarCitizen.exe",
+  "display_name": "Star Citizen",
+  "match_mode": "exact",
+  "note": "Starter default, not a measured recommendation. Run the pre-flight check first - this game needs a high vm.max_map_count or it won't launch.",
+  "renice_enabled": true,
+  "nice_value": -5,
+  "governor_boost": true,
+  "tearing_enabled": true,
+  "adaptive_sync_enabled": true,
+  "focus_mode": true,
+  "runner_vars": {"nvapi": false, "fsync": true, "no_esync": false, "dxvk_async": true},
+  "fps_watchdog": true,
+  "fps_dip_floor": 24
+}

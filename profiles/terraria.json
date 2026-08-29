@@ -1,0 +1,12 @@
+{
+  "exe": "Terraria.exe",
+  "display_name": "Terraria",
+  "match_mode": "exact",
+  "note": "Starter default, not a measured recommendation. Light: governor + renice only.",
+  "renice_enabled": true,
+  "nice_value": -5,
+  "governor_boost": true,
+  "tearing_enabled": false,
+  "adaptive_sync_enabled": false,
+  "focus_mode": false
+}
