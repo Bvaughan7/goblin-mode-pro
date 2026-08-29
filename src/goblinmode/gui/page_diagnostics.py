@@ -56,6 +56,16 @@ class DiagnosticsPage(Adw.PreferencesPage):
         fps_group.add(fps_frame)
         self.add(fps_group)
 
+        self._sessions_group = Adw.PreferencesGroup(
+            title="Session history",
+            description="A summary per game session, from the MangoHud log. A big "
+            "swing from your recent average is flagged.",
+        )
+        self.add(self._sessions_group)
+        self._session_rows: list[Gtk.Widget] = []
+        self._sessions_empty: Adw.ActionRow | None = None
+        self._set_sessions_empty()
+
         export_group = Adw.PreferencesGroup(
             description="Package the current state for an LLM, a forum thread, or a bug tracker.",
         )
@@ -72,16 +82,6 @@ class DiagnosticsPage(Adw.PreferencesPage):
         self._analyze_row.connect("activated", self._on_analyze)
         export_group.add(self._analyze_row)
         self.add(export_group)
-
-        self._sessions_group = Adw.PreferencesGroup(
-            title="Session history",
-            description="A summary per game session, from the MangoHud log. A big "
-            "swing from your recent average is flagged.",
-        )
-        self.add(self._sessions_group)
-        self._session_rows: list[Gtk.Widget] = []
-        self._sessions_empty: Adw.ActionRow | None = None
-        self._set_sessions_empty()
 
         self._log_group = Adw.PreferencesGroup(title="Incident log")
         self.add(self._log_group)
@@ -103,8 +103,28 @@ class DiagnosticsPage(Adw.PreferencesPage):
         for row in self._session_rows:
             self._sessions_group.remove(row)
         self._session_rows.clear()
+        try:
+            from goblinmode.sessions import SessionSummary, _detect_regression
+        except Exception:  # noqa: BLE001
+            SessionSummary = _detect_regression = None
+        per_game: dict[str, list[dict]] = {}
+        prepared: list[dict] = []
         for s in sessions[-30:]:
-            self._add_session_row({"summary": s, "regression": None}, prepend=False)
+            reg = None
+            if _detect_regression is not None and s.get("fps_1low") is not None:
+                prior = per_game.get(s.get("exe", ""), [])
+                if prior:
+                    try:
+                        r = _detect_regression(SessionSummary(**{
+                            k: s.get(k) for k in SessionSummary.__dataclass_fields__
+                        }), prior)
+                        reg = r.as_dict() if r else None
+                    except Exception:  # noqa: BLE001
+                        reg = None
+            per_game.setdefault(s.get("exe", ""), []).append(s)
+            prepared.append({"summary": s, "regression": reg})
+        for payload in reversed(prepared):  # newest session on top
+            self._add_session_row(payload, prepend=False)
 
     def add_session(self, payload: dict[str, Any]) -> None:
         self._add_session_row(payload, prepend=True)

@@ -54,7 +54,7 @@ def main() -> int:
 
     def on_activate(a: Adw.Application) -> None:
         win = MainWindow(a, bridge)
-        win.set_default_size(720, 800)
+        win.set_default_size(720, 900)
         win.present()
         a.hold()
 
