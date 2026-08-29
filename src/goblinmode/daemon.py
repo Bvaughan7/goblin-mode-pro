@@ -73,6 +73,7 @@ class Daemon:
 
         self._loop = GLib.MainLoop()
         self._forced_boost = False
+        self._boost_announced = False        # "performance mode on" already shown?
         self._active_pids: dict[str, int] = {}
         self._diag_source_id: int | None = None
         self._poll_source_id: int | None = None
@@ -151,9 +152,12 @@ class Daemon:
             self._active_pids[profile.exe] = event.pid or 0
             self.payload.apply(profile, event.pid)
             self._ensure_diagnostics_running()
-            self.sessions.start(
-                profile.exe, profile.display_name, self._tweaks_fingerprint()
-            )
+            fingerprint = self._tweaks_fingerprint()
+            self.sessions.start(profile.exe, profile.display_name, fingerprint)
+            if fingerprint and not self._boost_announced:
+                self._boost_announced = True
+                self._notify(f"Performance mode on — {profile.display_name}",
+                             "Boosting: " + ", ".join(fingerprint), urgency=0)
             if getattr(profile, "clip_on_incident", False):
                 threading.Thread(target=self.clip.start, name="gmp-clip-start",
                                  daemon=True).start()
@@ -173,6 +177,10 @@ class Daemon:
                 if self.clip.running():
                     threading.Thread(target=self.clip.stop, name="gmp-clip-stop",
                                      daemon=True).start()
+                if self._boost_announced and not self._forced_boost:
+                    self._boost_announced = False
+                    self._notify("Performance mode off",
+                                 "Settings restored to normal.", urgency=0)
         self._broadcast_status()
 
     def _tweaks_fingerprint(self) -> list[str]:
@@ -219,11 +227,13 @@ class Daemon:
                 f"Benchmark: {game}",
                 f"avg {summary.fps_avg:.0f} · 1% low {summary.fps_1low:.0f} · "
                 f"0.1% low {summary.fps_01low or 0:.0f} fps",
+                tag="session",
             )
         if regression is not None:
             log.info("%s", regression.headline(game))
             if regression.direction == "regression":
-                self._notify("Performance regression", regression.headline(game))
+                self._notify("Performance regression", regression.headline(game),
+                             urgency=2, tag="session")
         return GLib.SOURCE_REMOVE
 
     def arm_benchmark(self, exe: str) -> bool:
@@ -233,9 +243,10 @@ class Daemon:
         log.info("benchmark armed for %s", exe)
         return True
 
-    def _notify(self, title: str, body: str = "") -> None:
+    def _notify(self, title: str, body: str = "", *, urgency: int = 1,
+                tag: str = "status") -> None:
         from goblinmode import notify
-        notify.send(title, body)
+        notify.send(title, body, urgency=urgency, tag=tag)
         self.tray.notify(title, body)
 
     def _adopt_detected_game(self, cand) -> "config.GameProfile | None":
@@ -262,6 +273,7 @@ class Daemon:
         self._notify(
             f"Optimizing {cand.display_name}",
             "Auto-detected via " + cand.source + ". Open Goblin Mode Pro to tune or ignore it.",
+            tag="detect",
         )
         self.bridge.emit_detected({
             "exe": exe, "display_name": cand.display_name,
@@ -429,13 +441,14 @@ class Daemon:
             nice = {"gpu_fault": "GPU / driver fault",
                     "thermal_throttle": "Thermal throttling",
                     "vram_not_freed": "VRAM not released after exit"}[kind]
-            self._notify(nice, detail[:160], urgency=2)
+            self._notify(nice, detail[:160], urgency=2, tag="incident")
 
     def _save_clip(self, kind: str) -> None:
         path = self.clip.save()
         if path:
             GLib.idle_add(lambda: self._notify(
-                "Clip saved", f"30 s around the {kind.replace('_', ' ')} → {path}") or False)
+                "Clip saved", f"30 s around the {kind.replace('_', ' ')} → {path}",
+                tag="clip") or False)
 
     def _on_payload_incident(self, kind: str, detail: str) -> None:
         self._raise_incident(kind, detail)

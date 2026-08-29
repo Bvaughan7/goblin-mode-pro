@@ -313,16 +313,17 @@ def revert_sysctl(key: str) -> bool:
         data = {}
     if key not in data:
         return True  # never changed it
+    original = data[key]
     path = (Path("/proc/sys") / key.replace(".", "/")).resolve()
     if not str(path).startswith("/proc/sys/") or not path.is_file():
         raise ValueError(f"refusing to write {path}")
-    _write(path, str(int(data[key])))
+    _write(path, str(int(original)))
     del data[key]
     try:
         f.write_text(json.dumps(data, indent=2))
     except OSError:
         pass
-    log.info("sysctl %s reverted to %s", key, data.get(key))
+    log.info("sysctl %s reverted to %s", key, original)
     return True
 
 

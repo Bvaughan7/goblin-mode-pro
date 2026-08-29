@@ -72,11 +72,14 @@ class DashboardPage(Adw.PreferencesPage):
         open_check.connect("clicked", lambda _b: self._go_system_check())
         self._health_row.add_suffix(open_check)
         ready.add(self._health_row)
-        self._nudge_row = Adw.ActionRow(visible=False)
-        self._nudge_row.add_css_class("dim-label")
-        self._nudge_row.set_title_lines(0)
-        ready.add(self._nudge_row)
         self.add(ready)
+
+        # Distro / kernel setup tips - actionable commands with a copy button,
+        # filled in by set_setup_tips() once the capability probe is in.
+        self._tips_group = Adw.PreferencesGroup(
+            title=_("Setup tips for your system"), visible=False)
+        self._tips_rows: list[Adw.ActionRow] = []
+        self.add(self._tips_group)
 
         sysg = Adw.PreferencesGroup(
             title="Your hardware",
@@ -170,7 +173,7 @@ class DashboardPage(Adw.PreferencesPage):
                 "yes — NVIDIA" if caps.get("gpu_deep_stats")
                 else "basic (temp / load only)"
             )
-            self.set_kernel_nudge(caps)
+            self.set_setup_tips(caps)
             hh = caps.get("handheld")
             if hh:
                 pretty = {"steamdeck": "Steam Deck", "rog_ally": "ROG Ally",
@@ -264,29 +267,73 @@ class DashboardPage(Adw.PreferencesPage):
         gm = (info or {}).get("gamemode") or {}
         if not gm.get("installed"):
             self.r_gamemode._value.set_label("not installed")
+            self.r_gamemode.set_subtitle("")
         elif gm.get("active"):
             self.r_gamemode._value.set_label("active")
         else:
             self.r_gamemode._value.set_label("installed, idle")
+        if gm.get("installed"):
+            detail = (gm.get("detail") or "").replace("\n", " ").strip()
+            self.r_gamemode.set_subtitle(
+                detail[:100] if detail
+                else "sets the governor, GPU perf level and ioprio per game")
         pads = (info or {}).get("controllers") or []
         self.r_controllers._value.set_label(
             ", ".join(p.strip() for p in pads)[:60] if pads else "none detected")
 
-    def set_kernel_nudge(self, caps: dict[str, Any]) -> None:
-        if (caps or {}).get("kernel_flavor") == "generic":
-            distro = caps.get("distro_id", "")
-            hint = {
-                "ubuntu": "try the Xanmod or Liquorix kernel",
-                "debian": "try the Liquorix kernel (liquorix.net)",
-                "fedora": "try the kernel from COPR (e.g. bieszczaders/kernel-cachyos)",
-                "arch": "try linux-zen (in the repos) or the CachyOS kernels",
-                "cachyos": "",
-            }.get(distro, "a gaming-tuned kernel (Zen / Xanmod / CachyOS) can help with stutter")
-            if hint:
-                self._nudge_row.set_visible(True)
-                self._nudge_row.set_title(f"💡 You're on a stock kernel — {hint}.")
-                return
-        self._nudge_row.set_visible(False)
+    def set_setup_tips(self, caps: dict[str, Any]) -> None:
+        """Distro-specific, copy-pasteable one-liners: a gaming kernel if the
+        running one is stock, and the driver / namespace fix each distro needs.
+        Dismissible by simply ignoring them - never blocks anything."""
+        from goblinmode.gui.widgets.snippet import command_row
+
+        for r in self._tips_rows:
+            self._tips_group.remove(r)
+        self._tips_rows.clear()
+
+        caps = caps or {}
+        distro = (caps.get("distro_id") or "").lower()
+        tips: list[tuple[str, str]] = []
+
+        if caps.get("kernel_flavor") == "generic":
+            kernel = {
+                "ubuntu": ("A gaming-tuned kernel smooths out frame pacing",
+                           "sudo add-apt-repository ppa:xanmod/stable && "
+                           "sudo apt update && sudo apt install linux-xanmod-x64v3"),
+                "pop": ("A gaming-tuned kernel smooths out frame pacing",
+                        "sudo apt install linux-xanmod-x64v3   # after adding the XanMod PPA"),
+                "debian": ("A gaming-tuned kernel smooths out frame pacing",
+                           "curl -s 'https://liquorix.net/install-liquorix.sh' | sudo bash"),
+                "fedora": ("A gaming-tuned kernel smooths out frame pacing",
+                           "sudo dnf copr enable bieszczaders/kernel-cachyos && "
+                           "sudo dnf install kernel-cachyos"),
+                "arch": ("linux-zen is in the official repos and helps with stutter",
+                         "sudo pacman -S linux-zen linux-zen-headers"),
+                "cachyos": ("", ""),
+                "manjaro": ("A -zen or -rt kernel helps with stutter",
+                            "sudo mhwd-kernel -i linux-zen"),
+            }.get(distro, ("A gaming-tuned kernel (Zen / XanMod / CachyOS) helps with stutter", ""))
+            if kernel[1]:
+                tips.append(kernel)
+
+        if distro in ("ubuntu", "debian", "pop", "mint", "linuxmint"):
+            tips.append((
+                "Some anti-cheats and Steam's container need unprivileged user namespaces",
+                "echo 'kernel.unprivileged_userns_clone=1' | "
+                "sudo tee /etc/sysctl.d/99-userns.conf && sudo sysctl --system"))
+        if distro == "fedora" and "nvidia" in (caps.get("gpu_vendors") or []):
+            tips.append((
+                "NVIDIA users on Fedora need the RPM Fusion driver, not nouveau",
+                "sudo dnf install "
+                "https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm "
+                "https://mirrors.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm "
+                "&& sudo dnf install akmod-nvidia"))
+
+        for why, cmd in tips:
+            row = command_row(why, cmd)
+            self._tips_group.add(row)
+            self._tips_rows.append(row)
+        self._tips_group.set_visible(bool(self._tips_rows))
 
     def update_sample(self, s: dict[str, Any]) -> None:
         def fmt(v, unit=""):

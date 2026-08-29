@@ -223,9 +223,9 @@ class DaemonBridge:
                     GLib.Variant("(s)", (json.dumps(self._handler.get_session_history(exe)),))
                 )
             elif method == "GetHealth":
-                invocation.return_value(
-                    GLib.Variant("(s)", (json.dumps(self._handler.get_health()),))
-                )
+                # get_health() may re-run the full pre-flight probe (subprocess
+                # + sysfs walks) when its cache is stale - keep it off the loop.
+                self._async_str(invocation, lambda: json.dumps(self._handler.get_health()))
             elif method == "ArmBenchmark":
                 invocation.return_value(
                     GLib.Variant("(b)", (self._handler.arm_benchmark(params.unpack()[0]),))
@@ -338,11 +338,12 @@ class BridgeClient:
     def on_signal(self, callback: Callable[[str, Any], None]) -> None:
         self._sig_handlers.append(callback)
 
-    def _call(self, method: str, variant: GLib.Variant | None = None):
+    def _call(self, method: str, variant: GLib.Variant | None = None,
+              timeout_ms: int = 5000):
         if self._proxy is None:
             raise RuntimeError("bridge not connected")
         return self._proxy.call_sync(
-            method, variant, Gio.DBusCallFlags.NONE, 5000, None
+            method, variant, Gio.DBusCallFlags.NONE, timeout_ms, None
         ).unpack()
 
     def _call_async(self, method, variant, on_done, timeout_ms=30000):
@@ -405,14 +406,14 @@ class BridgeClient:
             json.loads(out[0]) if out else None, err))
 
     def apply_preflight_fixes(self) -> dict:
-        return json.loads(self._call("ApplyPreflightFixes")[0])
+        return json.loads(self._call("ApplyPreflightFixes", timeout_ms=30000)[0])
 
     def apply_preflight_fixes_async(self, on_done: Callable[[dict | None, object], None]) -> None:
         self._call_async("ApplyPreflightFixes", None, lambda out, err: on_done(
             json.loads(out[0]) if out else None, err))
 
     def build_report(self, note: str = "") -> str:
-        return self._call("BuildReport", GLib.Variant("(s)", (note,)))[0]
+        return self._call("BuildReport", GLib.Variant("(s)", (note,)), timeout_ms=20000)[0]
 
     def build_report_async(self, note: str, on_done: Callable[[str | None, object], None]) -> None:
         self._call_async("BuildReport", GLib.Variant("(s)", (note,)),
@@ -450,7 +451,7 @@ class BridgeClient:
 
     # -- roadmap additions ----------------------------------------------
     def get_health(self) -> dict:
-        return json.loads(self._call("GetHealth")[0])
+        return json.loads(self._call("GetHealth", timeout_ms=15000)[0])
 
     def get_health_async(self, on_done: Callable[[dict | None, object], None]) -> None:
         self._call_async("GetHealth", None, lambda out, err: on_done(
@@ -458,6 +459,9 @@ class BridgeClient:
 
     def arm_benchmark(self, exe: str) -> bool:
         return bool(self._call("ArmBenchmark", GLib.Variant("(s)", (exe,)))[0])
+
+    def export_setup(self) -> str:
+        return self._call("ExportSetup", timeout_ms=20000)[0]
 
     def get_system_info_async(self, on_done: Callable[[dict | None, object], None]) -> None:
         self._call_async("GetSystemInfo", None, lambda out, err: on_done(

@@ -19,7 +19,9 @@ log = logging.getLogger(__name__)
 _APP = "Goblin Mode Pro"
 _ICON = "com.goblinmode.Pro"
 _proxy: Gio.DBusProxy | None = None
-_last_id = 0
+#: one replace-id per tag, so a routine "boost off" can't clobber a live
+#: incident notification and vice versa
+_ids: dict[str, int] = {}
 
 
 def _get_proxy() -> Gio.DBusProxy | None:
@@ -41,9 +43,12 @@ def _get_proxy() -> Gio.DBusProxy | None:
 
 
 def send(title: str, body: str = "", *, replace: bool = True,
-         urgency: int = 1) -> None:
-    """Show (or replace) a notification. ``urgency``: 0 low, 1 normal, 2 critical."""
-    global _last_id
+         urgency: int = 1, tag: str = "status") -> None:
+    """Show (or replace) a notification. ``urgency``: 0 low, 1 normal, 2 critical.
+
+    ``replace`` collapses repeats *within the same ``tag``* onto one bubble;
+    different tags (status / incident / session / …) never overwrite each other.
+    """
     proxy = _get_proxy()
     if proxy is None:
         log.info("notify: %s — %s", title, body)
@@ -54,10 +59,11 @@ def send(title: str, body: str = "", *, replace: bool = True,
         res = proxy.call_sync(
             "Notify",
             GLib.Variant("(susssasa{sv}i)", (
-                _APP, _last_id if replace else 0, _ICON, title, body, [], hints, 6000,
+                _APP, _ids.get(tag, 0) if replace else 0, _ICON, title, body,
+                [], hints, 6000,
             )),
             Gio.DBusCallFlags.NONE, 3000, None,
         )
-        _last_id = int(res.unpack()[0])
+        _ids[tag] = int(res.unpack()[0])
     except GLib.Error as exc:
         log.debug("notify failed: %s", exc)
