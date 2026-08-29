@@ -83,6 +83,7 @@ class Daemon:
         self._dirty_profiles: set[str] = set()
         self._save_source_id: int | None = None
         self._prom_exporter = None  # goblinmode.exporter.Exporter, created lazily
+        self._on_ac: bool | None = None  # last-seen power source; None = not yet checked
 
     # -- lifecycle ------------------------------------------------------
     def run(self) -> int:
@@ -148,7 +149,23 @@ class Daemon:
             self.observer.poll()
         except Exception:  # noqa: BLE001
             log.exception("observer poll failed")
+        self._check_power_source()
         return GLib.SOURCE_CONTINUE
+
+    def _check_power_source(self) -> None:
+        """On a handheld, switch to the battery TDP preset (and back) as soon
+        as the power source flips, instead of waiting for the next game
+        launch to pick it up."""
+        try:
+            on_ac = capabilities.on_ac_power()
+        except Exception:  # noqa: BLE001
+            return
+        if on_ac is None:
+            return
+        if self._on_ac is not None and on_ac != self._on_ac:
+            log.info("power source changed: %s", "AC" if on_ac else "battery")
+            self.payload.refresh_power_source()
+        self._on_ac = on_ac
 
     # -- observer events --------------------------------------------
     def _on_game_event(self, event: GameEvent) -> None:
@@ -273,7 +290,7 @@ class Daemon:
             return existing if existing.enabled else None
         profile = config.new_profile(
             exe, cand.display_name or exe, auto_created=True,
-            handheld=bool(capabilities.detect().get("handheld")),
+            handheld=capabilities.detect().get("handheld") or "",
         )
         self.settings.profiles.append(profile)
         config.save(self.settings)

@@ -48,6 +48,24 @@ class GameProfileValidation(unittest.TestCase):
         self.assertLessEqual(len(config.GameProfile(exe="a", notes="x" * 5000).notes), 500)
 
 
+class NewProfileHandheldPresets(unittest.TestCase):
+    def test_non_handheld_leaves_power_limits_off(self):
+        p = config.new_profile("game.exe")
+        self.assertFalse(p.power_limit_enabled)
+        self.assertEqual((p.pl1_w, p.pl2_w), (0, 0))
+
+    def test_known_handheld_gets_its_model_preset(self):
+        p = config.new_profile("game.exe", handheld="rog_ally")
+        self.assertTrue(p.power_limit_enabled)
+        self.assertEqual((p.pl1_w, p.pl2_w), (15, 25))
+        self.assertEqual((p.battery_pl1_w, p.battery_pl2_w), (9, 15))
+        self.assertTrue(p.gamescope_enabled)
+
+    def test_unknown_handheld_string_falls_back_to_other(self):
+        p = config.new_profile("game.exe", handheld="some_future_device")
+        self.assertEqual((p.pl1_w, p.pl2_w), (12, 18))
+
+
 class EnvAssignments(unittest.TestCase):
     def test_gpu_tuning_radv_perftest_values_are_comma_joined(self):
         p = config.GameProfile(exe="a", gpu_tuning={"radv_gpl": True, "radv_nggc": True,

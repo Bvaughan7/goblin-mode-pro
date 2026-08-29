@@ -256,6 +256,42 @@ def _handheld() -> str | None:
     return None
 
 
+# Starter TDP presets per handheld model, (pl1_w, pl2_w) - conservative
+# published ranges for each device, not values measured on real hardware.
+# Applied only when a profile is auto-created for a detected handheld; the
+# per-game power-limit slider still overrides these freely.
+HANDHELD_TDP_PRESETS: dict[str, tuple[int, int]] = {
+    "steamdeck": (10, 15),
+    "rog_ally": (15, 25),
+    "legion_go": (15, 25),
+    "other_handheld": (12, 18),
+}
+
+#: lower starter preset for the same models while on battery
+HANDHELD_TDP_PRESETS_BATTERY: dict[str, tuple[int, int]] = {
+    "steamdeck": (7, 10),
+    "rog_ally": (9, 15),
+    "legion_go": (9, 15),
+    "other_handheld": (8, 12),
+}
+
+
+def on_ac_power() -> bool | None:
+    """True on AC, False on battery, None if there's no AC/mains supply node
+    to read (most desktops) - deliberately uncached (unlike :func:`detect`)
+    since it changes at plug/unplug, not once at process start."""
+    base = Path("/sys/class/power_supply")
+    if not base.is_dir():
+        return None
+    for supply in base.iterdir():
+        if _read(supply / "type") != "Mains":
+            continue
+        online = _read(supply / "online")
+        if online:
+            return online == "1"
+    return None
+
+
 def _session_recorder() -> str | None:
     for tool in ("gpu-screen-recorder", "wf-recorder", "obs", "spectacle"):
         if shutil.which(tool):

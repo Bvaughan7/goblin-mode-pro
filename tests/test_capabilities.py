@@ -1,4 +1,5 @@
 import unittest
+import unittest.mock
 
 from tests._support import _SRC  # noqa: F401
 
@@ -48,6 +49,28 @@ class KernelUpgradeTip(unittest.TestCase):
         why, cmd = capabilities.kernel_upgrade_tip("some-unknown-distro")
         self.assertTrue(why)
         self.assertEqual(cmd, "")
+
+
+class OnAcPower(unittest.TestCase):
+    def test_no_power_supply_dir_returns_none(self):
+        with unittest.mock.patch.object(capabilities.Path, "is_dir", return_value=False):
+            self.assertIsNone(capabilities.on_ac_power())
+
+    def test_returns_bool_or_none(self):
+        # whatever this machine actually reports, it must be a valid tri-state
+        self.assertIn(capabilities.on_ac_power(), (True, False, None))
+
+
+class HandheldTdpPresets(unittest.TestCase):
+    def test_every_model_has_an_ac_and_battery_preset(self):
+        for model in capabilities.HANDHELD_TDP_PRESETS:
+            self.assertIn(model, capabilities.HANDHELD_TDP_PRESETS_BATTERY)
+
+    def test_battery_preset_is_lower_than_ac(self):
+        for model, (ac1, ac2) in capabilities.HANDHELD_TDP_PRESETS.items():
+            b1, b2 = capabilities.HANDHELD_TDP_PRESETS_BATTERY[model]
+            self.assertLessEqual(b1, ac1)
+            self.assertLessEqual(b2, ac2)
 
 
 class DetectShape(unittest.TestCase):

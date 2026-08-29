@@ -206,6 +206,38 @@ class PayloadRefcountTest(unittest.TestCase):
         self.pay.revert(b)  # A still wants a limit -> drop back to A's numbers
         self.assertEqual(self.helper.pl_uw, (25_000_000, 30_000_000))
 
+    def test_battery_preset_used_only_on_battery(self):
+        from unittest.mock import patch
+
+        a = _profile("A.exe")
+        a.power_limit_enabled = True
+        a.pl1_w, a.pl2_w = 25, 30
+        a.battery_pl1_w, a.battery_pl2_w = 10, 15
+
+        with patch("goblinmode.capabilities.on_ac_power", return_value=True):
+            self.pay.apply(a, pid=1)
+            self.assertEqual(self.helper.pl_uw, (25_000_000, 30_000_000))
+
+        with patch("goblinmode.capabilities.on_ac_power", return_value=False):
+            self.pay.refresh_power_source()
+            self.assertEqual(self.helper.pl_uw, (10_000_000, 15_000_000))
+
+        # back on AC: reverts to the AC value
+        with patch("goblinmode.capabilities.on_ac_power", return_value=True):
+            self.pay.refresh_power_source()
+            self.assertEqual(self.helper.pl_uw, (25_000_000, 30_000_000))
+
+    def test_battery_preset_falls_back_to_ac_value_when_unset(self):
+        from unittest.mock import patch
+
+        a = _profile("A.exe")
+        a.power_limit_enabled = True
+        a.pl1_w, a.pl2_w = 25, 30  # no battery_pl*_w set (defaults 0)
+
+        with patch("goblinmode.capabilities.on_ac_power", return_value=False):
+            self.pay.apply(a, pid=1)
+            self.assertEqual(self.helper.pl_uw, (25_000_000, 30_000_000))
+
 
 if __name__ == "__main__":
     unittest.main()

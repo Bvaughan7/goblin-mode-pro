@@ -129,6 +129,14 @@ class PerformancePayload:
         self._write_applied_state()
         return True
 
+    def refresh_power_source(self) -> None:
+        """Re-run the global recompute without changing which profiles are
+        active - e.g. after an AC/battery flip, so a profile's battery TDP
+        preset (battery_pl1_w/battery_pl2_w) takes effect immediately instead
+        of waiting for the next launch/exit."""
+        if self._active:
+            self._recompute_global()
+
     def revert(self, profile: GameProfile) -> None:
         log.info("reverting payload for %s", profile.exe)
         self._active.pop(profile.exe, None)
@@ -154,13 +162,30 @@ class PerformancePayload:
 
     # -- global (refcounted) tweaks ------------------------------------
     def _desired_power_limits_uw(self) -> tuple[int, int]:
-        """Highest PL1/PL2 (in µW) requested by any active profile; 0 = leave."""
+        """Highest PL1/PL2 (in µW) requested by any active profile; 0 = leave.
+        On battery, a profile's battery_pl1_w/battery_pl2_w (if set) is used
+        instead of its AC pl1_w/pl2_w - e.g. a handheld's lower on-battery
+        TDP preset."""
+        on_battery = False
+        try:
+            from goblinmode import capabilities
+
+            on_battery = capabilities.on_ac_power() is False
+        except Exception:  # noqa: BLE001
+            pass
+
+        def _pl1(p):
+            return p.battery_pl1_w if on_battery and p.battery_pl1_w else p.pl1_w
+
+        def _pl2(p):
+            return p.battery_pl2_w if on_battery and p.battery_pl2_w else p.pl2_w
+
         wanting = [
             p for p in self._active.values()
-            if p.power_limit_enabled and (p.pl1_w or p.pl2_w)
+            if p.power_limit_enabled and (_pl1(p) or _pl2(p))
         ]
-        pl1 = max((p.pl1_w for p in wanting), default=0)
-        pl2 = max((p.pl2_w for p in wanting), default=0)
+        pl1 = max((_pl1(p) for p in wanting), default=0)
+        pl2 = max((_pl2(p) for p in wanting), default=0)
         return pl1 * 1_000_000, pl2 * 1_000_000
 
     def _tdp_backend(self) -> str | None:

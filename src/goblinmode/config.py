@@ -145,6 +145,10 @@ class GameProfile:
     power_limit_enabled: bool = False
     pl1_w: int = 0
     pl2_w: int = 0
+    # On-battery override (watts); 0 = use pl1_w/pl2_w unchanged on battery too.
+    # Only consulted when the machine reports it's actually on battery.
+    battery_pl1_w: int = 0
+    battery_pl2_w: int = 0
     # Re-apply the user's /etc/intel-undervolt.conf offsets on launch (suspend
     # and thermald can reset them). We never choose the values.
     undervolt_reapply: bool = False
@@ -191,6 +195,8 @@ class GameProfile:
         self.nice_value = max(-10, min(19, int(self.nice_value)))
         self.pl1_w = max(0, min(500, int(self.pl1_w)))
         self.pl2_w = max(0, min(500, int(self.pl2_w)))
+        self.battery_pl1_w = max(0, min(500, int(self.battery_pl1_w)))
+        self.battery_pl2_w = max(0, min(500, int(self.battery_pl2_w)))
         self.fps_dip_floor = max(5, min(120, int(self.fps_dip_floor)))
         self.fps_dip_ratio = max(0.1, min(0.9, float(self.fps_dip_ratio)))
         # Fill in any keys added in newer versions.
@@ -266,18 +272,27 @@ class Settings:
 
 
 def new_profile(exe: str, display_name: str = "", *, auto_created: bool = False,
-                handheld: bool = False) -> GameProfile:
-    """A fresh profile with sensible defaults. On a handheld, gamescope is on
-    (fixed panel) and the power-limit section starts enabled so the TDP slider
-    is one tap away."""
+                handheld: str = "") -> GameProfile:
+    """A fresh profile with sensible defaults. On a handheld (``handheld`` is
+    the detected model - "steamdeck" / "rog_ally" / "legion_go" /
+    "other_handheld"), gamescope is on (fixed panel), the power-limit section
+    starts enabled with that model's starter TDP preset instead of one
+    generic value, and the FPS-dip floor is lower."""
     p = GameProfile(
         exe=exe, display_name=display_name or exe, auto_created=auto_created,
         match_mode="exact" if exe.lower().endswith(".exe") else "substring",
     )
     if handheld:
+        from goblinmode.capabilities import HANDHELD_TDP_PRESETS, HANDHELD_TDP_PRESETS_BATTERY
+
         p.gamescope_enabled = True
         p.gamescope["borderless"] = False       # fullscreen on a handheld
         p.power_limit_enabled = True
+        pl1, pl2 = HANDHELD_TDP_PRESETS.get(handheld, HANDHELD_TDP_PRESETS["other_handheld"])
+        p.pl1_w, p.pl2_w = pl1, pl2
+        bpl1, bpl2 = HANDHELD_TDP_PRESETS_BATTERY.get(
+            handheld, HANDHELD_TDP_PRESETS_BATTERY["other_handheld"])
+        p.battery_pl1_w, p.battery_pl2_w = bpl1, bpl2
         p.fps_dip_floor = 28
     return p
 
