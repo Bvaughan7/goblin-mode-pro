@@ -45,6 +45,7 @@ class Rule:
     fix: str
     live: bool = False     # also watched on the live stderr for incidents
     severity: str = "warn"  # warn | error
+    fix_cmd: str | None = None  # a runnable remedy; may contain {appid}
 
 
 RULES: tuple[Rule, ...] = (
@@ -79,11 +80,13 @@ RULES: tuple[Rule, ...] = (
     Rule("wine_mono", r"wine: failed to load l?mscoree|Mono.*not installed|wine-mono",
          "wine-mono (.NET) missing", "deps",
          "The prefix has no .NET runtime.",
-         "Let Proton install wine-mono (delete and recreate the prefix), or install it with protontricks."),
+         "Let Proton install wine-mono (delete and recreate the prefix), or install it with protontricks.",
+         fix_cmd="protontricks {appid} mono"),
     Rule("vcrun", r"err:module:.*MSVC[PR]\d|api-ms-win-crt|vcruntime\d+\.dll.*not found",
          "Visual C++ runtime missing", "deps",
          "The game needs a Microsoft VC++ redistributable that isn't in the prefix.",
-         "protontricks <appid> vcrun2022 (or the version the game bundles)."),
+         "protontricks <appid> vcrun2022 (or the version the game bundles).",
+         fix_cmd="protontricks {appid} vcrun2022"),
     Rule("dxvk_d3d", r"d3d11: Direct3D 11 is not supported|D3D_FEATURE_LEVEL.*fail|Failed to create D3D(9|11) device",
          "Direct3D device creation failed", "gpu",
          "DXVK couldn't create the D3D device - Vulkan driver missing in the prefix, or a feature-level mismatch.",
@@ -134,10 +137,14 @@ class Finding:
     severity: str
     count: int
     sample: str
+    fix_cmd: str | None = None
 
 
-def analyze_text(text: str, max_per_rule: int = 1) -> list[Finding]:
-    """Scan a whole log; return one Finding per matched rule, most severe first."""
+def analyze_text(text: str, max_per_rule: int = 1, appid: str = "") -> list[Finding]:
+    """Scan a whole log; return one Finding per matched rule, most severe first.
+    ``appid`` (a Steam AppID), when known, is substituted into a rule's
+    ``fix_cmd`` template so the remedy is copy-paste ready instead of needing
+    the user to fill in a placeholder."""
     lines = text.splitlines()
     hits: dict[str, list[str]] = {}
     for line in lines:
@@ -148,10 +155,11 @@ def analyze_text(text: str, max_per_rule: int = 1) -> list[Finding]:
     for rule in RULES:
         if rule.id in hits:
             samples = hits[rule.id]
+            fix_cmd = rule.fix_cmd.format(appid=appid or "<appid>") if rule.fix_cmd else None
             out.append(Finding(
                 rule_id=rule.id, label=rule.label, category=rule.category,
                 cause=rule.cause, fix=rule.fix, severity=rule.severity,
-                count=len(samples), sample=samples[0],
+                count=len(samples), sample=samples[0], fix_cmd=fix_cmd,
             ))
     out.sort(key=lambda f: (f.severity != "error", f.category))
     return out

@@ -428,12 +428,24 @@ class DiagnosticsPage(Adw.PreferencesPage):
         if not findings:
             self._toast("No captured Proton log, or no known issues in it")
             return
-        body = "\n\n".join(
-            f"• {f['label']}  ({f['category']}, ×{f['count']})\n{f['cause']}\nFix: {f['fix']}"
-            for f in findings
-        )
+
+        from goblinmode.gui.widgets.snippet import command_row
+
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        for f in findings:
+            group = Adw.PreferencesGroup(
+                title=f"{f['label']}  ({f['category']}, ×{f['count']})",
+                description=f"{f['cause']}\n{f['fix']}",
+            )
+            if f.get("fix_cmd"):
+                group.add(command_row("Run this to fix it", f["fix_cmd"]))
+            box.append(group)
+        sc = Gtk.ScrolledWindow(min_content_height=200, max_content_height=440)
+        sc.set_child(box)
+
         d = Adw.MessageDialog(transient_for=self._window,
-                              heading=f"{len(findings)} issue(s) in the Proton log", body=body)
+                              heading=f"{len(findings)} issue(s) in the Proton log")
+        d.set_extra_child(sc)
         d.add_response("ok", "Close")
         d.present()
 

@@ -18,6 +18,38 @@ class CpuListParsing(unittest.TestCase):
         self.assertEqual(capabilities._parse_cpu_list("0,foo,2-x,3"), [0, 3])
 
 
+class InstallCommand(unittest.TestCase):
+    def test_known_manager_builds_a_command(self):
+        cmd = capabilities.install_command("pacman", "mangohud", "gamemode")
+        self.assertEqual(cmd, "sudo pacman -S --needed mangohud gamemode")
+
+    def test_per_manager_package_name_override(self):
+        self.assertEqual(capabilities.install_command("xbps-install", "mangohud"),
+                         "sudo xbps-install MangoHud")
+
+    def test_unknown_manager_returns_none(self):
+        self.assertIsNone(capabilities.install_command(None, "mangohud"))
+        self.assertIsNone(capabilities.install_command("nonesuch", "mangohud"))
+
+    def test_no_packages_returns_none(self):
+        self.assertIsNone(capabilities.install_command("apt"))
+
+
+class KernelUpgradeTip(unittest.TestCase):
+    def test_known_distro(self):
+        why, cmd = capabilities.kernel_upgrade_tip("arch")
+        self.assertTrue(why)
+        self.assertIn("pacman", cmd)
+
+    def test_distro_with_no_recommendation(self):
+        self.assertEqual(capabilities.kernel_upgrade_tip("cachyos"), ("", ""))
+
+    def test_unknown_distro_falls_back(self):
+        why, cmd = capabilities.kernel_upgrade_tip("some-unknown-distro")
+        self.assertTrue(why)
+        self.assertEqual(cmd, "")
+
+
 class DetectShape(unittest.TestCase):
     def test_detect_has_the_documented_keys(self):
         caps = capabilities.detect()

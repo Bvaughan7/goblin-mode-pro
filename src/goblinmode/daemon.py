@@ -611,7 +611,13 @@ class Daemon:
                 text = fh.read()
         except OSError:
             return []
-        return [f.__dict__ for f in logrules.analyze_text(text)]
+        appid = ""
+        for exe in self.observer.active_exes:
+            p = self.settings.profile_for_exe(exe)
+            if p and p.steam_app_id:
+                appid = p.steam_app_id
+                break
+        return [f.__dict__ for f in logrules.analyze_text(text, appid=appid)]
 
     def set_profile(self, profile: dict[str, Any]) -> bool:
         if not isinstance(profile, dict) or not profile.get("exe"):

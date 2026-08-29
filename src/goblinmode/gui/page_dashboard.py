@@ -66,6 +66,11 @@ class DashboardPage(Adw.PreferencesPage):
         self._health_pill.add_css_class("title-2")
         self._health_pill.set_valign(Gtk.Align.CENTER)
         self._health_row.add_suffix(self._health_pill)
+        explain = Gtk.Button(icon_name="help-about-symbolic", valign=Gtk.Align.CENTER)
+        explain.add_css_class("flat")
+        explain.set_tooltip_text("Explain my score")
+        explain.connect("clicked", lambda _b: self._explain_score())
+        self._health_row.add_suffix(explain)
         open_check = Gtk.Button(icon_name="go-next-symbolic", valign=Gtk.Align.CENTER)
         open_check.add_css_class("flat")
         open_check.set_tooltip_text("Open System Check")
@@ -242,6 +247,40 @@ class DashboardPage(Adw.PreferencesPage):
         win = self.get_root()
         if win is not None and hasattr(win, "set_visible_page") and hasattr(win, "preflight"):
             win.set_visible_page(win.preflight)
+
+    def _explain_score(self) -> None:
+        """Expand the health pill into what each failing/warn check actually
+        breaks in-game, instead of just the top-3 'worst' summary."""
+        self.bridge.run_preflight_async(self._explain_score_ready)
+
+    def _explain_score_ready(self, results, err) -> None:
+        win = self.get_root()
+        if err is not None or results is None:
+            if win is not None and hasattr(win, "toast"):
+                win.toast(f"Couldn't run the check: {err}")
+            return
+
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        notable = [r for r in results if r["status"] in ("warn", "fail")]
+        if not notable:
+            box.append(Gtk.Label(label="Everything checked out — nothing is costing "
+                                 "you in-game right now.", wrap=True, xalign=0))
+        for r in notable:
+            row = Adw.ActionRow(title=r["title"],
+                                subtitle=r.get("detail") or r.get("why", ""))
+            pill = Gtk.Label(label="ACTION" if r["status"] == "fail" else "CHECK")
+            pill.add_css_class("caption-heading")
+            pill.add_css_class("error" if r["status"] == "fail" else "warning")
+            pill.set_valign(Gtk.Align.CENTER)
+            row.add_prefix(pill)
+            group = Adw.PreferencesGroup()
+            group.add(row)
+            box.append(group)
+
+        d = Adw.MessageDialog(transient_for=win, heading="What's costing you performance")
+        d.set_extra_child(box)
+        d.add_response("ok", "Close")
+        d.present()
 
     def update_health(self, health: dict[str, Any]) -> None:
         score = (health or {}).get("score")
