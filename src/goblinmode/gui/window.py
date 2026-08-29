@@ -72,6 +72,15 @@ class MainWindow(Adw.PreferencesWindow):
         self.bridge.get_incidents_async(self._got_incidents)
         self.bridge.get_sessions_async(lambda s, e: s is not None
                                        and self.diagnostics.load_sessions(s))
+        self.bridge.get_health_async(lambda h, e: h is not None
+                                     and self.dashboard.update_health(h))
+        self.bridge.get_system_info_async(lambda i, e: i is not None
+                                          and self.dashboard.update_system_info(i))
+        self.request_proton_refresh()
+
+    def request_proton_refresh(self) -> None:
+        self.bridge.get_proton_info_async(lambda p, e: p is not None
+                                          and self.diagnostics.load_proton_info(p))
 
     def _apply_status(self, status, err) -> None:
         if not status:
@@ -98,6 +107,12 @@ class MainWindow(Adw.PreferencesWindow):
     def _periodic_refresh(self) -> bool:
         if self.bridge.available:
             self.bridge.get_status_async(self._apply_periodic)
+            self._periodic_n = getattr(self, "_periodic_n", 0) + 1
+            if self._periodic_n % 6 == 0:  # ~30 s
+                self.bridge.get_health_async(lambda h, e: h is not None
+                                             and self.dashboard.update_health(h))
+                self.bridge.get_system_info_async(lambda i, e: i is not None
+                                                  and self.dashboard.update_system_info(i))
         return True
 
     def _apply_periodic(self, status, _err) -> None:

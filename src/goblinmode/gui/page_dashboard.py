@@ -57,6 +57,25 @@ class DashboardPage(Adw.PreferencesPage):
         banner_group.add(self._banner)
         self.add(banner_group)
 
+        ready = Adw.PreferencesGroup()
+        self._health_row = Adw.ActionRow(
+            title="System readiness", subtitle="checking…")
+        self._health_pill = Gtk.Label(label="—")
+        self._health_pill.add_css_class("title-2")
+        self._health_pill.set_valign(Gtk.Align.CENTER)
+        self._health_row.add_suffix(self._health_pill)
+        open_check = Gtk.Button(icon_name="go-next-symbolic", valign=Gtk.Align.CENTER)
+        open_check.add_css_class("flat")
+        open_check.set_tooltip_text("Open System Check")
+        open_check.connect("clicked", lambda _b: self._go_system_check())
+        self._health_row.add_suffix(open_check)
+        ready.add(self._health_row)
+        self._nudge_row = Adw.ActionRow(visible=False)
+        self._nudge_row.add_css_class("dim-label")
+        self._nudge_row.set_title_lines(0)
+        ready.add(self._nudge_row)
+        self.add(ready)
+
         sysg = Adw.PreferencesGroup(
             title="Your hardware",
             description="What Goblin Mode Pro can tune on this machine.",
@@ -67,8 +86,11 @@ class DashboardPage(Adw.PreferencesPage):
         self.r_can_govern = _row("CPU speed control")
         self.r_can_power = _row("CPU power-limit control")
         self.r_can_gpu = _row("Deep GPU stats")
+        self.r_gamemode = _row("GameMode")
+        self.r_controllers = _row("Controllers")
         for r in (self.r_cpu_model, self.r_freq_driver, self.r_gpu_model,
-                  self.r_can_govern, self.r_can_power, self.r_can_gpu):
+                  self.r_can_govern, self.r_can_power, self.r_can_gpu,
+                  self.r_gamemode, self.r_controllers):
             sysg.add(r)
         self.add(sysg)
 
@@ -146,6 +168,7 @@ class DashboardPage(Adw.PreferencesPage):
                 "yes — NVIDIA" if caps.get("gpu_deep_stats")
                 else "basic (temp / load only)"
             )
+            self.set_kernel_nudge(caps)
 
         self.r_governor._value.set_label(str(status.get("governor") or "-"))
         tweaks = status.get("tweaks") or {}
@@ -202,6 +225,60 @@ class DashboardPage(Adw.PreferencesPage):
 
         if status.get("latest_sample"):
             self.update_sample(status["latest_sample"])
+
+    # -- roadmap: health score, GameMode, controllers, kernel nudge ----
+    def _go_system_check(self) -> None:
+        win = self.get_root()
+        if win is not None and hasattr(win, "set_visible_page") and hasattr(win, "preflight"):
+            win.set_visible_page(win.preflight)
+
+    def update_health(self, health: dict[str, Any]) -> None:
+        score = (health or {}).get("score")
+        if score is None:
+            self._health_pill.set_label("—")
+            self._health_row.set_subtitle("couldn't run the check")
+            return
+        self._health_pill.set_label(f"{score:g}/10")
+        for cls in ("success", "warning", "error"):
+            self._health_pill.remove_css_class(cls)
+        self._health_pill.add_css_class(
+            "success" if score >= 8.5 else "warning" if score >= 6 else "error")
+        n = health.get("counts") or {}
+        worst = health.get("worst") or []
+        if worst:
+            self._health_row.set_subtitle("needs attention: " + ", ".join(worst))
+        elif n.get("warn"):
+            self._health_row.set_subtitle(f"{n['warn']} thing(s) worth a look — open the check")
+        else:
+            self._health_row.set_subtitle("your machine is game-ready")
+
+    def update_system_info(self, info: dict[str, Any]) -> None:
+        gm = (info or {}).get("gamemode") or {}
+        if not gm.get("installed"):
+            self.r_gamemode._value.set_label("not installed")
+        elif gm.get("active"):
+            self.r_gamemode._value.set_label("active")
+        else:
+            self.r_gamemode._value.set_label("installed, idle")
+        pads = (info or {}).get("controllers") or []
+        self.r_controllers._value.set_label(
+            ", ".join(p.strip() for p in pads)[:60] if pads else "none detected")
+
+    def set_kernel_nudge(self, caps: dict[str, Any]) -> None:
+        if (caps or {}).get("kernel_flavor") == "generic":
+            distro = caps.get("distro_id", "")
+            hint = {
+                "ubuntu": "try the Xanmod or Liquorix kernel",
+                "debian": "try the Liquorix kernel (liquorix.net)",
+                "fedora": "try the kernel from COPR (e.g. bieszczaders/kernel-cachyos)",
+                "arch": "try linux-zen (in the repos) or the CachyOS kernels",
+                "cachyos": "",
+            }.get(distro, "a gaming-tuned kernel (Zen / Xanmod / CachyOS) can help with stutter")
+            if hint:
+                self._nudge_row.set_visible(True)
+                self._nudge_row.set_title(f"💡 You're on a stock kernel — {hint}.")
+                return
+        self._nudge_row.set_visible(False)
 
     def update_sample(self, s: dict[str, Any]) -> None:
         def fmt(v, unit=""):

@@ -56,6 +56,19 @@ class DiagnosticsPage(Adw.PreferencesPage):
         fps_group.add(fps_frame)
         self.add(fps_group)
 
+        bench_group = Adw.PreferencesGroup(
+            title="Benchmark",
+            description="Arm a benchmark, play for a few minutes, and get a report "
+            "card (avg / 1% / 0.1% low, frame-time stutter, thermal peaks) when you quit.",
+        )
+        self._bench_combo = Adw.ComboRow(title="Game to benchmark")
+        bench_group.add(self._bench_combo)
+        self._bench_row = Adw.ButtonRow(title="Arm benchmark for the selected game")
+        self._bench_row.set_start_icon_name("stopwatch-symbolic")
+        self._bench_row.connect("activated", self._on_arm_benchmark)
+        bench_group.add(self._bench_row)
+        self.add(bench_group)
+
         self._sessions_group = Adw.PreferencesGroup(
             title="Session history",
             description="A summary per game session, from the MangoHud log. A big "
@@ -65,6 +78,14 @@ class DiagnosticsPage(Adw.PreferencesPage):
         self._session_rows: list[Gtk.Widget] = []
         self._sessions_empty: Adw.ActionRow | None = None
         self._set_sessions_empty()
+
+        self._proton_group = Adw.PreferencesGroup(
+            title="Proton builds and shader caches",
+            description="Custom Proton/Wine builds you've installed, and how much "
+            "disk the shader caches are using.",
+        )
+        self._proton_rows: list[Gtk.Widget] = []
+        self.add(self._proton_group)
 
         export_group = Adw.PreferencesGroup(
             description="Package the current state for an LLM, a forum thread, or a bug tracker.",
@@ -77,6 +98,10 @@ class DiagnosticsPage(Adw.PreferencesPage):
         self._report_row.set_start_icon_name("dialog-question-symbolic")
         self._report_row.connect("activated", self._on_report)
         export_group.add(self._report_row)
+        self._setup_row = Adw.ButtonRow(title="Export my full setup")
+        self._setup_row.set_start_icon_name("document-save-symbolic")
+        self._setup_row.connect("activated", self._on_export_setup)
+        export_group.add(self._setup_row)
         self._analyze_row = Adw.ButtonRow(title="Analyze the Proton log")
         self._analyze_row.set_start_icon_name("system-search-symbolic")
         self._analyze_row.connect("activated", self._on_analyze)
@@ -153,6 +178,13 @@ class DiagnosticsPage(Adw.PreferencesPage):
         row = Adw.ExpanderRow(title=s.get("game") or s.get("exe") or "session",
                               subtitle="  ·  ".join(b for b in bits if b))
 
+        if s.get("benchmark"):
+            b = Gtk.Label(label="BENCHMARK")
+            b.add_css_class("caption-heading")
+            b.add_css_class("accent")
+            b.set_valign(Gtk.Align.CENTER)
+            row.add_suffix(b)
+
         if reg:
             worse = reg["direction"] == "regression"
             pill = Gtk.Label(label=f"{'▼' if worse else '▲'} {abs(reg['change_pct']):.0f}%")
@@ -162,14 +194,21 @@ class DiagnosticsPage(Adw.PreferencesPage):
             row.add_suffix(pill)
 
         lines = []
-        for k, lbl in (("fps_avg", "average"), ("fps_median", "median"),
-                       ("fps_1low", "1% low"), ("fps_min", "minimum")):
+        fields = [("fps_avg", "average"), ("fps_median", "median"),
+                  ("fps_1low", "1% low"), ("fps_min", "minimum")]
+        if s.get("benchmark"):
+            fields[3:3] = [("fps_p95", "95th %ile"), ("fps_01low", "0.1% low")]
+        for k, lbl in fields:
             if s.get(k) is not None:
-                lines.append(f"{lbl:>9}: {s[k]:.1f} fps")
-        if s.get("cpu_temp_avg") is not None:
-            lines.append(f"{'CPU temp':>9}: {s['cpu_temp_avg']:.0f} °C avg")
-        if s.get("gpu_temp_avg") is not None:
-            lines.append(f"{'GPU temp':>9}: {s['gpu_temp_avg']:.0f} °C avg")
+                lines.append(f"{lbl:>10}: {s[k]:.1f} fps")
+        if s.get("frametime_stutter_pct") is not None:
+            lines.append(f"{'stutter':>10}: {s['frametime_stutter_pct']:.1f}% of frames "
+                         f"(>2× median frame time)")
+        for k, lbl in (("cpu_temp_avg", "CPU temp"), ("gpu_temp_avg", "GPU temp")):
+            if s.get(k) is not None:
+                mx = s.get(k.replace("_avg", "_max"))
+                extra = f" (peak {mx:.0f})" if mx is not None else ""
+                lines.append(f"{lbl:>10}: {s[k]:.0f} °C avg{extra}")
         if s.get("tweaks"):
             lines.append(f"{'tweaks':>9}: " + ", ".join(s["tweaks"]))
         if s.get("kernel"):
@@ -246,10 +285,90 @@ class DiagnosticsPage(Adw.PreferencesPage):
             self.fps_graph.push(sample["fps"])
 
     def update_status(self, status: dict[str, Any]) -> None:
-        profiles = status.get("profiles") or []
+        profiles = [p for p in (status.get("profiles") or []) if p.get("exe") != "__forced__"]
         floors = [p.get("fps_dip_floor", 22) for p in profiles if p.get("fps_watchdog")]
         if floors:
             self.fps_graph.set_threshold(max(floors))
+        self._bench_profiles = profiles
+        names = [p.get("display_name") or p.get("exe") for p in profiles]
+        self._bench_combo.set_model(Gtk.StringList.new(names or ["(no games yet)"]))
+        self._bench_row.set_sensitive(bool(profiles))
+
+    # -- benchmark ----------------------------------------------
+    def _on_arm_benchmark(self, _row) -> None:
+        profs = getattr(self, "_bench_profiles", [])
+        idx = self._bench_combo.get_selected()
+        if not profs or idx >= len(profs):
+            return
+        exe = profs[idx]["exe"]
+        try:
+            self.bridge.arm_benchmark(exe)
+        except Exception as exc:  # noqa: BLE001
+            self._toast(f"Couldn't arm: {exc}")
+            return
+        self._toast(f"Benchmark armed — launch {profs[idx].get('display_name') or exe} "
+                    "and play for a few minutes. The report card lands in Session history.")
+
+    # -- proton / shader caches -------------------------------
+    def load_proton_info(self, info: dict) -> None:
+        for r in self._proton_rows:
+            self._proton_group.remove(r)
+        self._proton_rows.clear()
+        builds = (info or {}).get("builds") or []
+        caches = (info or {}).get("shader_caches") or []
+        if not builds and not caches:
+            row = Adw.ActionRow(title="Nothing found",
+                                subtitle="No custom Proton builds or shader caches yet")
+            self._proton_group.add(row)
+            self._proton_rows.append(row)
+            return
+        for b in builds[:12]:
+            row = Adw.ActionRow(title=b["name"], subtitle=b["kind"])
+            row.add_css_class("property")
+            self._proton_group.add(row)
+            self._proton_rows.append(row)
+        for c in caches:
+            mb = c["bytes"] / (1024 ** 2)
+            row = Adw.ActionRow(title=c["label"], subtitle=f"{mb:.0f} MB  ·  {c['path']}")
+            clear = Gtk.Button(label="Clear", valign=Gtk.Align.CENTER)
+            clear.add_css_class("flat")
+            if mb < 1:
+                clear.set_sensitive(False)
+            clear.connect("clicked", lambda _b, p=c["path"]: self._clear_cache(p))
+            row.add_suffix(clear)
+            self._proton_group.add(row)
+            self._proton_rows.append(row)
+
+    def _clear_cache(self, path: str) -> None:
+        d = Adw.MessageDialog(
+            transient_for=self._window, heading="Clear this shader cache?",
+            body="Games will rebuild it on next launch — the first run may stutter "
+            "while shaders recompile.")
+        d.add_response("cancel", "Cancel")
+        d.add_response("clear", "Clear")
+        d.set_response_appearance("clear", Adw.ResponseAppearance.DESTRUCTIVE)
+        d.connect("response", lambda _dd, resp: resp == "clear" and
+                  self.bridge.clear_shader_cache_async(path, self._cache_cleared))
+        d.present()
+
+    def _cache_cleared(self, res, _err) -> None:
+        r = res or {}
+        self._toast(r.get("message", "done") if r.get("ok") else
+                    f"Couldn't clear: {r.get('message', 'error')}")
+        self._window.request_proton_refresh()
+
+    def _on_export_setup(self, _row) -> None:
+        self._toast("Building setup report…")
+        self.bridge.export_setup_async(self._setup_ready)
+
+    def _setup_ready(self, md, _err) -> None:
+        if not md:
+            self._toast("Setup export failed")
+            return
+        disp = Gdk.Display.get_default()
+        if disp is not None:
+            disp.get_clipboard().set(md)
+        self._toast("Full setup copied to clipboard — paste it into a help thread")
 
     # -- export ---------------------------------------------------
     def _on_export(self, _row) -> None:
