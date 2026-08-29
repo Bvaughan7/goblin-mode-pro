@@ -311,7 +311,37 @@ class GamesPage(Adw.PreferencesPage):
                             "in /etc/intel-undervolt.conf, never ours"))
             uv.set_title_lines(0)
             pw.add_row(uv) if pw.get_sensitive() else exp.add_row(uv)
+        if self._caps.get("amd_undervolt") == "ryzenadj":
+            auv = self._switch_row_confirmed(
+                _("Re-apply my Curve Optimizer offsets on launch"),
+                p.get("amd_undervolt_reapply", False),
+                lambda v: self._patch(exe, amd_undervolt_reapply=v),
+                warning=_(
+                    "This re-applies the Curve Optimizer offsets from "
+                    "/etc/goblin-mode-pro/amd-undervolt.conf on launch — a file "
+                    "you write yourself. Goblin Mode Pro never picks these "
+                    "values. An aggressive undervolt can cause instability or "
+                    "crashes; if that happens, edit or delete that file."))
+            auv.set_subtitle(_("Uses the offsets in /etc/goblin-mode-pro/amd-undervolt.conf, "
+                              "never ours"))
+            auv.set_title_lines(0)
+            pw.add_row(auv) if pw.get_sensitive() else exp.add_row(auv)
         exp.add_row(pw)
+
+        if self._caps.get("fan_control"):
+            fan = self._switch_row_confirmed(
+                _("Spin up the fans on launch"),
+                p.get("fan_spinup_enabled", False),
+                lambda v: self._patch(exe, fan_spinup_enabled=v),
+                warning=_(
+                    "Forces every controllable fan to a manual, high-speed duty "
+                    "cycle when this game launches, and restores the previous "
+                    "setting on exit. This is best-effort and unverified across "
+                    "hardware — if a fan behaves oddly, disable this and file an "
+                    "issue."))
+            fan.set_subtitle(_("Gets ahead of thermal throttling instead of reacting to it"))
+            fan.set_title_lines(0)
+            exp.add_row(fan)
 
         # -- MangoHud nested expander --
         mh = Adw.ExpanderRow(
@@ -447,6 +477,50 @@ class GamesPage(Adw.PreferencesPage):
                 row.add_suffix(hb)
         sw = Gtk.Switch(valign=Gtk.Align.CENTER, active=active)
         sw.connect("notify::active", lambda s, _p: (not self._building) and on_change(s.get_active()))
+        row.add_suffix(sw)
+        row.set_activatable_widget(sw)
+        return row
+
+    def _switch_row_confirmed(self, title: str, active: bool, on_change,
+                              warning: str, help: str = "") -> Adw.ActionRow:
+        """Like _switch_row, but turning it *on* first shows an "I understand
+        the risk" confirm dialog - cancelling snaps the switch back off
+        without calling on_change. Turning it off never needs confirming."""
+        row = Adw.ActionRow(title=title)
+        if help:
+            hb = help_button(help)
+            if hb is not None:
+                row.add_suffix(hb)
+        sw = Gtk.Switch(valign=Gtk.Align.CENTER, active=active)
+
+        def _toggled(s, _p):
+            if self._building:
+                return
+            if not s.get_active():
+                on_change(False)
+                return
+            win = self.get_root()
+            d = Adw.MessageDialog(
+                transient_for=win,
+                heading=_("Are you sure?"),
+                body=warning,
+            )
+            d.add_response("cancel", _("Cancel"))
+            d.add_response("enable", _("I understand, enable it"))
+            d.set_response_appearance("enable", Adw.ResponseAppearance.DESTRUCTIVE)
+
+            def _respond(_d, response):
+                if response == "enable":
+                    on_change(True)
+                else:
+                    self._building = True
+                    s.set_active(False)
+                    self._building = False
+
+            d.connect("response", _respond)
+            d.present()
+
+        sw.connect("notify::active", _toggled)
         row.add_suffix(sw)
         row.set_activatable_widget(sw)
         return row
