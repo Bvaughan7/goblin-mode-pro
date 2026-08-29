@@ -1,0 +1,21 @@
+name: Feature request / idea
+description: Suggest something
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: The idea
+      description: What would it do, and who is it for (newcomers? power users? handhelds?)
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why it helps
+  - type: checkboxes
+    id: roadmap
+    attributes:
+      label: Checked the roadmap?
+      options:
+        - label: I looked at ROADMAP.md and this isn't already there

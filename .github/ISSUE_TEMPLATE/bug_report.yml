@@ -1,0 +1,36 @@
+name: Bug report
+description: Something isn't working
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Tip: **Diagnostics → Export my full setup** (or `goblin-mode-pro-cli setup`)
+        gives you a ready-to-paste report. Drop it in the "Setup" box below.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Launch <game> through <launcher>
+        2. ...
+  - type: textarea
+    id: setup
+    attributes:
+      label: Setup
+      description: Output of "Export my full setup" / `goblin-mode-pro-cli setup`
+      render: markdown
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      placeholder: "goblin-mode-pro 1.1.0 (from the AUR / install.sh / git)"

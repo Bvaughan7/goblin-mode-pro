@@ -33,3 +33,4 @@ packaging/*/*.pkg.tar*
 packaging/*/*.log
 po/_build/
 *.mo
+site/

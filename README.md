@@ -317,7 +317,7 @@ They cover the pure logic — config validation, capability parsing, the session
 args, the community-fetch host guard. GitHub Actions also import-checks every
 module and validates the `profiles/` JSON on each push.
 
-`docs/make-screenshots.py` and `docs/make-demo.py` regenerate the README visuals
+`scripts/make-screenshots.py` and `scripts/make-demo.py` regenerate the README visuals
 by rendering the real GUI off-screen (needs a running daemon; `make-demo.py`
 also needs `ffmpeg`).
 

@@ -25,7 +25,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 from goblinmode.gui.window import MainWindow  # noqa: E402
 from goblinmode.ipc.daemon_bridge import BridgeClient  # noqa: E402
 
-OUT = os.path.join(os.path.dirname(__file__), "screenshots")
+OUT = os.path.join(os.path.dirname(__file__), "..", "docs", "screenshots")
 PAGES = ["dashboard", "games", "system-check", "diagnostics"]
 
 

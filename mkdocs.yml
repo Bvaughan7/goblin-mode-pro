@@ -1,0 +1,45 @@
+site_name: Goblin Mode Pro
+site_description: A one-switch performance helper for Linux gaming
+site_url: https://bvaughan7.github.io/goblin-mode-pro/
+repo_url: https://github.com/Bvaughan7/goblin-mode-pro
+repo_name: Bvaughan7/goblin-mode-pro
+edit_uri: edit/main/docs/
+docs_dir: docs
+site_dir: site
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: green
+      toggle: { icon: material/weather-night, name: Dark mode }
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: green
+      toggle: { icon: material/weather-sunny, name: Light mode }
+  features:
+    - navigation.instant
+    - navigation.sections
+    - content.code.copy
+
+nav:
+  - Home: index.md
+  - Getting started: getting-started.md
+  - Per-game settings: per-game-settings.md
+  - Diagnostics & benchmarking: diagnostics.md
+  - Command line: cli.md
+  - Troubleshooting: troubleshooting.md
+  - Glossary: glossary.md
+  - Roadmap: https://github.com/Bvaughan7/goblin-mode-pro/blob/main/ROADMAP.md
+
+markdown_extensions:
+  - admonition
+  - pymdownx.superfences
+  - toc: { permalink: true }
+
+not_in_nav: |
+  screenshots/*
+  *.png
+  *.gif
+  *.mp4

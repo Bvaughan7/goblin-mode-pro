@@ -32,7 +32,7 @@ from PIL import Image, ImageDraw, ImageFont  # noqa: E402
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 from goblinmode.gui.window import MainWindow  # noqa: E402
 
-OUT = os.path.dirname(os.path.abspath(__file__))
+OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "docs")
 W, H = 760, 812
 CAP_H = 52
 FPS = 12
