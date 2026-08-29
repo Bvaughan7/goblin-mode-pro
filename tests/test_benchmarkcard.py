@@ -6,6 +6,12 @@ from tests._support import _SRC  # noqa: F401
 
 from goblinmode import benchmarkcard
 
+try:
+    import cairo  # noqa: F401
+    _HAVE_CAIRO = True
+except ImportError:
+    _HAVE_CAIRO = False
+
 
 class DiffSessions(unittest.TestCase):
     def test_higher_fps_is_better_for_b(self):
@@ -49,6 +55,7 @@ class DiffSessions(unittest.TestCase):
         self.assertIsNone(rows["fps_avg"]["delta_pct"])
 
 
+@unittest.skipUnless(_HAVE_CAIRO, "pycairo not installed")
 class RenderPng(unittest.TestCase):
     def test_writes_a_valid_png(self):
         session = {

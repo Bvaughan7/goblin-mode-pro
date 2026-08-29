@@ -96,11 +96,12 @@ class Exporter:
     def __init__(self, path: str, min_interval: float = 5.0) -> None:
         self.path = path
         self.min_interval = min_interval
-        self._last = 0.0
+        self._last: float | None = None  # None = never written yet; time.monotonic()'s
+        # reference point isn't guaranteed to be far from 0, so 0.0 isn't a safe sentinel.
 
     def maybe_write(self, status: dict[str, Any]) -> None:
         now = time.monotonic()
-        if now - self._last < self.min_interval:
+        if self._last is not None and now - self._last < self.min_interval:
             return
         self._last = now
         write_textfile(self.path, status)

@@ -24,6 +24,7 @@ Recommends:     gamescope
 Recommends:     wl-clipboard
 Recommends:     python3-pillow
 Recommends:     python3-pystray
+Recommends:     python3-cairo
 Suggests:       ryzenadj
 Suggests:       intel-undervolt
 Suggests:       gpu-screen-recorder

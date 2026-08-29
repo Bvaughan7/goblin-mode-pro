@@ -39,23 +39,23 @@ install_deps() {
     case "$pm" in
         pacman)
             sudo pacman -S --needed -- python python-gobject python-psutil \
-                python-pillow python-pystray gtk4 libadwaita || true
+                python-pillow python-pystray python-cairo gtk4 libadwaita || true
             sudo pacman -S --needed --asdeps -- wl-clipboard mangohud gamemode gamescope || true
             ;;
         apt-get)
             sudo apt-get update || true
-            sudo apt-get install -y python3 python3-gi python3-gi-cairo python3-psutil \
-                python3-pil gir1.2-gtk-4.0 gir1.2-adw-1 python3-pip \
+            sudo apt-get install -y python3 python3-gi python3-gi-cairo python3-cairo \
+                python3-psutil python3-pil gir1.2-gtk-4.0 gir1.2-adw-1 python3-pip \
                 wl-clipboard mangohud gamemode gamescope || true
             need_cmd pip3 && pip3 install --user --break-system-packages pystray 2>/dev/null || true
             ;;
         dnf)
             sudo dnf install -y python3 python3-gobject python3-psutil python3-pillow \
-                python3-pystray gtk4 libadwaita wl-clipboard mangohud gamemode gamescope || true
+                python3-pystray python3-cairo gtk4 libadwaita wl-clipboard mangohud gamemode gamescope || true
             ;;
         zypper)
             sudo zypper install -y python3 python3-gobject python3-psutil python3-Pillow \
-                python3-pystray gtk4-tools libadwaita wl-clipboard mangohud gamemode gamescope || true
+                python3-pystray python3-cairo gtk4-tools libadwaita wl-clipboard mangohud gamemode gamescope || true
             ;;
         *)
             warn "Unknown package manager - install the dependencies manually (see below)."

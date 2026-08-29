@@ -16,7 +16,7 @@ Depends: ${misc:Depends},
          gir1.2-adw-1,
          python3-psutil,
          policykit-1 | polkitd
-Recommends: mangohud, gamemode, gamescope, wl-clipboard, python3-pystray
+Recommends: mangohud, gamemode, gamescope, wl-clipboard, python3-pystray, python3-cairo
 Suggests: gpu-screen-recorder
 Description: One-switch performance helper for Linux gaming
  Detects a game launching, tunes the CPU governor, process priority,

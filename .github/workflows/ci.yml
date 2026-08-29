@@ -18,7 +18,7 @@ jobs:
       - name: Install test dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y python3-psutil python3-gi gir1.2-glib-2.0
+          sudo apt-get install -y python3-psutil python3-gi gir1.2-glib-2.0 python3-cairo
 
       - name: Compile-check every module
         run: python3 -m compileall -q src helper

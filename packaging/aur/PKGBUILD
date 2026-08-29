@@ -23,6 +23,7 @@ optdepends=(
   'gamescope: the per-game gamescope integration'
   'wl-clipboard: clipboard export on Wayland'
   'ryzenadj: AMD laptop TDP control'
+  'python-cairo: saving a benchmark report card as an image'
 )
 makedepends=('git')
 provides=("$_pkgname")
