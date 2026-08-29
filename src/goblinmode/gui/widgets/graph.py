@@ -14,6 +14,8 @@ import gi
 gi.require_version("Gtk", "4.0")
 from gi.repository import Gtk  # noqa: E402
 
+from goblinmode.i18n import _
+
 _WINDOW_S = 300
 _TEMP_MIN, _TEMP_MAX = 30.0, 100.0
 
@@ -82,7 +84,7 @@ class CorrelationGraph(Gtk.DrawingArea):
         if not self._points:
             cr.set_source_rgba(0.5, 0.5, 0.5, 0.8)
             cr.move_to(pad_l + 8, pad_t + plot_h / 2)
-            cr.show_text("waiting for samples…")
+            cr.show_text(_("waiting for samples…"))
             return
 
         now = time.monotonic()
@@ -180,7 +182,7 @@ class FpsGraph(Gtk.DrawingArea):
         if not self._points:
             cr.set_source_rgba(0.5, 0.5, 0.5, 0.8)
             cr.move_to(pad_l + 8, pad_t + ph / 2)
-            cr.show_text("no frame-rate log yet — enable the watchdog for a game")
+            cr.show_text(_("no frame-rate log yet — enable the watchdog for a game"))
             return
 
         vals = [v for _, v in self._points]

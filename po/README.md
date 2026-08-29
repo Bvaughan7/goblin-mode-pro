@@ -22,9 +22,16 @@ msgmerge -U po/pt_BR.po po/goblin-mode-pro.pot
 
 ## Coverage
 
-The plumbing is in place and the first-run wizard + page titles are wrapped.
-Wrapping the rest of the UI strings is a welcome contribution — grep for
-un-wrapped `label=`, `title=`, `subtitle=`, `set_label(` in `src/goblinmode/gui/`.
+The UI is fully wrapped: every static, user-facing string across
+`src/goblinmode/gui/` (wizard, dashboard, games, diagnostics, preflight and
+the shared widgets) is marked with `_()`. Live-data strings built with
+f-strings/`.format()`/`%` are intentionally left alone — gettext can't
+translate those sanely without restructuring the call sites.
+
+Five languages ship as real, hand-translated catalogues: German (`de`),
+French (`fr`), Spanish (`es`), Brazilian Portuguese (`pt_BR`) and Simplified
+Chinese (`zh_CN`). Adding another language or improving an existing
+translation is still a welcome contribution — see "Add a language" above.
 
 `.po` files ship in the repo; `.mo` files are built at install time (or by the
 extract script) and are **not** committed.

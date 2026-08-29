@@ -1,1254 +1,1254 @@
-# SOME DESCRIPTIVE TITLE.
-# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# French translations for Goblin Mode package.
+# Copyright (C) 2026 THE Goblin Mode'S COPYRIGHT HOLDER
 # This file is distributed under the same license as the Goblin Mode Pro package.
-# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+# Automatically generated, 2026.
 #
-#, fuzzy
 msgid ""
 msgstr ""
 "Project-Id-Version: Goblin Mode Pro\n"
 "Report-Msgid-Bugs-To: https://github.com/Bvaughan7/goblin-mode-pro/issues\n"
-"POT-Creation-Date: 2026-08-29 17:13-0400\n"
-"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
-"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
-"Language-Team: LANGUAGE <LL@li.org>\n"
-"Language: \n"
+"POT-Creation-Date: 2026-08-29 16:58-0400\n"
+"PO-Revision-Date: 2026-08-29 16:58-0400\n"
+"Last-Translator: Automatically generated\n"
+"Language-Team: none\n"
+"Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n > 1);\n"
 
 #: src/goblinmode/gui/app.py:71
 msgid "Daemon not running"
-msgstr ""
+msgstr "Le démon n'est pas actif"
 
 #: src/goblinmode/gui/app.py:73
 msgid ""
 "The Goblin Mode Pro background service is not active. Start it to manage "
 "game performance."
-msgstr ""
+msgstr "Le service en arrière-plan de Goblin Mode Pro n'est pas actif. Démarrez-le pour gérer les performances de jeu."
 
 #: src/goblinmode/gui/app.py:77
 msgid "Start background service"
-msgstr ""
+msgstr "Démarrer le service en arrière-plan"
 
 #: src/goblinmode/gui/page_dashboard.py:53
 msgid "Dashboard"
-msgstr ""
+msgstr "Tableau de bord"
 
 #: src/goblinmode/gui/page_dashboard.py:56
 #: src/goblinmode/gui/page_dashboard.py:155
 msgid "Idle - no game detected"
-msgstr ""
+msgstr "Inactif – aucun jeu détecté"
 
 #: src/goblinmode/gui/page_dashboard.py:64
 msgid "System readiness"
-msgstr ""
+msgstr "Préparation du système"
 
 #: src/goblinmode/gui/page_dashboard.py:64
 msgid "checking…"
-msgstr ""
+msgstr "vérification…"
 
 #: src/goblinmode/gui/page_dashboard.py:71
 msgid "Explain my score"
-msgstr ""
+msgstr "Expliquer mon score"
 
 #: src/goblinmode/gui/page_dashboard.py:76
 msgid "Open System Check"
-msgstr ""
+msgstr "Ouvrir la vérification du système"
 
 #: src/goblinmode/gui/page_dashboard.py:85
 msgid "Setup tips for your system"
-msgstr ""
+msgstr "Conseils de configuration pour votre système"
 
 #: src/goblinmode/gui/page_dashboard.py:90
 msgid "Your hardware"
-msgstr ""
+msgstr "Votre matériel"
 
 #: src/goblinmode/gui/page_dashboard.py:91
 msgid "What Goblin Mode Pro can tune on this machine."
-msgstr ""
+msgstr "Ce que Goblin Mode Pro peut optimiser sur cette machine."
 
 #: src/goblinmode/gui/page_dashboard.py:93
 msgid "Processor"
-msgstr ""
+msgstr "Processeur"
 
 #: src/goblinmode/gui/page_dashboard.py:94
 msgid "CPU frequency driver"
-msgstr ""
+msgstr "Pilote de fréquence du CPU"
 
 #: src/goblinmode/gui/page_dashboard.py:95
 msgid "Graphics"
-msgstr ""
+msgstr "Graphismes"
 
 #: src/goblinmode/gui/page_dashboard.py:96
 msgid "CPU speed control"
-msgstr ""
+msgstr "Contrôle de la vitesse du CPU"
 
 #: src/goblinmode/gui/page_dashboard.py:97
 msgid "CPU power-limit control"
-msgstr ""
+msgstr "Contrôle de la limite de puissance du CPU"
 
 #: src/goblinmode/gui/page_dashboard.py:98
 msgid "Deep GPU stats"
-msgstr ""
+msgstr "Statistiques GPU détaillées"
 
 #: src/goblinmode/gui/page_dashboard.py:99
 msgid "GameMode"
-msgstr ""
+msgstr "GameMode"
 
 #: src/goblinmode/gui/page_dashboard.py:100
 msgid "Controllers"
-msgstr ""
+msgstr "Manettes"
 
 #: src/goblinmode/gui/page_dashboard.py:107
 msgid "CPU"
-msgstr ""
+msgstr "CPU"
 
 #: src/goblinmode/gui/page_dashboard.py:108
 msgid "Scaling governor"
-msgstr ""
+msgstr "Gouverneur de fréquence"
 
 #: src/goblinmode/gui/page_dashboard.py:109
 msgid "Energy performance preference"
-msgstr ""
+msgstr "Préférence énergie/performance"
 
 #: src/goblinmode/gui/page_dashboard.py:110
 msgid "Package temperature"
-msgstr ""
+msgstr "Température du package CPU"
 
 #: src/goblinmode/gui/page_dashboard.py:111
 msgid "Package power (vs PL1 / PL2)"
-msgstr ""
+msgstr "Puissance du package (vs PL1 / PL2)"
 
 #: src/goblinmode/gui/page_dashboard.py:112
 msgid "RAPL limits (PL1 / PL2)"
-msgstr ""
+msgstr "Limites RAPL (PL1 / PL2)"
 
 #: src/goblinmode/gui/page_dashboard.py:113
 msgid "Aggregate load"
-msgstr ""
+msgstr "Charge globale"
 
 #: src/goblinmode/gui/page_dashboard.py:118
 msgid "GPU"
-msgstr ""
+msgstr "GPU"
 
 #: src/goblinmode/gui/page_dashboard.py:119
 msgid "Utilisation"
-msgstr ""
+msgstr "Utilisation"
 
 #: src/goblinmode/gui/page_dashboard.py:120
 msgid "Temperature"
-msgstr ""
+msgstr "Température"
 
 #: src/goblinmode/gui/page_dashboard.py:121
 msgid "Throttle reasons"
-msgstr ""
+msgstr "Raisons du throttling"
 
 #: src/goblinmode/gui/page_dashboard.py:122
 msgid "Video memory (used / total)"
-msgstr ""
+msgstr "Mémoire vidéo (utilisée / totale)"
 
 #: src/goblinmode/gui/page_dashboard.py:123
 msgid "PCIe link"
-msgstr ""
+msgstr "Liaison PCIe"
 
 #: src/goblinmode/gui/page_dashboard.py:124
 msgid "Core clock (cur / max)"
-msgstr ""
+msgstr "Fréquence du cœur (actuelle / max.)"
 
 #: src/goblinmode/gui/page_dashboard.py:131
 #: src/goblinmode/gui/page_diagnostics.py:52
 msgid "Frame rate"
-msgstr ""
+msgstr "Fréquence d'images"
 
 #: src/goblinmode/gui/page_dashboard.py:132
 msgid "From the MangoHud log when the watchdog is enabled for a game."
-msgstr ""
+msgstr "À partir du journal MangoHud lorsque le chien de garde est activé pour un jeu."
 
 #: src/goblinmode/gui/page_dashboard.py:134
 msgid "avg 60 s / min / 1% low"
-msgstr ""
+msgstr "moy. 60 s / min / 1 % bas"
 
 #: src/goblinmode/gui/page_dashboard.py:138
 msgid "Service"
-msgstr ""
+msgstr "Service"
 
 #: src/goblinmode/gui/page_dashboard.py:139
 msgid "Privileged helper"
-msgstr ""
+msgstr "Assistant privilégié"
 
 #: src/goblinmode/gui/page_dashboard.py:140
 msgid "Active tweaks"
-msgstr ""
+msgstr "Ajustements actifs"
 
 #: src/goblinmode/gui/page_dashboard.py:149
 msgid "Optimizations disabled"
-msgstr ""
+msgstr "Optimisations désactivées"
 
 #: src/goblinmode/gui/page_dashboard.py:153
 msgid "Forced performance mode"
-msgstr ""
+msgstr "Mode performance forcé"
 
 #: src/goblinmode/gui/page_dashboard.py:168
 msgid "yes — governor + EPP"
-msgstr ""
+msgstr "oui — gouverneur + EPP"
 
 #: src/goblinmode/gui/page_dashboard.py:169
 msgid "yes — governor"
-msgstr ""
+msgstr "oui — gouverneur"
 
 #: src/goblinmode/gui/page_dashboard.py:170
 msgid "no (needs the helper)"
-msgstr ""
+msgstr "non (nécessite l'assistant)"
 
 #: src/goblinmode/gui/page_dashboard.py:173
 msgid "yes — Intel RAPL"
-msgstr ""
+msgstr "oui — Intel RAPL"
 
 #: src/goblinmode/gui/page_dashboard.py:174
 msgid "yes — ryzenadj"
-msgstr ""
+msgstr "oui — ryzenadj"
 
 #: src/goblinmode/gui/page_dashboard.py:175
 msgid "not on this processor"
-msgstr ""
+msgstr "pas sur ce processeur"
 
 #: src/goblinmode/gui/page_dashboard.py:178
 msgid "yes — NVIDIA"
-msgstr ""
+msgstr "oui — NVIDIA"
 
 #: src/goblinmode/gui/page_dashboard.py:179
 msgid "basic (temp / load only)"
-msgstr ""
+msgstr "basique (temp. / charge uniquement)"
 
 #: src/goblinmode/gui/page_dashboard.py:191
 msgid "performance"
-msgstr ""
+msgstr "performance"
 
 #: src/goblinmode/gui/page_dashboard.py:191
 msgid "default"
-msgstr ""
+msgstr "par défaut"
 
 #: src/goblinmode/gui/page_dashboard.py:199
 msgid "connected"
-msgstr ""
+msgstr "connecté"
 
 #: src/goblinmode/gui/page_dashboard.py:199
 msgid "unavailable (limited mode)"
-msgstr ""
+msgstr "indisponible (mode limité)"
 
 #: src/goblinmode/gui/page_dashboard.py:203
 msgid "governor"
-msgstr ""
+msgstr "gouverneur"
 
 #: src/goblinmode/gui/page_dashboard.py:205
 msgid "power-limit"
-msgstr ""
+msgstr "limite de puissance"
 
 #: src/goblinmode/gui/page_dashboard.py:207
 msgid "tearing"
-msgstr ""
+msgstr "tearing"
 
 #: src/goblinmode/gui/page_dashboard.py:209
 msgid "VRR"
-msgstr ""
+msgstr "VRR"
 
 #: src/goblinmode/gui/page_dashboard.py:213
 msgid "mangohud"
-msgstr ""
+msgstr "mangohud"
 
 #: src/goblinmode/gui/page_dashboard.py:214
 msgid "none"
-msgstr ""
+msgstr "aucun"
 
 #: src/goblinmode/gui/page_dashboard.py:219
 msgid "  ⚠ near full"
-msgstr ""
+msgstr "  ⚠ presque plein"
 
 #: src/goblinmode/gui/page_dashboard.py:226
 msgid "  ⚠ down-trained"
-msgstr ""
+msgstr "  ⚠ sous-cadencé"
 
 #: src/goblinmode/gui/page_dashboard.py:235
 msgid "  ⚠ in dip"
-msgstr ""
+msgstr "  ⚠ en chute"
 
 #: src/goblinmode/gui/page_dashboard.py:240
 msgid "- (watchdog off or no log yet)"
-msgstr ""
+msgstr "– (chien de garde désactivé ou pas encore de journal)"
 
 #: src/goblinmode/gui/page_dashboard.py:266
 msgid "Everything checked out — nothing is costing you in-game right now."
-msgstr ""
+msgstr "Tout est en ordre — rien ne vous coûte de performance en jeu actuellement."
 
 #: src/goblinmode/gui/page_dashboard.py:271
 #: src/goblinmode/gui/page_preflight.py:29
 msgid "ACTION"
-msgstr ""
+msgstr "ACTION"
 
 #: src/goblinmode/gui/page_dashboard.py:271
 #: src/goblinmode/gui/page_preflight.py:28
 msgid "CHECK"
-msgstr ""
+msgstr "VÉRIFIER"
 
 #: src/goblinmode/gui/page_dashboard.py:280
 msgid "What's costing you performance"
-msgstr ""
+msgstr "Ce qui vous coûte en performance"
 
 #: src/goblinmode/gui/page_dashboard.py:282
 #: src/goblinmode/gui/page_diagnostics.py:449
 #: src/goblinmode/gui/page_games.py:697
 msgid "Close"
-msgstr ""
+msgstr "Fermer"
 
 #: src/goblinmode/gui/page_dashboard.py:289
 msgid "couldn't run the check"
-msgstr ""
+msgstr "impossible d'exécuter la vérification"
 
 #: src/goblinmode/gui/page_dashboard.py:303
 msgid "your machine is game-ready"
-msgstr ""
+msgstr "votre machine est prête pour le jeu"
 
 #: src/goblinmode/gui/page_dashboard.py:308
 msgid "not installed"
-msgstr ""
+msgstr "non installé"
 
 #: src/goblinmode/gui/page_dashboard.py:311
 msgid "active"
-msgstr ""
+msgstr "actif"
 
 #: src/goblinmode/gui/page_dashboard.py:313
 msgid "installed, idle"
-msgstr ""
+msgstr "installé, inactif"
 
 #: src/goblinmode/gui/page_dashboard.py:318
 msgid "sets the governor, GPU perf level and ioprio per game"
-msgstr ""
+msgstr "définit le gouverneur, le niveau de performance GPU et la priorité d'E/S par jeu"
 
 #: src/goblinmode/gui/page_dashboard.py:321
 msgid "none detected"
-msgstr ""
+msgstr "aucun détecté"
 
 #: src/goblinmode/gui/page_dashboard.py:346
 msgid ""
 "Some anti-cheats and Steam's container need unprivileged user namespaces"
-msgstr ""
+msgstr "Certains anti-triche et le conteneur de Steam nécessitent des espaces de noms utilisateur non privilégiés"
 
 #: src/goblinmode/gui/page_dashboard.py:351
 msgid "NVIDIA users on Fedora need the RPM Fusion driver, not nouveau"
-msgstr ""
+msgstr "Les utilisateurs NVIDIA sous Fedora ont besoin du pilote RPM Fusion, pas de nouveau"
 
 #: src/goblinmode/gui/page_diagnostics.py:23
 msgid "Thermal throttle"
-msgstr ""
+msgstr "Limitation thermique"
 
 #: src/goblinmode/gui/page_diagnostics.py:24
 msgid "Power limit (PL1)"
-msgstr ""
+msgstr "Limite de puissance (PL1)"
 
 #: src/goblinmode/gui/page_diagnostics.py:25
 msgid "GPU throttle"
-msgstr ""
+msgstr "Limitation GPU"
 
 #: src/goblinmode/gui/page_diagnostics.py:26
 msgid "GPU / driver fault"
-msgstr ""
+msgstr "Erreur GPU / pilote"
 
 #: src/goblinmode/gui/page_diagnostics.py:27
 msgid "Frame-rate cliff"
-msgstr ""
+msgstr "Chute de la fréquence d'images"
 
 #: src/goblinmode/gui/page_diagnostics.py:28
 msgid "Frame rate recovered"
-msgstr ""
+msgstr "Fréquence d'images rétablie"
 
 #: src/goblinmode/gui/page_diagnostics.py:29
 msgid "VRAM not released after exit"
-msgstr ""
+msgstr "VRAM non libérée après la fermeture"
 
 #: src/goblinmode/gui/page_diagnostics.py:30
 msgid "Helper unavailable"
-msgstr ""
+msgstr "Assistant indisponible"
 
 #: src/goblinmode/gui/page_diagnostics.py:31
 msgid "Payload error"
-msgstr ""
+msgstr "Erreur de charge utile"
 
 #: src/goblinmode/gui/page_diagnostics.py:37
 msgid "Diagnostics"
-msgstr ""
+msgstr "Diagnostics"
 
 #: src/goblinmode/gui/page_diagnostics.py:42
 msgid "Temperature vs load"
-msgstr ""
+msgstr "Température vs charge"
 
 #: src/goblinmode/gui/page_diagnostics.py:43
 msgid ""
 "CPU temp (red), GPU temp (orange), CPU load (blue). Vertical marks = "
 "throttle events."
-msgstr ""
+msgstr "Temp. CPU (rouge), temp. GPU (orange), charge CPU (bleu). Marques verticales = événements de limitation."
 
 #: src/goblinmode/gui/page_diagnostics.py:53
 msgid "From the MangoHud watchdog log. The dashed line is the dip threshold."
-msgstr ""
+msgstr "À partir du journal du chien de garde MangoHud. La ligne en pointillés est le seuil de chute."
 
 #: src/goblinmode/gui/page_diagnostics.py:62
 msgid "Benchmark"
-msgstr ""
+msgstr "Benchmark"
 
 #: src/goblinmode/gui/page_diagnostics.py:63
 msgid ""
 "Arm a benchmark, play for a few minutes, and get a report card (avg / 1% / "
 "0.1% low, frame-time stutter, thermal peaks) when you quit."
-msgstr ""
+msgstr "Armez un benchmark, jouez quelques minutes et obtenez un rapport (moy. / 1 % / 0,1 % bas, saccades de frame-time, pics thermiques) en quittant."
 
 #: src/goblinmode/gui/page_diagnostics.py:66
 msgid "Game to benchmark"
-msgstr ""
+msgstr "Jeu à tester"
 
 #: src/goblinmode/gui/page_diagnostics.py:68
 msgid "Arm benchmark for the selected game"
-msgstr ""
+msgstr "Armer le benchmark pour le jeu sélectionné"
 
 #: src/goblinmode/gui/page_diagnostics.py:75
 msgid "Session history"
-msgstr ""
+msgstr "Historique des sessions"
 
 #: src/goblinmode/gui/page_diagnostics.py:76
 msgid ""
 "A summary per game session, from the MangoHud log. A big swing from your "
 "recent average is flagged."
-msgstr ""
+msgstr "Un résumé par session de jeu, à partir du journal MangoHud. Un écart important par rapport à votre moyenne récente est signalé."
 
 #: src/goblinmode/gui/page_diagnostics.py:85
 msgid "Proton builds and shader caches"
-msgstr ""
+msgstr "Versions de Proton et caches de shaders"
 
 #: src/goblinmode/gui/page_diagnostics.py:86
 msgid ""
 "Custom Proton/Wine builds you've installed, and how much disk the shader "
 "caches are using."
-msgstr ""
+msgstr "Les versions personnalisées de Proton/Wine que vous avez installées, et l'espace disque utilisé par les caches de shaders."
 
 #: src/goblinmode/gui/page_diagnostics.py:93
 msgid "Package the current state for an LLM, a forum thread, or a bug tracker."
-msgstr ""
+msgstr "Rassemblez l'état actuel pour un LLM, un fil de forum ou un outil de suivi de bugs."
 
 #: src/goblinmode/gui/page_diagnostics.py:95
 msgid "Export last incident for AI"
-msgstr ""
+msgstr "Exporter le dernier incident pour l'IA"
 
 #: src/goblinmode/gui/page_diagnostics.py:99
 #: src/goblinmode/gui/page_diagnostics.py:395
 msgid "Build a bug report"
-msgstr ""
+msgstr "Créer un rapport de bug"
 
 #: src/goblinmode/gui/page_diagnostics.py:103
 msgid "Export my full setup"
-msgstr ""
+msgstr "Exporter toute ma configuration"
 
 #: src/goblinmode/gui/page_diagnostics.py:107
 msgid "Analyze the Proton log"
-msgstr ""
+msgstr "Analyser le journal Proton"
 
 #: src/goblinmode/gui/page_diagnostics.py:113
 msgid "Incident log"
-msgstr ""
+msgstr "Journal des incidents"
 
 #: src/goblinmode/gui/page_diagnostics.py:123
 msgid "No sessions recorded yet"
-msgstr ""
+msgstr "Aucune session enregistrée pour le moment"
 
 #: src/goblinmode/gui/page_diagnostics.py:124
 msgid ""
 "Enable the frame-rate watchdog or the overlay for a game, then play — each "
 "session is summarised here on exit."
-msgstr ""
+msgstr "Activez le chien de garde de fréquence d'images ou l'overlay pour un jeu, puis jouez — chaque session est résumée ici en quittant."
 
 #: src/goblinmode/gui/page_diagnostics.py:180
 msgid "session"
-msgstr ""
+msgstr "session"
 
 #: src/goblinmode/gui/page_diagnostics.py:184
 msgid "BENCHMARK"
-msgstr ""
+msgstr "BENCHMARK"
 
 #: src/goblinmode/gui/page_diagnostics.py:199
 msgid "average"
-msgstr ""
+msgstr "moyenne"
 
 #: src/goblinmode/gui/page_diagnostics.py:199
 msgid "median"
-msgstr ""
+msgstr "médiane"
 
 #: src/goblinmode/gui/page_diagnostics.py:200
 msgid "1% low"
-msgstr ""
+msgstr "1 % bas"
 
 #: src/goblinmode/gui/page_diagnostics.py:200
 msgid "minimum"
-msgstr ""
+msgstr "minimum"
 
 #: src/goblinmode/gui/page_diagnostics.py:202
-#, python-format
+#, no-python-format
 msgid "95th %ile"
-msgstr ""
+msgstr "95e percentile"
 
 #: src/goblinmode/gui/page_diagnostics.py:202
 msgid "0.1% low"
-msgstr ""
+msgstr "0,1 % bas"
 
 #: src/goblinmode/gui/page_diagnostics.py:209
 msgid "CPU temp"
-msgstr ""
+msgstr "Temp. CPU"
 
 #: src/goblinmode/gui/page_diagnostics.py:209
 msgid "GPU temp"
-msgstr ""
+msgstr "Temp. GPU"
 
 #: src/goblinmode/gui/page_diagnostics.py:224
 msgid "No frame log for this session."
-msgstr ""
+msgstr "Aucun journal d'images pour cette session."
 
 #: src/goblinmode/gui/page_diagnostics.py:243
 msgid "No incidents recorded"
-msgstr ""
+msgstr "Aucun incident enregistré"
 
 #: src/goblinmode/gui/page_diagnostics.py:244
 msgid "Throttling and GPU faults during gameplay show up here"
-msgstr ""
+msgstr "Les limitations et erreurs GPU pendant le jeu apparaissent ici"
 
 #: src/goblinmode/gui/page_diagnostics.py:322
 msgid "Nothing found"
-msgstr ""
+msgstr "Rien trouvé"
 
 #: src/goblinmode/gui/page_diagnostics.py:323
 msgid "No custom Proton builds or shader caches yet"
-msgstr ""
+msgstr "Aucune version personnalisée de Proton ni cache de shaders pour le moment"
 
 #: src/goblinmode/gui/page_diagnostics.py:335
 #: src/goblinmode/gui/page_diagnostics.py:350
 msgid "Clear"
-msgstr ""
+msgstr "Effacer"
 
 #: src/goblinmode/gui/page_diagnostics.py:346
 msgid "Clear this shader cache?"
-msgstr ""
+msgstr "Effacer ce cache de shaders ?"
 
 #: src/goblinmode/gui/page_diagnostics.py:347
 msgid ""
 "Games will rebuild it on next launch — the first run may stutter while "
 "shaders recompile."
-msgstr ""
+msgstr "Les jeux le reconstruiront au prochain lancement — le premier lancement peut saccader pendant la recompilation des shaders."
 
 #: src/goblinmode/gui/page_diagnostics.py:349
 #: src/goblinmode/gui/page_diagnostics.py:403
 #: src/goblinmode/gui/page_games.py:547 src/goblinmode/gui/page_games.py:729
 msgid "Cancel"
-msgstr ""
+msgstr "Annuler"
 
 #: src/goblinmode/gui/page_diagnostics.py:358
 msgid "done"
-msgstr ""
+msgstr "terminé"
 
 #: src/goblinmode/gui/page_diagnostics.py:363
 msgid "Building setup report…"
-msgstr ""
+msgstr "Création du rapport de configuration…"
 
 #: src/goblinmode/gui/page_diagnostics.py:368
 msgid "Setup export failed"
-msgstr ""
+msgstr "Échec de l'exportation de la configuration"
 
 #: src/goblinmode/gui/page_diagnostics.py:373
 msgid "Full setup copied to clipboard — paste it into a help thread"
-msgstr ""
+msgstr "Configuration complète copiée dans le presse-papiers — collez-la dans un fil d'aide"
 
 #: src/goblinmode/gui/page_diagnostics.py:381
 msgid "Export failed"
-msgstr ""
+msgstr "Échec de l'exportation"
 
 #: src/goblinmode/gui/page_diagnostics.py:384
 msgid "No incident to export yet"
-msgstr ""
+msgstr "Aucun incident à exporter pour le moment"
 
 #: src/goblinmode/gui/page_diagnostics.py:390
 msgid "Incident payload copied to clipboard"
-msgstr ""
+msgstr "Charge utile de l'incident copiée dans le presse-papiers"
 
 #: src/goblinmode/gui/page_diagnostics.py:396
 msgid ""
 "Describe the problem in a sentence (optional). GMP gathers system info, the "
 "pre-flight results, the last incident and the Proton log analysis, copies a "
 "Markdown report to your clipboard, and opens a pre-filled issue form."
-msgstr ""
+msgstr "Décrivez le problème en une phrase (facultatif). GMP rassemble les infos système, les résultats de la vérification préalable, le dernier incident et l'analyse du journal Proton, copie un rapport Markdown dans votre presse-papiers et ouvre un formulaire de ticket pré-rempli."
 
 #: src/goblinmode/gui/page_diagnostics.py:401
 msgid "e.g. crashes on the loading screen"
-msgstr ""
+msgstr "p. ex. plante sur l'écran de chargement"
 
 #: src/goblinmode/gui/page_diagnostics.py:404
 msgid "Build report"
-msgstr ""
+msgstr "Créer le rapport"
 
 #: src/goblinmode/gui/page_diagnostics.py:420
 msgid "Bug report copied — paste it into a forum thread or issue"
-msgstr ""
+msgstr "Rapport de bug copié — collez-le dans un fil de forum ou un ticket"
 
 #: src/goblinmode/gui/page_diagnostics.py:429
 msgid "No captured Proton log, or no known issues in it"
-msgstr ""
+msgstr "Aucun journal Proton capturé, ou aucun problème connu à l'intérieur"
 
 #: src/goblinmode/gui/page_diagnostics.py:441
 msgid "Run this to fix it"
-msgstr ""
+msgstr "Exécutez ceci pour le corriger"
 
 #: src/goblinmode/gui/page_games.py:32
 msgid "Show overlay"
-msgstr ""
+msgstr "Afficher l'overlay"
 
 #: src/goblinmode/gui/page_games.py:33
 msgid "FPS counter"
-msgstr ""
+msgstr "Compteur de FPS"
 
 #: src/goblinmode/gui/page_games.py:34
 msgid "CPU temperature"
-msgstr ""
+msgstr "Température du CPU"
 
 #: src/goblinmode/gui/page_games.py:35
 msgid "GPU temperature"
-msgstr ""
+msgstr "Température du GPU"
 
 #: src/goblinmode/gui/page_games.py:36
 msgid "RAM usage"
-msgstr ""
+msgstr "Utilisation de la RAM"
 
 #: src/goblinmode/gui/page_games.py:37
 msgid "Frame-timing graph"
-msgstr ""
+msgstr "Graphique de frame-timing"
 
 #: src/goblinmode/gui/page_games.py:40
 msgid "NVAPI (PROTON_ENABLE_NVAPI + DXVK_ENABLE_NVAPI)"
-msgstr ""
+msgstr "NVAPI (PROTON_ENABLE_NVAPI + DXVK_ENABLE_NVAPI)"
 
 #: src/goblinmode/gui/page_games.py:41
 msgid "Force Fsync (WINEFSYNC=1)"
-msgstr ""
+msgstr "Forcer Fsync (WINEFSYNC=1)"
 
 #: src/goblinmode/gui/page_games.py:42
 msgid "Disable Esync (PROTON_NO_ESYNC=1)"
-msgstr ""
+msgstr "Désactiver Esync (PROTON_NO_ESYNC=1)"
 
 #: src/goblinmode/gui/page_games.py:43
 msgid "Async shader compile (DXVK_ASYNC=1)"
-msgstr ""
+msgstr "Compilation asynchrone des shaders (DXVK_ASYNC=1)"
 
 #: src/goblinmode/gui/page_games.py:49
 msgid "Games"
-msgstr ""
+msgstr "Jeux"
 
 #: src/goblinmode/gui/page_games.py:57
 msgid "Steam launch option"
-msgstr ""
+msgstr "Option de lancement Steam"
 
 #: src/goblinmode/gui/page_games.py:59
 msgid ""
 "For Proton games, set the game's launch options to the string below so "
 "Goblin Mode Pro can inject runner variables and capture the Wine/Proton log."
-msgstr ""
+msgstr "Pour les jeux Proton, définissez les options de lancement du jeu sur la chaîne ci-dessous afin que Goblin Mode Pro puisse injecter des variables du runner et capturer le journal Wine/Proton."
 
 #: src/goblinmode/gui/page_games.py:64
 msgid "Right-click → copy"
-msgstr ""
+msgstr "Clic droit → copier"
 
 #: src/goblinmode/gui/page_games.py:75
 msgid "Auto-detect games"
-msgstr ""
+msgstr "Détecter automatiquement les jeux"
 
 #: src/goblinmode/gui/page_games.py:76
 msgid ""
 "Optimize any game GMP recognises — Steam / Lutris / Heroic, or anything "
 "doing sustained GPU work — not just the profiles below."
-msgstr ""
+msgstr "Optimise tout jeu que GMP reconnaît — Steam / Lutris / Heroic, ou tout ce qui sollicite le GPU en continu — pas seulement les profils ci-dessous."
 
 #: src/goblinmode/gui/page_games.py:86
 msgid "Game profiles"
-msgstr ""
+msgstr "Profils de jeu"
 
 #: src/goblinmode/gui/page_games.py:90
 msgid "Browse community profiles"
-msgstr ""
+msgstr "Parcourir les profils de la communauté"
 
 #: src/goblinmode/gui/page_games.py:95
 msgid "Import a shared profile (.json)"
-msgstr ""
+msgstr "Importer un profil partagé (.json)"
 
 #: src/goblinmode/gui/page_games.py:100
 msgid "Add game executable"
-msgstr ""
+msgstr "Ajouter un exécutable de jeu"
 
 #: src/goblinmode/gui/page_games.py:159
 msgid "No games yet"
-msgstr ""
+msgstr "Aucun jeu pour le moment"
 
 #: src/goblinmode/gui/page_games.py:160
 msgid "Use the + button to add a game executable"
-msgstr ""
+msgstr "Utilisez le bouton + pour ajouter un exécutable de jeu"
 
 #: src/goblinmode/gui/page_games.py:176
 msgid "  ·  auto-detected"
-msgstr ""
+msgstr "  ·  détecté automatiquement"
 
 #: src/goblinmode/gui/page_games.py:183
 msgid "AUTO"
-msgstr ""
+msgstr "AUTO"
 
 #: src/goblinmode/gui/page_games.py:188
 msgid "Keep"
-msgstr ""
+msgstr "Conserver"
 
 #: src/goblinmode/gui/page_games.py:192
 msgid "Ignore"
-msgstr ""
+msgstr "Ignorer"
 
 #: src/goblinmode/gui/page_games.py:199
 msgid "Export this profile to share it"
-msgstr ""
+msgstr "Exporter ce profil pour le partager"
 
 #: src/goblinmode/gui/page_games.py:210
 msgid "Process priority (renice)"
-msgstr ""
+msgstr "Priorité du processus (renice)"
 
 #: src/goblinmode/gui/page_games.py:214
 msgid "Nice value"
-msgstr ""
+msgstr "Valeur nice"
 
 #: src/goblinmode/gui/page_games.py:215
 msgid "Lower = higher priority (needs the helper)"
-msgstr ""
+msgstr "Plus bas = priorité plus élevée (nécessite l'assistant)"
 
 #: src/goblinmode/gui/page_games.py:221
 msgid "Off — use every core"
-msgstr ""
+msgstr "Désactivé — utiliser tous les cœurs"
 
 #: src/goblinmode/gui/page_games.py:227
 msgid "Pin to CPU cores"
-msgstr ""
+msgstr "Épingler à des cœurs CPU"
 
 #: src/goblinmode/gui/page_games.py:228
 msgid "Keep the game's threads off the slow cores / the cross-CCD hop"
-msgstr ""
+msgstr "Éloigne les threads du jeu des cœurs lents / du saut inter-CCD"
 
 #: src/goblinmode/gui/page_games.py:238
 msgid "CPU governor boost"
-msgstr ""
+msgstr "Boost du gouverneur CPU"
 
 #: src/goblinmode/gui/page_games.py:242
 msgid "Compositor: allow tearing"
-msgstr ""
+msgstr "Compositeur : autoriser le tearing"
 
 #: src/goblinmode/gui/page_games.py:246
 msgid "Compositor: adaptive sync (VRR)"
-msgstr ""
+msgstr "Compositeur : synchronisation adaptative (VRR)"
 
 #: src/goblinmode/gui/page_games.py:250
 msgid "Focus mode"
-msgstr ""
+msgstr "Mode concentration"
 
 #: src/goblinmode/gui/page_games.py:253
 msgid "Pause the file indexer, turn on Do Not Disturb, inhibit idle"
-msgstr ""
+msgstr "Suspend l'indexation des fichiers, active le mode ne pas déranger, empêche la mise en veille"
 
 #: src/goblinmode/gui/page_games.py:262
 msgid "TDP / power limit"
-msgstr ""
+msgstr "TDP / limite de puissance"
 
 #: src/goblinmode/gui/page_games.py:262
 msgid "CPU power limit"
-msgstr ""
+msgstr "Limite de puissance du CPU"
 
 #: src/goblinmode/gui/page_games.py:264
 msgid "Set the wattage the APU may sustain — via ryzenadj (experimental)"
-msgstr ""
+msgstr "Définit la puissance que l'APU peut soutenir — via ryzenadj (expérimental)"
 
 #: src/goblinmode/gui/page_games.py:266
 msgid "Let the CPU draw more watts to hold its speed under load"
-msgstr ""
+msgstr "Permet au CPU de consommer plus de watts pour maintenir sa fréquence sous charge"
 
 #: src/goblinmode/gui/page_games.py:267
 msgid "Not available on this processor"
-msgstr ""
+msgstr "Non disponible sur ce processeur"
 
 #: src/goblinmode/gui/page_games.py:278
 msgid "Custom"
-msgstr ""
+msgstr "Personnalisé"
 
 #: src/goblinmode/gui/page_games.py:280
 msgid "Preset"
-msgstr ""
+msgstr "Préréglage"
 
 #: src/goblinmode/gui/page_games.py:286
 msgid "Sustained (watts)"
-msgstr ""
+msgstr "Soutenu (watts)"
 
 #: src/goblinmode/gui/page_games.py:287
 msgid "0 leaves the factory value"
-msgstr ""
+msgstr "0 laisse la valeur d'usine"
 
 #: src/goblinmode/gui/page_games.py:290
 msgid "Short burst (watts)"
-msgstr ""
+msgstr "Pointe courte (watts)"
 
 #: src/goblinmode/gui/page_games.py:307
 msgid "Re-apply my undervolt on launch"
-msgstr ""
+msgstr "Réappliquer mon undervolt au lancement"
 
 #: src/goblinmode/gui/page_games.py:310
 msgid ""
 "Runs `intel-undervolt apply` — uses the offsets you set in /etc/intel-"
 "undervolt.conf, never ours"
-msgstr ""
+msgstr "Exécute « intel-undervolt apply » — utilise les décalages que vous avez définis dans /etc/intel-undervolt.conf, jamais les nôtres"
 
 #: src/goblinmode/gui/page_games.py:318
 msgid "MangoHud configurator"
-msgstr ""
+msgstr "Configurateur MangoHud"
 
 #: src/goblinmode/gui/page_games.py:319
 msgid "Changes apply on the next launch — mid-game, use the in-game keys below"
-msgstr ""
+msgstr "Les modifications s'appliquent au prochain lancement — en jeu, utilisez les touches ci-dessous"
 
 #: src/goblinmode/gui/page_games.py:328
 msgid "Use a per-game MangoHud.conf"
-msgstr ""
+msgstr "Utiliser un MangoHud.conf par jeu"
 
 #: src/goblinmode/gui/page_games.py:333
 msgid "Frame-rate watchdog"
-msgstr ""
+msgstr "Chien de garde de fréquence d'images"
 
 #: src/goblinmode/gui/page_games.py:336
 msgid ""
 "Log FPS via MangoHud; raise an incident with GPU state on an extreme dip"
-msgstr ""
+msgstr "Enregistre les FPS via MangoHud ; signale un incident avec l'état du GPU en cas de chute extrême"
 
 #: src/goblinmode/gui/page_games.py:340
 msgid "Auto-clip a problem"
-msgstr ""
+msgstr "Enregistrer automatiquement un clip du problème"
 
 #: src/goblinmode/gui/page_games.py:342
 msgid ""
 "Keep a 30 s replay buffer; save it when the watchdog fires or a GPU fault "
 "appears (→ ~/Videos)"
-msgstr ""
+msgstr "Conserve un tampon de relecture de 30 s ; l'enregistre lorsque le chien de garde se déclenche ou qu'une erreur GPU survient (→ ~/Videos)"
 
 #: src/goblinmode/gui/page_games.py:347
 msgid "Dip threshold (fps)"
-msgstr ""
+msgstr "Seuil de chute (FPS)"
 
 #: src/goblinmode/gui/page_games.py:352
 msgid "In-game keys"
-msgstr ""
+msgstr "Touches en jeu"
 
 #: src/goblinmode/gui/page_games.py:353
 msgid "Shift_R+F12 hide/show · Shift_L+F2 log on/off · Shift_L+F4 reload"
-msgstr ""
+msgstr "Shift_R+F12 afficher/masquer · Shift_L+F2 journal on/off · Shift_L+F4 recharger"
 
 #: src/goblinmode/gui/page_games.py:360
 msgid "Runner variables (Proton/Wine)"
-msgstr ""
+msgstr "Variables du runner (Proton/Wine)"
 
 #: src/goblinmode/gui/page_games.py:373
 msgid "A solid frame limiter, FSR/NIS upscaling and clean alt-tab"
-msgstr ""
+msgstr "Un limiteur d'images fiable, un upscaling FSR/NIS et un alt-tab propre"
 
 #: src/goblinmode/gui/page_games.py:374
 msgid "gamescope is not installed"
-msgstr ""
+msgstr "gamescope n'est pas installé"
 
 #: src/goblinmode/gui/page_games.py:383
 msgid "Width (0 = auto)"
-msgstr ""
+msgstr "Largeur (0 = auto)"
 
 #: src/goblinmode/gui/page_games.py:384
 msgid "Height (0 = auto)"
-msgstr ""
+msgstr "Hauteur (0 = auto)"
 
 #: src/goblinmode/gui/page_games.py:385
 msgid "Refresh / FPS cap (0 = off)"
-msgstr ""
+msgstr "Taux de rafraîchissement / plafond FPS (0 = désactivé)"
 
 #: src/goblinmode/gui/page_games.py:391
 msgid "Upscaling"
-msgstr ""
+msgstr "Upscaling"
 
 #: src/goblinmode/gui/page_games.py:392
 msgid "off"
-msgstr ""
+msgstr "désactivé"
 
 #: src/goblinmode/gui/page_games.py:392
 msgid "integer"
-msgstr ""
+msgstr "entier"
 
 #: src/goblinmode/gui/page_games.py:397
 msgid "HDR (needs an HDR display)"
-msgstr ""
+msgstr "HDR (nécessite un écran HDR)"
 
 #: src/goblinmode/gui/page_games.py:405
 msgid "GPU driver tuning"
-msgstr ""
+msgstr "Réglage du pilote GPU"
 
 #: src/goblinmode/gui/page_games.py:420
 msgid "Compatibility check"
-msgstr ""
+msgstr "Vérification de compatibilité"
 
 #: src/goblinmode/gui/page_games.py:421
 msgid "ProtonDB rating and anti-cheat status for this game"
-msgstr ""
+msgstr "Note ProtonDB et statut anti-triche pour ce jeu"
 
 #: src/goblinmode/gui/page_games.py:423
 msgid "Steam AppID (optional)"
-msgstr ""
+msgstr "AppID Steam (facultatif)"
 
 #: src/goblinmode/gui/page_games.py:428
 msgid "Check this game"
-msgstr ""
+msgstr "Vérifier ce jeu"
 
 #: src/goblinmode/gui/page_games.py:501
 msgid "Checking…"
-msgstr ""
+msgstr "Vérification…"
 
 #: src/goblinmode/gui/page_games.py:513
 msgid "ProtonDB: add the Steam AppID above to check"
-msgstr ""
+msgstr "ProtonDB : ajoutez l'AppID Steam ci-dessus pour vérifier"
 
 #: src/goblinmode/gui/page_games.py:522
 msgid "Anti-cheat: not listed (likely none, or works fine)"
-msgstr ""
+msgstr "Anti-triche : non répertorié (probablement aucun, ou fonctionne bien)"
 
 #: src/goblinmode/gui/page_games.py:544
 msgid "Remove game profile?"
-msgstr ""
+msgstr "Supprimer le profil de jeu ?"
 
 #: src/goblinmode/gui/page_games.py:548
 msgid "Remove"
-msgstr ""
+msgstr "Supprimer"
 
 #: src/goblinmode/gui/page_games.py:563
 msgid "Select game executable"
-msgstr ""
+msgstr "Sélectionner un exécutable de jeu"
 
 #: src/goblinmode/gui/page_games.py:602
 msgid "Export profile"
-msgstr ""
+msgstr "Exporter le profil"
 
 #: src/goblinmode/gui/page_games.py:621
 msgid "Profile exported"
-msgstr ""
+msgstr "Profil exporté"
 
 #: src/goblinmode/gui/page_games.py:624
 msgid "Import a shared profile"
-msgstr ""
+msgstr "Importer un profil partagé"
 
 #: src/goblinmode/gui/page_games.py:639
 msgid "Couldn't read that file"
-msgstr ""
+msgstr "Impossible de lire ce fichier"
 
 #: src/goblinmode/gui/page_games.py:642
 msgid "Not a Goblin Mode Pro profile"
-msgstr ""
+msgstr "Ce n'est pas un profil Goblin Mode Pro"
 
 #: src/goblinmode/gui/page_games.py:654
 msgid "That profile was rejected as invalid"
-msgstr ""
+msgstr "Ce profil a été rejeté comme invalide"
 
 #: src/goblinmode/gui/page_games.py:663
 msgid "Fetching community profiles…"
-msgstr ""
+msgstr "Récupération des profils de la communauté…"
 
 #: src/goblinmode/gui/page_games.py:679
 msgid "No community profiles listed"
-msgstr ""
+msgstr "Aucun profil de la communauté répertorié"
 
 #: src/goblinmode/gui/page_games.py:683
 msgid "Community profiles"
-msgstr ""
+msgstr "Profils de la communauté"
 
 #: src/goblinmode/gui/page_games.py:684
 msgid ""
 "Downloaded from the project repo. Applying one overwrites that game's tweaks "
 "(it never touches your other games)."
-msgstr ""
+msgstr "Téléchargé depuis le dépôt du projet. L'application écrase les ajustements de ce jeu (vos autres jeux ne sont jamais touchés)."
 
 #: src/goblinmode/gui/page_games.py:691 src/goblinmode/gui/page_games.py:730
 msgid "Apply"
-msgstr ""
+msgstr "Appliquer"
 
 #: src/goblinmode/gui/page_games.py:717
 msgid "Empty profile"
-msgstr ""
+msgstr "Profil vide"
 
 #: src/goblinmode/gui/page_games.py:741
 msgid "The daemon rejected that profile"
-msgstr ""
+msgstr "Le démon a rejeté ce profil"
 
 #: src/goblinmode/gui/page_games.py:748
 msgid "Launch option copied"
-msgstr ""
+msgstr "Option de lancement copiée"
 
 #: src/goblinmode/gui/page_preflight.py:27
 msgid "PASS"
-msgstr ""
+msgstr "OK"
 
 #: src/goblinmode/gui/page_preflight.py:30
 msgid "FYI"
-msgstr ""
+msgstr "Info"
 
 #: src/goblinmode/gui/page_preflight.py:37
 msgid "System Check"
-msgstr ""
+msgstr "Vérification du système"
 
 #: src/goblinmode/gui/page_preflight.py:43
 msgid ""
 "These are Linux settings that decide whether some games run smoothly, "
 "stutter, or fail to start. The scan is read-only."
-msgstr ""
+msgstr "Ce sont des paramètres Linux qui déterminent si certains jeux tournent sans accroc, saccadent ou ne démarrent pas. L'analyse est en lecture seule."
 
 #: src/goblinmode/gui/page_preflight.py:55
 msgid "Scan again"
-msgstr ""
+msgstr "Analyser à nouveau"
 
 #: src/goblinmode/gui/page_preflight.py:60 src/goblinmode/gui/wizard.py:103
 msgid "Apply the safe fixes"
-msgstr ""
+msgstr "Appliquer les corrections sûres"
 
 #: src/goblinmode/gui/page_preflight.py:67
 msgid "Checks"
-msgstr ""
+msgstr "Vérifications"
 
 #: src/goblinmode/gui/page_preflight.py:73
 msgid "Make it stick after a reboot"
-msgstr ""
+msgstr "Le rendre permanent après un redémarrage"
 
 #: src/goblinmode/gui/page_preflight.py:74
 msgid ""
 "The one-click fixes above are temporary. To keep them, install the text "
 "below (ask an admin if you're not sure)."
-msgstr ""
+msgstr "Les corrections en un clic ci-dessus sont temporaires. Pour les conserver, installez le texte ci-dessous (demandez à un administrateur en cas de doute)."
 
 #: src/goblinmode/gui/page_preflight.py:77
 msgid "Settings to install"
-msgstr ""
+msgstr "Paramètres à installer"
 
 #: src/goblinmode/gui/page_preflight.py:79
 msgid "Startup (kernel) options"
-msgstr ""
+msgstr "Options de démarrage (noyau)"
 
 #: src/goblinmode/gui/page_preflight.py:90
 msgid "Scanning your system…"
-msgstr ""
+msgstr "Analyse de votre système…"
 
 #: src/goblinmode/gui/page_preflight.py:129
 #: src/goblinmode/gui/page_preflight.py:130
 msgid "# nothing to add"
-msgstr ""
+msgstr "# rien à ajouter"
 
 #: src/goblinmode/gui/page_preflight.py:147
 msgid "No further detail."
-msgstr ""
+msgstr "Aucun détail supplémentaire."
 
 #: src/goblinmode/gui/page_preflight.py:183
 msgid "Applying fixes… (you may be asked to authenticate)"
-msgstr ""
+msgstr "Application des corrections… (une authentification peut vous être demandée)"
 
 #: src/goblinmode/gui/page_preflight.py:193
 msgid "nothing"
-msgstr ""
+msgstr "rien"
 
 #: src/goblinmode/gui/page_preflight.py:227
 msgid "Copy"
-msgstr ""
+msgstr "Copier"
 
 #: src/goblinmode/gui/widgets/graph.py:87
 msgid "waiting for samples…"
-msgstr ""
+msgstr "en attente d'échantillons…"
 
 #: src/goblinmode/gui/widgets/graph.py:185
 msgid "no frame-rate log yet — enable the watchdog for a game"
-msgstr ""
+msgstr "pas encore de journal de fréquence d'images — activez le chien de garde pour un jeu"
 
 #: src/goblinmode/gui/widgets/help.py:11
 msgid ""
 "Linux slows your CPU down when it thinks you're idle, to save power. This "
 "keeps it at full speed while the game runs, then puts it back — it removes "
 "the stutter when the CPU 'wakes up' late."
-msgstr ""
+msgstr "Linux ralentit votre CPU quand il pense que vous êtes inactif, pour économiser l'énergie. Ceci le maintient à pleine vitesse pendant que le jeu tourne, puis le remet en place — cela supprime les saccades quand le CPU se 'réveille' en retard."
 
 #: src/goblinmode/gui/widgets/help.py:14
 msgid ""
 "Tells the Linux scheduler your game matters more than background tasks, so "
 "updates, indexing and browser tabs stop stealing CPU mid-fight."
-msgstr ""
+msgstr "Indique à l'ordonnanceur Linux que votre jeu compte plus que les tâches en arrière-plan, afin que les mises à jour, l'indexation et les onglets du navigateur cessent de voler du CPU en plein combat."
 
 #: src/goblinmode/gui/widgets/help.py:17
 msgid ""
 "The compositor normally adds a frame of delay to keep the picture perfectly "
 "clean. Allowing tearing removes that delay for lower input lag — your mouse "
 "feels more connected."
-msgstr ""
+msgstr "Le compositeur ajoute normalement un délai d'une image pour garder une image parfaitement propre. Autoriser le tearing supprime ce délai pour réduire le input lag — votre souris semble plus réactive."
 
 #: src/goblinmode/gui/widgets/help.py:20
 msgid ""
 "Adaptive Sync / VRR makes the monitor match the game's frame rate instead of "
 "a fixed one, which removes a whole class of stutter. Only works on a VRR-"
 "capable display."
-msgstr ""
+msgstr "Adaptive Sync / VRR fait correspondre le moniteur à la fréquence d'images du jeu au lieu d'une fréquence fixe, ce qui élimine toute une catégorie de saccades. Fonctionne uniquement sur un écran compatible VRR."
 
 #: src/goblinmode/gui/widgets/help.py:23
 msgid ""
 "Pauses the file-search indexer, turns on Do Not Disturb and stops the screen "
 "blanking — removes background hitches and the 'screen dimmed mid-cutscene' "
 "problem."
-msgstr ""
+msgstr "Suspend l'indexeur de recherche de fichiers, active le mode ne pas déranger et empêche l'extinction de l'écran — supprime les à-coups en arrière-plan et le problème de l'écran qui s'assombrit en pleine cinématique."
 
 #: src/goblinmode/gui/widgets/help.py:26
 msgid ""
 "Pins the game's threads to the fast cores of a hybrid CPU, or to one CCD on "
 "a Ryzen, so it stays off the slow cores and the cross-CCD latency penalty."
-msgstr ""
+msgstr "Épingle les threads du jeu aux cœurs rapides d'un CPU hybride, ou à un seul CCD sur un Ryzen, afin d'éviter les cœurs lents et la pénalité de latence inter-CCD."
 
 #: src/goblinmode/gui/widgets/help.py:29
 msgid ""
 "Laptops and desktops cap how many watts the CPU may draw. If your cooling "
 "can keep up, raising the cap lets the CPU hold its top speed for longer."
-msgstr ""
+msgstr "Les portables et les ordinateurs de bureau limitent le nombre de watts que le CPU peut consommer. Si votre refroidissement suit, augmenter la limite permet au CPU de maintenir sa vitesse maximale plus longtemps."
 
 #: src/goblinmode/gui/widgets/help.py:32
 msgid ""
 "A tiny display layer that gives a rock-solid frame cap, FSR/NIS upscaling "
 "and alt-tab that doesn't break the game. Needs the 'gamescope' package."
-msgstr ""
+msgstr "Une petite couche d'affichage qui offre un plafond d'images très stable, un upscaling FSR/NIS et un alt-tab qui ne casse pas le jeu. Nécessite le paquet 'gamescope'."
 
 #: src/goblinmode/gui/widgets/help.py:35
 msgid ""
 "Extra environment variables for your graphics driver — small, well-known "
 "knobs that help specific engines. Safe to leave on."
-msgstr ""
+msgstr "Variables d'environnement supplémentaires pour votre pilote graphique — de petits réglages bien connus qui aident certains moteurs. Sans risque à laisser activé."
 
 #: src/goblinmode/gui/widgets/help.py:37
 msgid ""
 "Logs your FPS via MangoHud and, if it falls off a cliff and stays there, "
 "captures what the GPU was doing so you can see why."
-msgstr ""
+msgstr "Enregistre vos FPS via MangoHud et, s'ils chutent brutalement et y restent, capture ce que faisait le GPU pour que vous puissiez en voir la raison."
 
 #: src/goblinmode/gui/widgets/help.py:39
 msgid ""
 "Switches for Proton/Wine that many Windows games need on Linux — NVAPI (DLSS/"
 "Reflex), Fsync (threading), async shader compile (fewer first-run hitches)."
-msgstr ""
+msgstr "Interrupteurs pour Proton/Wine dont de nombreux jeux Windows ont besoin sous Linux — NVAPI (DLSS/Reflex), Fsync (threading), compilation asynchrone des shaders (moins de saccades au premier lancement)."
 
 #: src/goblinmode/gui/widgets/snippet.py:31
 msgid "Copy command"
-msgstr ""
+msgstr "Copier la commande"
 
 #: src/goblinmode/gui/wizard.py:27
 msgid ""
 "Right-click the game → Properties → General → Launch Options, and paste:"
-msgstr ""
+msgstr "Clic droit sur le jeu → Propriétés → Général → Options de lancement, puis collez :"
 
 #: src/goblinmode/gui/wizard.py:29
 msgid "Right-click the game → Configure → System options → Command prefix:"
-msgstr ""
+msgstr "Clic droit sur le jeu → Configurer → Options système → Préfixe de commande :"
 
 #: src/goblinmode/gui/wizard.py:31
 msgid "Game → Settings → Advanced → Wrapper command:"
-msgstr ""
+msgstr "Jeu → Paramètres → Avancé → Commande wrapper :"
 
 #: src/goblinmode/gui/wizard.py:32
 msgid "Set the runner's wrapper or command prefix to:"
-msgstr ""
+msgstr "Définissez le wrapper ou le préfixe de commande du runner sur :"
 
 #: src/goblinmode/gui/wizard.py:50
 msgid "Welcome"
-msgstr ""
+msgstr "Bienvenue"
 
 #: src/goblinmode/gui/wizard.py:57
 msgid "Skip"
-msgstr ""
+msgstr "Passer"
 
 #: src/goblinmode/gui/wizard.py:85
 msgid ""
 "Three quick steps: check your system is game-ready, wire up your game "
 "launcher, and you're done. Takes about a minute."
-msgstr ""
+msgstr "Trois étapes rapides : vérifiez que votre système est prêt pour le jeu, connectez votre launcher de jeu, et c'est terminé. Cela prend environ une minute."
 
 #: src/goblinmode/gui/wizard.py:87
 msgid "Get started"
-msgstr ""
+msgstr "Commencer"
 
 #: src/goblinmode/gui/wizard.py:99
 msgid "Checking your system…"
-msgstr ""
+msgstr "Vérification de votre système…"
 
 #: src/goblinmode/gui/wizard.py:107 src/goblinmode/gui/wizard.py:127
 msgid "Next"
-msgstr ""
+msgstr "Suivant"
 
 #: src/goblinmode/gui/wizard.py:118
 msgid "Missing pieces"
-msgstr ""
+msgstr "Éléments manquants"
 
 #: src/goblinmode/gui/wizard.py:143
 msgid "The FPS overlay and frame-rate watchdog need it"
-msgstr ""
+msgstr "L'overlay FPS et le chien de garde de fréquence d'images en ont besoin"
 
 #: src/goblinmode/gui/wizard.py:145
 msgid "Per-game governor/priority/GPU tuning most launchers expect"
-msgstr ""
+msgstr "Réglage du gouverneur/priorité/GPU par jeu, attendu par la plupart des launchers"
 
 #: src/goblinmode/gui/wizard.py:162
 msgid "Nothing missing - MangoHud, GameMode and your kernel all look good."
-msgstr ""
+msgstr "Rien ne manque - MangoHud, GameMode et votre noyau sont tous en bon état."
 
 #: src/goblinmode/gui/wizard.py:165
 msgid ""
 "Copy these into a terminal when you get a chance. None of this runs "
 "automatically - Goblin Mode Pro never installs packages on its own."
-msgstr ""
+msgstr "Copiez-les dans un terminal quand vous avez l'occasion. Rien de tout cela ne s'exécute automatiquement - Goblin Mode Pro n'installe jamais de paquets de lui-même."
 
 #: src/goblinmode/gui/wizard.py:179
 msgid "Wire up your launcher"
-msgstr ""
+msgstr "Connectez votre launcher"
 
 #: src/goblinmode/gui/wizard.py:181
 msgid ""
 "Goblin Mode Pro needs a small wrapper on your game's launch command so it "
 "can inject settings and read the Proton log. Pick your launcher:"
-msgstr ""
+msgstr "Goblin Mode Pro a besoin d'un petit wrapper sur la commande de lancement de votre jeu pour injecter des paramètres et lire le journal Proton. Choisissez votre launcher :"
 
 #: src/goblinmode/gui/wizard.py:200
 msgid "Done"
-msgstr ""
+msgstr "Terminé"
 
 #: src/goblinmode/gui/wizard.py:209
 msgid "You're set"
-msgstr ""
+msgstr "Vous êtes prêt"
 
 #: src/goblinmode/gui/wizard.py:210
 msgid ""
 "Launch a game and Goblin Mode Pro takes over automatically. Open it any time "
 "from the tray icon or your app menu to tune per-game settings."
-msgstr ""
+msgstr "Lancez un jeu et Goblin Mode Pro prend le relais automatiquement. Ouvrez-le à tout moment depuis l'icône de la zone de notification ou votre menu d'applications pour ajuster les paramètres par jeu."
 
 #: src/goblinmode/gui/wizard.py:213
 msgid "Finish"
-msgstr ""
+msgstr "Terminer"
 
 #: src/goblinmode/gui/wizard.py:228
 msgid "Couldn't run the check"
-msgstr ""
+msgstr "Impossible d'exécuter la vérification"
 
 #: src/goblinmode/gui/wizard.py:242
 msgid "Your machine is game-ready. 🎮"
-msgstr ""
+msgstr "Votre machine est prête pour le jeu. 🎮"
 
 #: src/goblinmode/gui/wizard.py:246
 msgid "Applying…"
-msgstr ""
+msgstr "Application…"

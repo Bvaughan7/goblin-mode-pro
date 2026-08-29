@@ -24,12 +24,12 @@ from goblinmode.runner import LAUNCH_OPTION
 log = logging.getLogger(__name__)
 
 _LAUNCHERS = {
-    "Steam": ("Right-click the game → Properties → General → Launch Options, and "
-              "paste:", LAUNCH_OPTION),
-    "Lutris": ("Right-click the game → Configure → System options → "
-               "Command prefix:", "goblin-run"),
-    "Heroic": ("Game → Settings → Advanced → Wrapper command:", "goblin-run"),
-    "Bottles / other": ("Set the runner's wrapper or command prefix to:", "goblin-run"),
+    "Steam": (_("Right-click the game → Properties → General → Launch Options, and "
+              "paste:"), LAUNCH_OPTION),
+    "Lutris": (_("Right-click the game → Configure → System options → "
+               "Command prefix:"), "goblin-run"),
+    "Heroic": (_("Game → Settings → Advanced → Wrapper command:"), "goblin-run"),
+    "Bottles / other": (_("Set the runner's wrapper or command prefix to:"), "goblin-run"),
 }
 
 
@@ -82,8 +82,8 @@ class FirstRunWizard(Adw.Window):
     def _welcome_page(self) -> Gtk.Widget:
         p = self._page("com.goblinmode.Pro",
                        "Goblin Mode Pro",
-                       "Three quick steps: check your system is game-ready, wire up "
-                       "your game launcher, and you're done. Takes about a minute.")
+                       _("Three quick steps: check your system is game-ready, wire up "
+                       "your game launcher, and you're done. Takes about a minute."))
         btn = Gtk.Button(label=_("Get started"), halign=Gtk.Align.CENTER)
         btn.add_css_class("suggested-action")
         btn.add_css_class("pill")
@@ -140,9 +140,9 @@ class FirstRunWizard(Adw.Window):
         pm = caps.get("package_manager")
         missing = []
         if not caps.get("mangohud"):
-            missing.append(("mangohud", "The FPS overlay and frame-rate watchdog need it"))
+            missing.append(("mangohud", _("The FPS overlay and frame-rate watchdog need it")))
         if not caps.get("gamemode"):
-            missing.append(("gamemode", "Per-game governor/priority/GPU tuning most launchers expect"))
+            missing.append(("gamemode", _("Per-game governor/priority/GPU tuning most launchers expect")))
 
         rows: list[tuple[str, str]] = []
         for pkg, why in missing:
@@ -158,12 +158,12 @@ class FirstRunWizard(Adw.Window):
                 rows.append((why, cmd))
 
         if not rows:
-            self._install_sub.set_label(
-                "Nothing missing - MangoHud, GameMode and your kernel all look good.")
+            self._install_sub.set_label(_(
+                "Nothing missing - MangoHud, GameMode and your kernel all look good."))
         else:
-            self._install_sub.set_label(
+            self._install_sub.set_label(_(
                 "Copy these into a terminal when you get a chance. None of this runs "
-                "automatically - Goblin Mode Pro never installs packages on its own.")
+                "automatically - Goblin Mode Pro never installs packages on its own."))
 
         for why, cmd in rows:
             if cmd:
@@ -178,9 +178,9 @@ class FirstRunWizard(Adw.Window):
                       margin_top=24, margin_bottom=24, margin_start=24, margin_end=24)
         head = Gtk.Label(label=_("Wire up your launcher"))
         head.add_css_class("title-1")
-        sub = Gtk.Label(wrap=True, label="Goblin Mode Pro needs a small wrapper on "
+        sub = Gtk.Label(wrap=True, label=_("Goblin Mode Pro needs a small wrapper on "
                         "your game's launch command so it can inject settings and "
-                        "read the Proton log. Pick your launcher:")
+                        "read the Proton log. Pick your launcher:"))
         sub.add_css_class("dim-label")
         box.append(head)
         box.append(sub)
@@ -206,10 +206,10 @@ class FirstRunWizard(Adw.Window):
         return box
 
     def _done_page(self) -> Gtk.Widget:
-        p = self._page("emblem-ok-symbolic", "You're set",
-                       "Launch a game and Goblin Mode Pro takes over automatically. "
+        p = self._page("emblem-ok-symbolic", _("You're set"),
+                       _("Launch a game and Goblin Mode Pro takes over automatically. "
                        "Open it any time from the tray icon or your app menu to tune "
-                       "per-game settings.")
+                       "per-game settings."))
         btn = Gtk.Button(label=_("Finish"), halign=Gtk.Align.CENTER)
         btn.add_css_class("suggested-action")
         btn.add_css_class("pill")
@@ -225,7 +225,7 @@ class FirstRunWizard(Adw.Window):
         h = health or {}
         score = h.get("score")
         if score is None:
-            self._check_title.set_label("Couldn't run the check")
+            self._check_title.set_label(_("Couldn't run the check"))
             return
         self._check_title.set_label(f"System readiness: {score:g}/10")
         worst = h.get("worst") or []
@@ -239,11 +239,11 @@ class FirstRunWizard(Adw.Window):
             self._check_detail.set_label(f"{n['warn']} thing(s) worth a look — you "
                                          "can review them later in System Check.")
         else:
-            self._check_detail.set_label("Your machine is game-ready. 🎮")
+            self._check_detail.set_label(_("Your machine is game-ready. 🎮"))
 
     def _on_fix(self, _btn) -> None:
         self._fix_btn.set_sensitive(False)
-        self._fix_btn.set_label("Applying…")
+        self._fix_btn.set_label(_("Applying…"))
         self.bridge.apply_preflight_fixes_async(
             lambda res, err: (self._fix_btn.set_visible(False), self._run_check()))
 

@@ -29,18 +29,18 @@ from goblinmode.runner import LAUNCH_OPTION
 log = logging.getLogger(__name__)
 
 _MANGOHUD_LABELS = {
-    "enabled": "Show overlay",
-    "fps": "FPS counter",
-    "cpu_temp": "CPU temperature",
-    "gpu_temp": "GPU temperature",
-    "ram": "RAM usage",
-    "frame_timing": "Frame-timing graph",
+    "enabled": _("Show overlay"),
+    "fps": _("FPS counter"),
+    "cpu_temp": _("CPU temperature"),
+    "gpu_temp": _("GPU temperature"),
+    "ram": _("RAM usage"),
+    "frame_timing": _("Frame-timing graph"),
 }
 _RUNNER_LABELS = {
-    "nvapi": "NVAPI (PROTON_ENABLE_NVAPI + DXVK_ENABLE_NVAPI)",
-    "fsync": "Force Fsync (WINEFSYNC=1)",
-    "no_esync": "Disable Esync (PROTON_NO_ESYNC=1)",
-    "dxvk_async": "Async shader compile (DXVK_ASYNC=1)",
+    "nvapi": _("NVAPI (PROTON_ENABLE_NVAPI + DXVK_ENABLE_NVAPI)"),
+    "fsync": _("Force Fsync (WINEFSYNC=1)"),
+    "no_esync": _("Disable Esync (PROTON_NO_ESYNC=1)"),
+    "dxvk_async": _("Async shader compile (DXVK_ASYNC=1)"),
 }
 
 
@@ -54,14 +54,14 @@ class GamesPage(Adw.PreferencesPage):
         self._caps: dict[str, Any] = {}
 
         info = Adw.PreferencesGroup(
-            title="Steam launch option",
-            description=(
+            title=_("Steam launch option"),
+            description=_(
                 "For Proton games, set the game's launch options to the string "
                 "below so Goblin Mode Pro can inject runner variables and capture "
                 "the Wine/Proton log."
             ),
         )
-        row = Adw.ActionRow(title=LAUNCH_OPTION, subtitle="Right-click → copy")
+        row = Adw.ActionRow(title=LAUNCH_OPTION, subtitle=_("Right-click → copy"))
         row.add_css_class("monospace")
         copy = Gtk.Button(icon_name="edit-copy-symbolic", valign=Gtk.Align.CENTER)
         copy.add_css_class("flat")
@@ -72,9 +72,9 @@ class GamesPage(Adw.PreferencesPage):
 
         auto = Adw.PreferencesGroup()
         self._auto_row = Adw.SwitchRow(
-            title="Auto-detect games",
-            subtitle="Optimize any game GMP recognises — Steam / Lutris / Heroic, "
-            "or anything doing sustained GPU work — not just the profiles below.",
+            title=_("Auto-detect games"),
+            subtitle=_("Optimize any game GMP recognises — Steam / Lutris / Heroic, "
+            "or anything doing sustained GPU work — not just the profiles below."),
         )
         self._auto_row.connect(
             "notify::active",
@@ -83,21 +83,21 @@ class GamesPage(Adw.PreferencesPage):
         auto.add(self._auto_row)
         self.add(auto)
 
-        self._group = Adw.PreferencesGroup(title="Game profiles")
+        self._group = Adw.PreferencesGroup(title=_("Game profiles"))
         hdr = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
         community_btn = Gtk.Button(icon_name="folder-download-symbolic", valign=Gtk.Align.CENTER)
         community_btn.add_css_class("flat")
-        community_btn.set_tooltip_text("Browse community profiles")
+        community_btn.set_tooltip_text(_("Browse community profiles"))
         community_btn.connect("clicked", self._on_community)
         hdr.append(community_btn)
         import_btn = Gtk.Button(icon_name="document-open-symbolic", valign=Gtk.Align.CENTER)
         import_btn.add_css_class("flat")
-        import_btn.set_tooltip_text("Import a shared profile (.json)")
+        import_btn.set_tooltip_text(_("Import a shared profile (.json)"))
         import_btn.connect("clicked", self._on_import)
         hdr.append(import_btn)
         add_btn = Gtk.Button(icon_name="list-add-symbolic", valign=Gtk.Align.CENTER)
         add_btn.add_css_class("flat")
-        add_btn.set_tooltip_text("Add game executable")
+        add_btn.set_tooltip_text(_("Add game executable"))
         add_btn.connect("clicked", self._on_add_game)
         hdr.append(add_btn)
         self._group.set_header_suffix(hdr)
@@ -156,8 +156,8 @@ class GamesPage(Adw.PreferencesPage):
 
         if not self._profiles:
             empty = Adw.ActionRow(
-                title="No games yet",
-                subtitle="Use the + button to add a game executable",
+                title=_("No games yet"),
+                subtitle=_("Use the + button to add a game executable"),
             )
             self._group.add(empty)
             self._rows.append(empty)
@@ -173,30 +173,30 @@ class GamesPage(Adw.PreferencesPage):
         exp = Adw.ExpanderRow(
             title=p.get("display_name") or exe,
             subtitle=f"{exe}  ·  match: {p.get('match_mode', 'exact')}"
-            + ("  ·  auto-detected" if auto else ""),
+            + (_("  ·  auto-detected") if auto else ""),
         )
         exp.set_show_enable_switch(True)
         exp.set_enable_expansion(bool(p.get("enabled", True)))
         exp.connect("notify::enable-expansion", self._on_enable_toggled, exe)
 
         if auto:
-            pill = Gtk.Label(label="AUTO")
+            pill = Gtk.Label(label=_("AUTO"))
             pill.add_css_class("caption-heading")
             pill.add_css_class("accent")
             pill.set_valign(Gtk.Align.CENTER)
             exp.add_suffix(pill)
-            keep = Gtk.Button(label="Keep", valign=Gtk.Align.CENTER)
+            keep = Gtk.Button(label=_("Keep"), valign=Gtk.Align.CENTER)
             keep.add_css_class("flat")
             keep.connect("clicked", lambda _b: self._keep(exe))
             exp.add_suffix(keep)
-            ignore = Gtk.Button(label="Ignore", valign=Gtk.Align.CENTER)
+            ignore = Gtk.Button(label=_("Ignore"), valign=Gtk.Align.CENTER)
             ignore.add_css_class("flat")
             ignore.connect("clicked", lambda _b: self._ignore(exe))
             exp.add_suffix(ignore)
 
         share = Gtk.Button(icon_name="send-to-symbolic", valign=Gtk.Align.CENTER)
         share.add_css_class("flat")
-        share.set_tooltip_text("Export this profile to share it")
+        share.set_tooltip_text(_("Export this profile to share it"))
         share.connect("clicked", lambda _b: self._on_export(exe))
         exp.add_suffix(share)
 
@@ -207,25 +207,25 @@ class GamesPage(Adw.PreferencesPage):
 
         # -- simple toggles --
         exp.add_row(self._switch_row(
-            "Process priority (renice)", p.get("renice_enabled", True),
+            _("Process priority (renice)"), p.get("renice_enabled", True),
             lambda v: self._patch(exe, renice_enabled=v), help="renice",
         ))
         nice = Adw.SpinRow.new_with_range(-10, 19, 1)
-        nice.set_title("Nice value")
-        nice.set_subtitle("Lower = higher priority (needs the helper)")
+        nice.set_title(_("Nice value"))
+        nice.set_subtitle(_("Lower = higher priority (needs the helper)"))
         nice.set_value(p.get("nice_value", -5))
         nice.connect("notify::value", lambda r, _p: self._patch(exe, nice_value=int(r.get_value())))
         exp.add_row(nice)
 
         layout = self._caps.get("core_layout") or {}
-        pin_opts = [("off", "Off — use every core")]
+        pin_opts = [("off", _("Off — use every core"))]
         if layout.get("performance"):
             pin_opts.append(("performance", f"Fast cores only ({len(layout['performance'])} of {len(layout.get('online', []))})"))
         if layout.get("cache_groups"):
             pin_opts.append(("cache0", f"One cache group / CCD ({len(layout['cache_groups'][0])} cores)"))
         if len(pin_opts) > 1:
-            pin = Adw.ComboRow(title="Pin to CPU cores")
-            pin.set_subtitle("Keep the game's threads off the slow cores / the cross-CCD hop")
+            pin = Adw.ComboRow(title=_("Pin to CPU cores"))
+            pin.set_subtitle(_("Keep the game's threads off the slow cores / the cross-CCD hop"))
             pin.set_model(Gtk.StringList.new([label for _k, label in pin_opts]))
             keys = [k for k, _l in pin_opts]
             cur = p.get("core_pin", "off")
@@ -235,22 +235,22 @@ class GamesPage(Adw.PreferencesPage):
             exp.add_row(pin)
 
         exp.add_row(self._switch_row(
-            "CPU governor boost", p.get("governor_boost", True),
+            _("CPU governor boost"), p.get("governor_boost", True),
             lambda v: self._patch(exe, governor_boost=v), help="governor",
         ))
         exp.add_row(self._switch_row(
-            "Compositor: allow tearing", p.get("tearing_enabled", True),
+            _("Compositor: allow tearing"), p.get("tearing_enabled", True),
             lambda v: self._patch(exe, tearing_enabled=v), help="tearing",
         ))
         exp.add_row(self._switch_row(
-            "Compositor: adaptive sync (VRR)", p.get("adaptive_sync_enabled", False),
+            _("Compositor: adaptive sync (VRR)"), p.get("adaptive_sync_enabled", False),
             lambda v: self._patch(exe, adaptive_sync_enabled=v), help="vrr",
         ))
         focus = self._switch_row(
-            "Focus mode", p.get("focus_mode", False),
+            _("Focus mode"), p.get("focus_mode", False),
             lambda v: self._patch(exe, focus_mode=v), help="focus",
         )
-        focus.set_subtitle("Pause the file indexer, turn on Do Not Disturb, inhibit idle")
+        focus.set_subtitle(_("Pause the file indexer, turn on Do Not Disturb, inhibit idle"))
         exp.add_row(focus)
 
         # -- Power limit / TDP nested expander --
@@ -259,12 +259,12 @@ class GamesPage(Adw.PreferencesPage):
         tdp_ok = rapl_ok or tdp_backend == "ryzenadj"
         amd = tdp_backend == "ryzenadj" and not rapl_ok
         pw = Adw.ExpanderRow(
-            title="TDP / power limit" if amd else "CPU power limit",
+            title=_("TDP / power limit") if amd else _("CPU power limit"),
             subtitle=(
-                "Set the wattage the APU may sustain — via ryzenadj (experimental)"
+                _("Set the wattage the APU may sustain — via ryzenadj (experimental)")
                 if amd else
-                "Let the CPU draw more watts to hold its speed under load"
-            ) if tdp_ok else "Not available on this processor",
+                _("Let the CPU draw more watts to hold its speed under load")
+            ) if tdp_ok else _("Not available on this processor"),
         )
         pw.set_sensitive(tdp_ok)
         if tdp_ok:
@@ -275,19 +275,19 @@ class GamesPage(Adw.PreferencesPage):
                 lambda r, _p: (not self._building) and self._patch(exe, power_limit_enabled=r.get_enable_expansion()),
             )
             # Preset selector — sets both limits at once.
-            presets = [("Custom", 0), ("15 W", 15), ("25 W", 25),
+            presets = [(_("Custom"), 0), ("15 W", 15), ("25 W", 25),
                        ("35 W", 35), ("45 W", 45), ("65 W", 65)]
-            combo = Adw.ComboRow(title="Preset")
+            combo = Adw.ComboRow(title=_("Preset"))
             combo.set_model(Gtk.StringList.new([lbl for lbl, _w in presets]))
             cur_w = p.get("pl1_w", 0)
             combo.set_selected(next((i for i, (_l, w) in enumerate(presets) if w == cur_w), 0))
 
             pl1 = Adw.SpinRow.new_with_range(0, 250, 1)
-            pl1.set_title("Sustained (watts)")
-            pl1.set_subtitle("0 leaves the factory value")
+            pl1.set_title(_("Sustained (watts)"))
+            pl1.set_subtitle(_("0 leaves the factory value"))
             pl1.set_value(cur_w)
             pl2 = Adw.SpinRow.new_with_range(0, 250, 1)
-            pl2.set_title("Short burst (watts)")
+            pl2.set_title(_("Short burst (watts)"))
             pl2.set_value(p.get("pl2_w", 0))
 
             def _apply_preset(row, _p, _pl1=pl1, _pl2=pl2, _ps=presets):
@@ -304,19 +304,19 @@ class GamesPage(Adw.PreferencesPage):
                 pw.add_row(pl2)
         if self._caps.get("undervolt") == "intel-undervolt":
             uv = self._switch_row(
-                "Re-apply my undervolt on launch",
+                _("Re-apply my undervolt on launch"),
                 p.get("undervolt_reapply", False),
                 lambda v: self._patch(exe, undervolt_reapply=v))
-            uv.set_subtitle("Runs `intel-undervolt apply` — uses the offsets you set "
-                            "in /etc/intel-undervolt.conf, never ours")
+            uv.set_subtitle(_("Runs `intel-undervolt apply` — uses the offsets you set "
+                            "in /etc/intel-undervolt.conf, never ours"))
             uv.set_title_lines(0)
             pw.add_row(uv) if pw.get_sensitive() else exp.add_row(uv)
         exp.add_row(pw)
 
         # -- MangoHud nested expander --
         mh = Adw.ExpanderRow(
-            title="MangoHud configurator",
-            subtitle="Changes apply on the next launch — mid-game, use the in-game keys below",
+            title=_("MangoHud configurator"),
+            subtitle=_("Changes apply on the next launch — mid-game, use the in-game keys below"),
         )
         mango = dict(p.get("mangohud", {}))
         for key in MANGOHUD_TOGGLES:
@@ -325,39 +325,39 @@ class GamesPage(Adw.PreferencesPage):
                 lambda v, k=key: self._patch_mangohud(exe, k, v),
             ))
         per_game = self._switch_row(
-            "Use a per-game MangoHud.conf", p.get("per_game_mangohud", False),
+            _("Use a per-game MangoHud.conf"), p.get("per_game_mangohud", False),
             lambda v: self._patch(exe, per_game_mangohud=v),
         )
         mh.add_row(per_game)
         wd = self._switch_row(
-            "Frame-rate watchdog", p.get("fps_watchdog", False),
+            _("Frame-rate watchdog"), p.get("fps_watchdog", False),
             lambda v: self._patch(exe, fps_watchdog=v), help="watchdog",
         )
-        wd.set_subtitle("Log FPS via MangoHud; raise an incident with GPU state on an extreme dip")
+        wd.set_subtitle(_("Log FPS via MangoHud; raise an incident with GPU state on an extreme dip"))
         mh.add_row(wd)
         if self._caps.get("session_recorder") == "gpu-screen-recorder":
             clip = self._switch_row(
-                "Auto-clip a problem", p.get("clip_on_incident", False),
+                _("Auto-clip a problem"), p.get("clip_on_incident", False),
                 lambda v: self._patch(exe, clip_on_incident=v))
-            clip.set_subtitle("Keep a 30 s replay buffer; save it when the watchdog "
-                              "fires or a GPU fault appears (→ ~/Videos)")
+            clip.set_subtitle(_("Keep a 30 s replay buffer; save it when the watchdog "
+                              "fires or a GPU fault appears (→ ~/Videos)"))
             clip.set_title_lines(0)
             mh.add_row(clip)
         floor = Adw.SpinRow.new_with_range(5, 120, 1)
-        floor.set_title("Dip threshold (fps)")
+        floor.set_title(_("Dip threshold (fps)"))
         floor.set_value(p.get("fps_dip_floor", 22))
         floor.connect("notify::value", lambda r, _p: self._patch(exe, fps_dip_floor=int(r.get_value())))
         mh.add_row(floor)
         keys = Adw.ActionRow(
-            title="In-game keys",
-            subtitle="Shift_R+F12 hide/show · Shift_L+F2 log on/off · Shift_L+F4 reload",
+            title=_("In-game keys"),
+            subtitle=_("Shift_R+F12 hide/show · Shift_L+F2 log on/off · Shift_L+F4 reload"),
         )
         keys.add_css_class("dim-label")
         mh.add_row(keys)
         exp.add_row(mh)
 
         # -- Runner variables nested expander --
-        rv = Adw.ExpanderRow(title="Runner variables (Proton/Wine)")
+        rv = Adw.ExpanderRow(title=_("Runner variables (Proton/Wine)"))
         runner_vars = dict(p.get("runner_vars", {}))
         for key in RUNNER_VARS:
             rv.add_row(self._switch_row(
@@ -370,8 +370,8 @@ class GamesPage(Adw.PreferencesPage):
         gs_ok = self._caps.get("gamescope", True)
         gs = Adw.ExpanderRow(
             title="gamescope",
-            subtitle="A solid frame limiter, FSR/NIS upscaling and clean alt-tab"
-            if gs_ok else "gamescope is not installed",
+            subtitle=_("A solid frame limiter, FSR/NIS upscaling and clean alt-tab")
+            if gs_ok else _("gamescope is not installed"),
         )
         gcfg = dict(p.get("gamescope", {}))
         gs.set_sensitive(gs_ok)
@@ -380,21 +380,21 @@ class GamesPage(Adw.PreferencesPage):
             gs.set_enable_expansion(bool(p.get("gamescope_enabled", False)))
             gs.connect("notify::enable-expansion",
                        lambda r, _p: (not self._building) and self._patch(exe, gamescope_enabled=r.get_enable_expansion()))
-            for k, title, lo, hi, step in (("w", "Width (0 = auto)", 0, 7680, 10),
-                                           ("h", "Height (0 = auto)", 0, 4320, 10),
-                                           ("refresh", "Refresh / FPS cap (0 = off)", 0, 360, 1)):
+            for k, title, lo, hi, step in (("w", _("Width (0 = auto)"), 0, 7680, 10),
+                                           ("h", _("Height (0 = auto)"), 0, 4320, 10),
+                                           ("refresh", _("Refresh / FPS cap (0 = off)"), 0, 360, 1)):
                 sr = Adw.SpinRow.new_with_range(lo, hi, step)
                 sr.set_title(title)
                 sr.set_value(gcfg.get(k, 0) or 0)
                 sr.connect("notify::value", lambda r, _p, kk=k: self._patch_gamescope(exe, kk, int(r.get_value())))
                 gs.add_row(sr)
-            up = Adw.ComboRow(title="Upscaling")
-            up.set_model(Gtk.StringList.new(["off", "FSR", "NIS", "integer"]))
+            up = Adw.ComboRow(title=_("Upscaling"))
+            up.set_model(Gtk.StringList.new([_("off"), "FSR", "NIS", _("integer")]))
             up.set_selected({"off": 0, "fsr": 1, "nis": 2, "integer": 3}.get(gcfg.get("upscale", "off"), 0))
             up.connect("notify::selected", lambda r, _p: self._patch_gamescope(
                 exe, "upscale", ["off", "fsr", "nis", "integer"][r.get_selected()]))
             gs.add_row(up)
-            gs.add_row(self._switch_row("HDR (needs an HDR display)", gcfg.get("hdr", False),
+            gs.add_row(self._switch_row(_("HDR (needs an HDR display)"), gcfg.get("hdr", False),
                                         lambda v: self._patch_gamescope(exe, "hdr", v)))
         exp.add_row(gs)
 
@@ -402,7 +402,7 @@ class GamesPage(Adw.PreferencesPage):
         vendors = [v for v in (self._caps.get("gpu_vendors") or []) if v in GPU_TUNING_VARS]
         if vendors:
             gt = Adw.ExpanderRow(
-                title="GPU driver tuning",
+                title=_("GPU driver tuning"),
                 subtitle="Extra " + " / ".join(v.upper() if v == "amd" else v.title()
                                                for v in vendors) + " driver knobs",
             )
@@ -417,15 +417,15 @@ class GamesPage(Adw.PreferencesPage):
 
         # -- Compatibility: Steam AppID + ProtonDB / anti-cheat --
         comp = Adw.ExpanderRow(
-            title="Compatibility check",
-            subtitle="ProtonDB rating and anti-cheat status for this game",
+            title=_("Compatibility check"),
+            subtitle=_("ProtonDB rating and anti-cheat status for this game"),
         )
-        appid = Adw.EntryRow(title="Steam AppID (optional)")
+        appid = Adw.EntryRow(title=_("Steam AppID (optional)"))
         appid.set_text(str(p.get("steam_app_id", "")))
         appid.connect("changed", lambda r: self._patch(
             exe, steam_app_id="".join(c for c in r.get_text() if c.isdigit())[:12]))
         comp.add_row(appid)
-        check = Adw.ButtonRow(title="Check this game")
+        check = Adw.ButtonRow(title=_("Check this game"))
         check.set_start_icon_name("system-search-symbolic")
         result = Adw.ActionRow(visible=False)
         result.set_css_classes(["dim-label"])
@@ -498,7 +498,7 @@ class GamesPage(Adw.PreferencesPage):
         app_id = p.get("steam_app_id", "")
         name = p.get("display_name") or exe
         result_row.set_visible(True)
-        result_row.set_title("Checking…")
+        result_row.set_title(_("Checking…"))
 
         def work() -> None:
             from goblinmode import webdata
@@ -510,7 +510,7 @@ class GamesPage(Adw.PreferencesPage):
                                  f"({t.get('total', 0)} reports, "
                                  f"{t.get('confidence', '?')} confidence)")
                 else:
-                    lines.append("ProtonDB: add the Steam AppID above to check")
+                    lines.append(_("ProtonDB: add the Steam AppID above to check"))
             except Exception as exc:  # noqa: BLE001
                 lines.append(f"ProtonDB: {exc}")
             try:
@@ -519,7 +519,7 @@ class GamesPage(Adw.PreferencesPage):
                     lines.append(f"Anti-cheat: {ac['status']}"
                                  + (f" — {', '.join(ac['anticheats'])}" if ac['anticheats'] else ""))
                 else:
-                    lines.append("Anti-cheat: not listed (likely none, or works fine)")
+                    lines.append(_("Anti-cheat: not listed (likely none, or works fine)"))
             except Exception as exc:  # noqa: BLE001
                 lines.append(f"Anti-cheat: {exc}")
             GLib.idle_add(lambda: result_row.set_title("\n".join(lines)) or False)
@@ -541,11 +541,11 @@ class GamesPage(Adw.PreferencesPage):
     def _on_remove(self, _btn: Gtk.Button, exe: str) -> None:
         dialog = Adw.MessageDialog(
             transient_for=self.get_root(),
-            heading="Remove game profile?",
+            heading=_("Remove game profile?"),
             body=f"“{exe}” will no longer be optimised.",
         )
-        dialog.add_response("cancel", "Cancel")
-        dialog.add_response("remove", "Remove")
+        dialog.add_response("cancel", _("Cancel"))
+        dialog.add_response("remove", _("Remove"))
         dialog.set_response_appearance("remove", Adw.ResponseAppearance.DESTRUCTIVE)
         dialog.connect("response", self._on_remove_response, exe)
         dialog.present()
@@ -560,7 +560,7 @@ class GamesPage(Adw.PreferencesPage):
                 log.warning("remove_profile failed: %s", exc)
 
     def _on_add_game(self, _btn: Gtk.Button) -> None:
-        dialog = Gtk.FileDialog(title="Select game executable")
+        dialog = Gtk.FileDialog(title=_("Select game executable"))
         dialog.open(self.get_root(), None, self._on_file_chosen)
 
     def _on_file_chosen(self, dialog: Gtk.FileDialog, result) -> None:
@@ -599,7 +599,7 @@ class GamesPage(Adw.PreferencesPage):
             "display_name": p.get("display_name") or exe,
             **{k: p[k] for k in self._SHARE_KEYS if k in p},
         }
-        dialog = Gtk.FileDialog(title="Export profile", initial_name=f"{exe}.gmp.json")
+        dialog = Gtk.FileDialog(title=_("Export profile"), initial_name=f"{exe}.gmp.json")
         blob = json.dumps(payload, indent=2, sort_keys=True) + "\n"
         dialog.save(self.get_root(), None, self._on_export_chosen, blob)
 
@@ -618,10 +618,10 @@ class GamesPage(Adw.PreferencesPage):
             return
         root = self.get_root()
         if hasattr(root, "toast"):
-            root.toast("Profile exported")
+            root.toast(_("Profile exported"))
 
     def _on_import(self, _btn: Gtk.Button) -> None:
-        dialog = Gtk.FileDialog(title="Import a shared profile")
+        dialog = Gtk.FileDialog(title=_("Import a shared profile"))
         dialog.open(self.get_root(), None, self._on_import_chosen)
 
     def _on_import_chosen(self, dialog: Gtk.FileDialog, result) -> None:
@@ -636,10 +636,10 @@ class GamesPage(Adw.PreferencesPage):
             raw = json.loads(bytes(data)[:65536].decode("utf-8", "replace")) if ok else None
         except (GLib.Error, ValueError) as exc:
             log.warning("profile import: unreadable file: %s", exc)
-            self._import_toast("Couldn't read that file")
+            self._import_toast(_("Couldn't read that file"))
             return
         if not isinstance(raw, dict) or not raw.get("exe"):
-            self._import_toast("Not a Goblin Mode Pro profile")
+            self._import_toast(_("Not a Goblin Mode Pro profile"))
             return
         # Keep only the shareable fields; the daemon re-validates everything.
         profile = {
@@ -651,7 +651,7 @@ class GamesPage(Adw.PreferencesPage):
         if self.bridge.set_profile(profile):
             self._import_toast(f"Imported “{profile['display_name']}”")
         else:
-            self._import_toast("That profile was rejected as invalid")
+            self._import_toast(_("That profile was rejected as invalid"))
 
     def _import_toast(self, msg: str) -> None:
         root = self.get_root()
@@ -660,7 +660,7 @@ class GamesPage(Adw.PreferencesPage):
 
     # -- community profiles -------------------------------------
     def _on_community(self, _btn: Gtk.Button) -> None:
-        self._import_toast("Fetching community profiles…")
+        self._import_toast(_("Fetching community profiles…"))
 
         def work() -> None:
             from goblinmode import community
@@ -676,25 +676,25 @@ class GamesPage(Adw.PreferencesPage):
     def _community_index_ready(self, index, err) -> bool:
         if err or not index:
             self._import_toast(f"Couldn't reach the community profiles ({err})"
-                               if err else "No community profiles listed")
+                               if err else _("No community profiles listed"))
             return False
         dialog = Adw.MessageDialog(
             transient_for=self.get_root(),
-            heading="Community profiles",
-            body="Downloaded from the project repo. Applying one overwrites that "
-            "game's tweaks (it never touches your other games).",
+            heading=_("Community profiles"),
+            body=_("Downloaded from the project repo. Applying one overwrites that "
+            "game's tweaks (it never touches your other games)."),
         )
         group = Adw.PreferencesGroup()
         for entry in index:
             row = Adw.ActionRow(title=entry["display_name"],
                                 subtitle=entry.get("note") or entry["exe"])
-            get = Gtk.Button(label="Apply", valign=Gtk.Align.CENTER)
+            get = Gtk.Button(label=_("Apply"), valign=Gtk.Align.CENTER)
             get.add_css_class("flat")
             get.connect("clicked", lambda _b, e=entry: (dialog.close(), self._fetch_community(e)))
             row.add_suffix(get)
             group.add(row)
         dialog.set_extra_child(group)
-        dialog.add_response("close", "Close")
+        dialog.add_response("close", _("Close"))
         dialog.present()
         return False
 
@@ -714,7 +714,7 @@ class GamesPage(Adw.PreferencesPage):
 
     def _community_profile_ready(self, prof, err) -> bool:
         if err or not prof:
-            self._import_toast(f"Fetch failed ({err})" if err else "Empty profile")
+            self._import_toast(f"Fetch failed ({err})" if err else _("Empty profile"))
             return False
         note = prof.pop("note", "")
         exe = prof.get("exe", "?")
@@ -726,8 +726,8 @@ class GamesPage(Adw.PreferencesPage):
             + (f"This replaces your current tweaks for {exe}."
                if existing else f"This adds a new profile for {exe}."),
         )
-        d.add_response("cancel", "Cancel")
-        d.add_response("apply", "Apply")
+        d.add_response("cancel", _("Cancel"))
+        d.add_response("apply", _("Apply"))
         d.set_response_appearance("apply", Adw.ResponseAppearance.SUGGESTED)
         d.connect("response", lambda _dd, resp: resp == "apply" and self._apply_community(prof))
         d.present()
@@ -738,11 +738,11 @@ class GamesPage(Adw.PreferencesPage):
         if self.bridge.set_profile(prof):
             self._import_toast(f"Applied community settings for {prof.get('exe')}")
         else:
-            self._import_toast("The daemon rejected that profile")
+            self._import_toast(_("The daemon rejected that profile"))
 
     def _copy_launch_option(self, _btn: Gtk.Button) -> None:
         clip = self.get_clipboard()
         clip.set(LAUNCH_OPTION)
         root = self.get_root()
         if hasattr(root, "toast"):
-            root.toast("Launch option copied")
+            root.toast(_("Launch option copied"))

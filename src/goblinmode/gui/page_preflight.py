@@ -24,10 +24,10 @@ from goblinmode.ipc.daemon_bridge import BridgeClient
 log = logging.getLogger(__name__)
 
 _PILL = {
-    "ok": ("PASS", "success"),
-    "warn": ("CHECK", "warning"),
-    "fail": ("ACTION", "error"),
-    "info": ("FYI", "dim-label"),
+    "ok": (_("PASS"), "success"),
+    "warn": (_("CHECK"), "warning"),
+    "fail": (_("ACTION"), "error"),
+    "info": (_("FYI"), "dim-label"),
     "unknown": ("?", "dim-label"),
 }
 
@@ -40,8 +40,8 @@ class PreflightPage(Adw.PreferencesPage):
         self._busy = False
 
         head = Adw.PreferencesGroup(
-            description="These are Linux settings that decide whether some games "
-            "run smoothly, stutter, or fail to start. The scan is read-only.",
+            description=_("These are Linux settings that decide whether some games "
+            "run smoothly, stutter, or fail to start. The scan is read-only."),
         )
 
         status_row = Adw.ActionRow()
@@ -52,31 +52,31 @@ class PreflightPage(Adw.PreferencesPage):
         status_row.set_child(self._status)
         head.add(status_row)
 
-        self._rescan = Adw.ButtonRow(title="Scan again")
+        self._rescan = Adw.ButtonRow(title=_("Scan again"))
         self._rescan.set_start_icon_name("view-refresh-symbolic")
         self._rescan.connect("activated", lambda _r: self.refresh())
         head.add(self._rescan)
 
-        self._apply_row = Adw.ButtonRow(title="Apply the safe fixes")
+        self._apply_row = Adw.ButtonRow(title=_("Apply the safe fixes"))
         self._apply_row.set_start_icon_name("emblem-system-symbolic")
         self._apply_row.connect("activated", self._on_apply)
         self._apply_row.set_sensitive(False)
         head.add(self._apply_row)
         self.add(head)
 
-        self._checks_group = Adw.PreferencesGroup(title="Checks")
+        self._checks_group = Adw.PreferencesGroup(title=_("Checks"))
         self.add(self._checks_group)
         self._rows: list[Gtk.Widget] = []
         self._applied_keys: set[str] = set()   # sysctls we changed this session
 
         self._persist_group = Adw.PreferencesGroup(
-            title="Make it stick after a reboot",
-            description="The one-click fixes above are temporary. To keep them, "
-            "install the text below (ask an admin if you're not sure).",
+            title=_("Make it stick after a reboot"),
+            description=_("The one-click fixes above are temporary. To keep them, "
+            "install the text below (ask an admin if you're not sure)."),
         )
-        self._persist = Adw.ExpanderRow(title="Settings to install")
+        self._persist = Adw.ExpanderRow(title=_("Settings to install"))
         self._dropin = _code_row("/etc/sysctl.d/99-goblin-mode-pro.conf", "")
-        self._kparams = _code_row("Startup (kernel) options", "")
+        self._kparams = _code_row(_("Startup (kernel) options"), "")
         self._persist.add_row(self._dropin)
         self._persist.add_row(self._kparams)
         self._persist_group.add(self._persist)
@@ -87,7 +87,7 @@ class PreflightPage(Adw.PreferencesPage):
     def refresh(self) -> None:
         if self._busy:
             return
-        self._set_busy(True, "Scanning your system…")
+        self._set_busy(True, _("Scanning your system…"))
         self.bridge.run_preflight_async(self._on_results)
 
     def _on_results(self, results: list | None, err) -> None:
@@ -126,8 +126,8 @@ class PreflightPage(Adw.PreferencesPage):
             c["kernel_param"] for c in results
             if c["kernel_param"] and c["status"] in ("warn", "fail")
         )
-        self._dropin.set_text(dropin or "# nothing to add")
-        self._kparams.set_text(kparams or "# nothing to add")
+        self._dropin.set_text(dropin or _("# nothing to add"))
+        self._kparams.set_text(kparams or _("# nothing to add"))
         self._persist_group.set_visible(bool(dropin) or bool(kparams and kparams.strip("# ")))
 
     def _build_row(self, chk: dict[str, Any]) -> Adw.ExpanderRow:
@@ -144,7 +144,7 @@ class PreflightPage(Adw.PreferencesPage):
         val.set_valign(Gtk.Align.CENTER)
         row.add_suffix(val)
 
-        detail = chk["detail"] or "No further detail."
+        detail = chk["detail"] or _("No further detail.")
         if chk["fix_hint"]:
             detail += f"\n\nTo fix it yourself: {chk['fix_hint']}"
         body = Adw.ActionRow(title=detail)
@@ -180,7 +180,7 @@ class PreflightPage(Adw.PreferencesPage):
     def _on_apply(self, _row) -> None:
         if self._busy:
             return
-        self._set_busy(True, "Applying fixes… (you may be asked to authenticate)")
+        self._set_busy(True, _("Applying fixes… (you may be asked to authenticate)"))
         self.bridge.apply_preflight_fixes_async(self._on_applied)
 
     def _on_applied(self, res: dict | None, err) -> None:
@@ -190,7 +190,7 @@ class PreflightPage(Adw.PreferencesPage):
             return
         for entry in res.get("applied") or []:
             self._applied_keys.add(entry.split("=", 1)[0])
-        done = ", ".join(res.get("applied") or []) or "nothing"
+        done = ", ".join(res.get("applied") or []) or _("nothing")
         failed = res.get("failed") or []
         self._toast(f"Applied: {done}" + (f" — failed: {', '.join(failed)}" if failed else ""))
         self.refresh()
@@ -224,7 +224,7 @@ def _code_row(title: str, text: str) -> Adw.ActionRow:
     scroller.set_child(view)
     row.set_child(scroller)
 
-    copy = Gtk.Button(icon_name="edit-copy-symbolic", valign=Gtk.Align.CENTER, tooltip_text="Copy")
+    copy = Gtk.Button(icon_name="edit-copy-symbolic", valign=Gtk.Align.CENTER, tooltip_text=_("Copy"))
     copy.add_css_class("flat")
 
     def do_copy(_b):

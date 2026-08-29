@@ -53,7 +53,7 @@ class DashboardPage(Adw.PreferencesPage):
         super().__init__(title=_("Dashboard"), icon_name="utilities-system-monitor-symbolic")
         self.bridge = bridge
 
-        self._banner = Adw.Banner(title="Idle - no game detected")
+        self._banner = Adw.Banner(title=_("Idle - no game detected"))
         self._banner.set_revealed(True)
         banner_group = Adw.PreferencesGroup()
         banner_group.add(self._banner)
@@ -61,19 +61,19 @@ class DashboardPage(Adw.PreferencesPage):
 
         ready = Adw.PreferencesGroup()
         self._health_row = Adw.ActionRow(
-            title="System readiness", subtitle="checking…")
+            title=_("System readiness"), subtitle=_("checking…"))
         self._health_pill = Gtk.Label(label="—")
         self._health_pill.add_css_class("title-2")
         self._health_pill.set_valign(Gtk.Align.CENTER)
         self._health_row.add_suffix(self._health_pill)
         explain = Gtk.Button(icon_name="help-about-symbolic", valign=Gtk.Align.CENTER)
         explain.add_css_class("flat")
-        explain.set_tooltip_text("Explain my score")
+        explain.set_tooltip_text(_("Explain my score"))
         explain.connect("clicked", lambda _b: self._explain_score())
         self._health_row.add_suffix(explain)
         open_check = Gtk.Button(icon_name="go-next-symbolic", valign=Gtk.Align.CENTER)
         open_check.add_css_class("flat")
-        open_check.set_tooltip_text("Open System Check")
+        open_check.set_tooltip_text(_("Open System Check"))
         open_check.connect("clicked", lambda _b: self._go_system_check())
         self._health_row.add_suffix(open_check)
         ready.add(self._health_row)
@@ -87,57 +87,57 @@ class DashboardPage(Adw.PreferencesPage):
         self.add(self._tips_group)
 
         sysg = Adw.PreferencesGroup(
-            title="Your hardware",
-            description="What Goblin Mode Pro can tune on this machine.",
+            title=_("Your hardware"),
+            description=_("What Goblin Mode Pro can tune on this machine."),
         )
-        self.r_cpu_model = _row("Processor")
-        self.r_freq_driver = _row("CPU frequency driver")
-        self.r_gpu_model = _row("Graphics")
-        self.r_can_govern = _row("CPU speed control")
-        self.r_can_power = _row("CPU power-limit control")
-        self.r_can_gpu = _row("Deep GPU stats")
-        self.r_gamemode = _row("GameMode")
-        self.r_controllers = _row("Controllers")
+        self.r_cpu_model = _row(_("Processor"))
+        self.r_freq_driver = _row(_("CPU frequency driver"))
+        self.r_gpu_model = _row(_("Graphics"))
+        self.r_can_govern = _row(_("CPU speed control"))
+        self.r_can_power = _row(_("CPU power-limit control"))
+        self.r_can_gpu = _row(_("Deep GPU stats"))
+        self.r_gamemode = _row(_("GameMode"))
+        self.r_controllers = _row(_("Controllers"))
         for r in (self.r_cpu_model, self.r_freq_driver, self.r_gpu_model,
                   self.r_can_govern, self.r_can_power, self.r_can_gpu,
                   self.r_gamemode, self.r_controllers):
             sysg.add(r)
         self.add(sysg)
 
-        cpu = Adw.PreferencesGroup(title="CPU")
-        self.r_governor = _row("Scaling governor")
-        self.r_epp = _row("Energy performance preference")
-        self.r_cpu_temp = _row("Package temperature")
-        self.r_power = _row("Package power (vs PL1 / PL2)")
-        self.r_pl = _row("RAPL limits (PL1 / PL2)")
-        self.r_load = _row("Aggregate load")
+        cpu = Adw.PreferencesGroup(title=_("CPU"))
+        self.r_governor = _row(_("Scaling governor"))
+        self.r_epp = _row(_("Energy performance preference"))
+        self.r_cpu_temp = _row(_("Package temperature"))
+        self.r_power = _row(_("Package power (vs PL1 / PL2)"))
+        self.r_pl = _row(_("RAPL limits (PL1 / PL2)"))
+        self.r_load = _row(_("Aggregate load"))
         for r in (self.r_governor, self.r_epp, self.r_cpu_temp, self.r_power, self.r_pl, self.r_load):
             cpu.add(r)
         self.add(cpu)
 
-        gpu = Adw.PreferencesGroup(title="GPU")
-        self.r_gpu_load = _row("Utilisation")
-        self.r_gpu_temp = _row("Temperature")
-        self.r_gpu_throttle = _row("Throttle reasons")
-        self.r_vram = _row("Video memory (used / total)")
-        self.r_pcie = _row("PCIe link")
-        self.r_gpuclock = _row("Core clock (cur / max)")
+        gpu = Adw.PreferencesGroup(title=_("GPU"))
+        self.r_gpu_load = _row(_("Utilisation"))
+        self.r_gpu_temp = _row(_("Temperature"))
+        self.r_gpu_throttle = _row(_("Throttle reasons"))
+        self.r_vram = _row(_("Video memory (used / total)"))
+        self.r_pcie = _row(_("PCIe link"))
+        self.r_gpuclock = _row(_("Core clock (cur / max)"))
         for r in (self.r_gpu_load, self.r_gpu_temp, self.r_gpu_throttle,
                   self.r_vram, self.r_pcie, self.r_gpuclock):
             gpu.add(r)
         self.add(gpu)
 
         fps = Adw.PreferencesGroup(
-            title="Frame rate",
-            description="From the MangoHud log when the watchdog is enabled for a game.",
+            title=_("Frame rate"),
+            description=_("From the MangoHud log when the watchdog is enabled for a game."),
         )
-        self.r_fps = _row("avg 60 s / min / 1% low")
+        self.r_fps = _row(_("avg 60 s / min / 1% low"))
         fps.add(self.r_fps)
         self.add(fps)
 
-        svc = Adw.PreferencesGroup(title="Service")
-        self.r_helper = _row("Privileged helper")
-        self.r_active = _row("Active tweaks")
+        svc = Adw.PreferencesGroup(title=_("Service"))
+        self.r_helper = _row(_("Privileged helper"))
+        self.r_active = _row(_("Active tweaks"))
         svc.add(self.r_helper)
         svc.add(self.r_active)
         self.add(svc)
@@ -146,13 +146,13 @@ class DashboardPage(Adw.PreferencesPage):
     def update_status(self, status: dict[str, Any]) -> None:
         games = status.get("active_games") or []
         if not status.get("master_enabled", True):
-            self._banner.set_title("Optimizations disabled")
+            self._banner.set_title(_("Optimizations disabled"))
         elif games:
             self._banner.set_title("Boosting: " + ", ".join(games))
         elif status.get("forced_boost"):
-            self._banner.set_title("Forced performance mode")
+            self._banner.set_title(_("Forced performance mode"))
         else:
-            self._banner.set_title("Idle - no game detected")
+            self._banner.set_title(_("Idle - no game detected"))
 
         caps = status.get("capabilities") or {}
         if caps:
@@ -165,18 +165,18 @@ class DashboardPage(Adw.PreferencesPage):
                           for v in (caps.get("gpu_vendors") or [])) or "-"
             )
             self.r_can_govern._value.set_label(
-                "yes — governor + EPP" if caps.get("epp_control")
-                else "yes — governor" if caps.get("governor_control")
-                else "no (needs the helper)"
+                _("yes — governor + EPP") if caps.get("epp_control")
+                else _("yes — governor") if caps.get("governor_control")
+                else _("no (needs the helper)")
             )
             self.r_can_power._value.set_label(
-                "yes — Intel RAPL" if caps.get("rapl_control")
-                else "yes — ryzenadj" if caps.get("ryzenadj")
-                else "not on this processor"
+                _("yes — Intel RAPL") if caps.get("rapl_control")
+                else _("yes — ryzenadj") if caps.get("ryzenadj")
+                else _("not on this processor")
             )
             self.r_can_gpu._value.set_label(
-                "yes — NVIDIA" if caps.get("gpu_deep_stats")
-                else "basic (temp / load only)"
+                _("yes — NVIDIA") if caps.get("gpu_deep_stats")
+                else _("basic (temp / load only)")
             )
             self.set_setup_tips(caps)
             hh = caps.get("handheld")
@@ -188,7 +188,7 @@ class DashboardPage(Adw.PreferencesPage):
 
         self.r_governor._value.set_label(str(status.get("governor") or "-"))
         tweaks = status.get("tweaks") or {}
-        self.r_epp._value.set_label("performance" if tweaks.get("epp_boosted") else "default")
+        self.r_epp._value.set_label(_("performance") if tweaks.get("epp_boosted") else _("default"))
         plw = tweaks.get("power_limits_w")
         if plw:
             suffix = "  (overridden)" if tweaks.get("power_limited") else ""
@@ -196,34 +196,34 @@ class DashboardPage(Adw.PreferencesPage):
         else:
             self.r_pl._value.set_label("-")
         self.r_helper._value.set_label(
-            "connected" if status.get("helper_available") else "unavailable (limited mode)"
+            _("connected") if status.get("helper_available") else _("unavailable (limited mode)")
         )
         active = []
         if tweaks.get("epp_boosted") or tweaks.get("governor") == "performance":
-            active.append("governor")
+            active.append(_("governor"))
         if tweaks.get("power_limited"):
-            active.append("power-limit")
+            active.append(_("power-limit"))
         if tweaks.get("tearing"):
-            active.append("tearing")
+            active.append(_("tearing"))
         if tweaks.get("adaptive_sync"):
-            active.append("VRR")
+            active.append(_("VRR"))
         if tweaks.get("reniced"):
             active.append(f"renice×{len(tweaks['reniced'])}")
         if tweaks.get("mangohud_files"):
-            active.append("mangohud")
-        self.r_active._value.set_label(", ".join(active) or "none")
+            active.append(_("mangohud"))
+        self.r_active._value.set_label(", ".join(active) or _("none"))
 
         g = status.get("gpu") or {}
         used, total, free = g.get("vram_used_mb"), g.get("vram_total_mb"), g.get("vram_free_mb")
         if used is not None and total:
-            warn = "  ⚠ near full" if (free is not None and free < 400) else ""
+            warn = _("  ⚠ near full") if (free is not None and free < 400) else ""
             self.r_vram._value.set_label(f"{used} / {total} MB{warn}")
         else:
             self.r_vram._value.set_label("-")
         gen, genm = g.get("pcie_gen"), g.get("pcie_gen_max")
         wid, widm = g.get("pcie_width"), g.get("pcie_width_max")
         if gen and genm:
-            degraded = "  ⚠ down-trained" if gen < genm else ""
+            degraded = _("  ⚠ down-trained") if gen < genm else ""
             self.r_pcie._value.set_label(f"Gen{gen}×{wid or '?'} (max Gen{genm}×{widm or '?'}){degraded}")
         else:
             self.r_pcie._value.set_label("-")
@@ -232,12 +232,12 @@ class DashboardPage(Adw.PreferencesPage):
 
         f = status.get("fps") or {}
         if f.get("fps_avg") is not None:
-            dip = "  ⚠ in dip" if f.get("in_dip") else ""
+            dip = _("  ⚠ in dip") if f.get("in_dip") else ""
             self.r_fps._value.set_label(
                 f"{f.get('fps_avg')} / {f.get('fps_min')} / {f.get('fps_1low')} fps{dip}"
             )
         else:
-            self.r_fps._value.set_label("- (watchdog off or no log yet)")
+            self.r_fps._value.set_label(_("- (watchdog off or no log yet)"))
 
         if status.get("latest_sample"):
             self.update_sample(status["latest_sample"])
@@ -263,12 +263,12 @@ class DashboardPage(Adw.PreferencesPage):
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
         notable = [r for r in results if r["status"] in ("warn", "fail")]
         if not notable:
-            box.append(Gtk.Label(label="Everything checked out — nothing is costing "
-                                 "you in-game right now.", wrap=True, xalign=0))
+            box.append(Gtk.Label(label=_("Everything checked out — nothing is costing "
+                                 "you in-game right now."), wrap=True, xalign=0))
         for r in notable:
             row = Adw.ActionRow(title=r["title"],
                                 subtitle=r.get("detail") or r.get("why", ""))
-            pill = Gtk.Label(label="ACTION" if r["status"] == "fail" else "CHECK")
+            pill = Gtk.Label(label=_("ACTION") if r["status"] == "fail" else _("CHECK"))
             pill.add_css_class("caption-heading")
             pill.add_css_class("error" if r["status"] == "fail" else "warning")
             pill.set_valign(Gtk.Align.CENTER)
@@ -277,16 +277,16 @@ class DashboardPage(Adw.PreferencesPage):
             group.add(row)
             box.append(group)
 
-        d = Adw.MessageDialog(transient_for=win, heading="What's costing you performance")
+        d = Adw.MessageDialog(transient_for=win, heading=_("What's costing you performance"))
         d.set_extra_child(box)
-        d.add_response("ok", "Close")
+        d.add_response("ok", _("Close"))
         d.present()
 
     def update_health(self, health: dict[str, Any]) -> None:
         score = (health or {}).get("score")
         if score is None:
             self._health_pill.set_label("—")
-            self._health_row.set_subtitle("couldn't run the check")
+            self._health_row.set_subtitle(_("couldn't run the check"))
             return
         self._health_pill.set_label(f"{score:g}/10")
         for cls in ("success", "warning", "error"):
@@ -300,25 +300,25 @@ class DashboardPage(Adw.PreferencesPage):
         elif n.get("warn"):
             self._health_row.set_subtitle(f"{n['warn']} thing(s) worth a look — open the check")
         else:
-            self._health_row.set_subtitle("your machine is game-ready")
+            self._health_row.set_subtitle(_("your machine is game-ready"))
 
     def update_system_info(self, info: dict[str, Any]) -> None:
         gm = (info or {}).get("gamemode") or {}
         if not gm.get("installed"):
-            self.r_gamemode._value.set_label("not installed")
+            self.r_gamemode._value.set_label(_("not installed"))
             self.r_gamemode.set_subtitle("")
         elif gm.get("active"):
-            self.r_gamemode._value.set_label("active")
+            self.r_gamemode._value.set_label(_("active"))
         else:
-            self.r_gamemode._value.set_label("installed, idle")
+            self.r_gamemode._value.set_label(_("installed, idle"))
         if gm.get("installed"):
             detail = (gm.get("detail") or "").replace("\n", " ").strip()
             self.r_gamemode.set_subtitle(
                 detail[:100] if detail
-                else "sets the governor, GPU perf level and ioprio per game")
+                else _("sets the governor, GPU perf level and ioprio per game"))
         pads = (info or {}).get("controllers") or []
         self.r_controllers._value.set_label(
-            ", ".join(p.strip() for p in pads)[:60] if pads else "none detected")
+            ", ".join(p.strip() for p in pads)[:60] if pads else _("none detected"))
 
     def set_setup_tips(self, caps: dict[str, Any]) -> None:
         """Distro-specific, copy-pasteable one-liners: a gaming kernel if the
@@ -343,12 +343,12 @@ class DashboardPage(Adw.PreferencesPage):
 
         if distro in ("ubuntu", "debian", "pop", "mint", "linuxmint"):
             tips.append((
-                "Some anti-cheats and Steam's container need unprivileged user namespaces",
+                _("Some anti-cheats and Steam's container need unprivileged user namespaces"),
                 "echo 'kernel.unprivileged_userns_clone=1' | "
                 "sudo tee /etc/sysctl.d/99-userns.conf && sudo sysctl --system"))
         if distro == "fedora" and "nvidia" in (caps.get("gpu_vendors") or []):
             tips.append((
-                "NVIDIA users on Fedora need the RPM Fusion driver, not nouveau",
+                _("NVIDIA users on Fedora need the RPM Fusion driver, not nouveau"),
                 "sudo dnf install "
                 "https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm "
                 "https://mirrors.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm "

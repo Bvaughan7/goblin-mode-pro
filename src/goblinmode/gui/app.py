@@ -16,6 +16,8 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, Gio, GLib, Gtk  # noqa: E402
 
+from goblinmode.i18n import _
+
 from goblinmode import APP_ID
 from goblinmode.ipc.daemon_bridge import BridgeClient
 
@@ -66,13 +68,13 @@ class _DaemonMissingWindow(Adw.ApplicationWindow):
 
         status = Adw.StatusPage(
             icon_name="applications-games-symbolic",
-            title="Daemon not running",
-            description=(
+            title=_("Daemon not running"),
+            description=_(
                 "The Goblin Mode Pro background service is not active. "
                 "Start it to manage game performance."
             ),
         )
-        btn = Gtk.Button(label="Start background service")
+        btn = Gtk.Button(label=_("Start background service"))
         btn.add_css_class("suggested-action")
         btn.add_css_class("pill")
         btn.set_halign(Gtk.Align.CENTER)
