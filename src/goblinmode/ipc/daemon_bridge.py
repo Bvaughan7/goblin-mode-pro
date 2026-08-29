@@ -72,10 +72,15 @@ INTROSPECTION_XML = f"""
       <arg type="s" name="note" direction="in"/><arg type="s" name="markdown" direction="out"/>
     </method>
     <method name="AnalyzeLog"><arg type="s" name="json" direction="out"/></method>
+    <method name="GetSessions"><arg type="s" name="json" direction="out"/></method>
+    <method name="GetSessionHistory">
+      <arg type="s" name="exe" direction="in"/><arg type="s" name="json" direction="out"/>
+    </method>
     <signal name="StatusChanged"><arg type="s" name="json"/></signal>
     <signal name="MetricsUpdated"><arg type="s" name="json"/></signal>
     <signal name="IncidentLogged"><arg type="s" name="json"/></signal>
     <signal name="GameDetected"><arg type="s" name="json"/></signal>
+    <signal name="SessionLogged"><arg type="s" name="json"/></signal>
   </interface>
 </node>
 """
@@ -98,6 +103,8 @@ class DaemonHandler(Protocol):
     def apply_preflight_fixes(self) -> dict[str, Any]: ...
     def build_report(self, note: str) -> str: ...
     def analyze_log(self) -> list[dict[str, Any]]: ...
+    def get_sessions(self) -> list[dict[str, Any]]: ...
+    def get_session_history(self, exe: str) -> list[dict[str, Any]]: ...
 
 
 # --------------------------------------------------------------------------
@@ -186,6 +193,15 @@ class DaemonBridge:
                 self._async_str(invocation, lambda: self._handler.build_report(note))
             elif method == "AnalyzeLog":
                 self._async_str(invocation, lambda: json.dumps(self._handler.analyze_log()))
+            elif method == "GetSessions":
+                invocation.return_value(
+                    GLib.Variant("(s)", (json.dumps(self._handler.get_sessions()),))
+                )
+            elif method == "GetSessionHistory":
+                exe = params.unpack()[0]
+                invocation.return_value(
+                    GLib.Variant("(s)", (json.dumps(self._handler.get_session_history(exe)),))
+                )
             else:
                 invocation.return_dbus_error(
                     "org.freedesktop.DBus.Error.UnknownMethod", method
@@ -235,6 +251,9 @@ class DaemonBridge:
 
     def emit_detected(self, game: dict) -> None:
         self._emit("GameDetected", game)
+
+    def emit_session(self, payload: dict) -> None:
+        self._emit("SessionLogged", payload)
 
 
 # --------------------------------------------------------------------------
@@ -365,3 +384,9 @@ class BridgeClient:
 
     def analyze_log(self) -> list[dict]:
         return json.loads(self._call("AnalyzeLog")[0])
+
+    def get_sessions(self) -> list[dict]:
+        return json.loads(self._call("GetSessions")[0])
+
+    def get_session_history(self, exe: str) -> list[dict]:
+        return json.loads(self._call("GetSessionHistory", GLib.Variant("(s)", (exe,)))[0])

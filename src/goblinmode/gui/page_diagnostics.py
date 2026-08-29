@@ -73,11 +73,107 @@ class DiagnosticsPage(Adw.PreferencesPage):
         export_group.add(self._analyze_row)
         self.add(export_group)
 
+        self._sessions_group = Adw.PreferencesGroup(
+            title="Session history",
+            description="A summary per game session, from the MangoHud log. A big "
+            "swing from your recent average is flagged.",
+        )
+        self.add(self._sessions_group)
+        self._session_rows: list[Gtk.Widget] = []
+        self._sessions_empty: Adw.ActionRow | None = None
+        self._set_sessions_empty()
+
         self._log_group = Adw.PreferencesGroup(title="Incident log")
         self.add(self._log_group)
         self._log_rows: list[Gtk.Widget] = []
         self._empty_row: Adw.ActionRow | None = None
         self._set_empty()
+
+    # -- session history -----------------------------------------
+    def _set_sessions_empty(self) -> None:
+        if self._sessions_empty is None:
+            self._sessions_empty = Adw.ActionRow(
+                title="No sessions recorded yet",
+                subtitle="Enable the frame-rate watchdog or the overlay for a game, "
+                "then play — each session is summarised here on exit.",
+            )
+            self._sessions_group.add(self._sessions_empty)
+
+    def load_sessions(self, sessions: list[dict]) -> None:
+        for row in self._session_rows:
+            self._sessions_group.remove(row)
+        self._session_rows.clear()
+        for s in sessions[-30:]:
+            self._add_session_row({"summary": s, "regression": None}, prepend=False)
+
+    def add_session(self, payload: dict[str, Any]) -> None:
+        self._add_session_row(payload, prepend=True)
+        if payload.get("regression"):
+            r = payload["regression"]
+            game = payload.get("summary", {}).get("game", "a game")
+            self._toast(
+                f"{game}: {r['metric']} "
+                f"{'down' if r['direction'] == 'regression' else 'up'} "
+                f"{abs(r['change_pct']):.0f}% vs your recent average"
+            )
+
+    def _add_session_row(self, payload: dict[str, Any], prepend: bool) -> None:
+        s = payload.get("summary") or {}
+        reg = payload.get("regression")
+        if self._sessions_empty is not None:
+            self._sessions_group.remove(self._sessions_empty)
+            self._sessions_empty = None
+
+        mins = int(round((s.get("duration_s") or 0) / 60))
+        bits = [s.get("started", "")[:10], f"{mins} min"]
+        if s.get("fps_avg") is not None:
+            bits.append(f"avg {s['fps_avg']:.0f} fps")
+        if s.get("fps_1low") is not None:
+            bits.append(f"1% low {s['fps_1low']:.0f}")
+        row = Adw.ExpanderRow(title=s.get("game") or s.get("exe") or "session",
+                              subtitle="  ·  ".join(b for b in bits if b))
+
+        if reg:
+            worse = reg["direction"] == "regression"
+            pill = Gtk.Label(label=f"{'▼' if worse else '▲'} {abs(reg['change_pct']):.0f}%")
+            pill.add_css_class("caption-heading")
+            pill.add_css_class("error" if worse else "success")
+            pill.set_valign(Gtk.Align.CENTER)
+            row.add_suffix(pill)
+
+        lines = []
+        for k, lbl in (("fps_avg", "average"), ("fps_median", "median"),
+                       ("fps_1low", "1% low"), ("fps_min", "minimum")):
+            if s.get(k) is not None:
+                lines.append(f"{lbl:>9}: {s[k]:.1f} fps")
+        if s.get("cpu_temp_avg") is not None:
+            lines.append(f"{'CPU temp':>9}: {s['cpu_temp_avg']:.0f} °C avg")
+        if s.get("gpu_temp_avg") is not None:
+            lines.append(f"{'GPU temp':>9}: {s['gpu_temp_avg']:.0f} °C avg")
+        if s.get("tweaks"):
+            lines.append(f"{'tweaks':>9}: " + ", ".join(s["tweaks"]))
+        if s.get("kernel"):
+            lines.append(f"{'kernel':>9}: {s['kernel']}")
+        if reg:
+            lines.append("")
+            lines.append(
+                f"{reg['metric']} {reg['current']:.0f} fps vs a recent baseline of "
+                f"{reg['baseline']:.0f} fps ({reg['sessions_compared']} sessions)."
+            )
+        body = Gtk.Label(label="\n".join(lines) or "No frame log for this session.",
+                         xalign=0, wrap=True, selectable=True)
+        body.add_css_class("monospace")
+        inner = Adw.ActionRow()
+        inner.set_child(body)
+        row.add_row(inner)
+
+        self._sessions_group.add(row)
+        if prepend:
+            self._session_rows.insert(0, row)
+        else:
+            self._session_rows.append(row)
+        if len(self._session_rows) > 30:
+            self._sessions_group.remove(self._session_rows.pop())
 
     # -- incident list --------------------------------------------
     def _set_empty(self) -> None:

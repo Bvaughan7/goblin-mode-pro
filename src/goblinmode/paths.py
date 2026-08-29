@@ -33,6 +33,9 @@ CONFIG_FILE = CONFIG_DIR / "config.json"
 GAME_LOG_DIR = DATA_DIR / "logs"
 INCIDENT_FILE = DATA_DIR / "incidents.jsonl"
 
+# Per-game session summaries for regression tracking (goblinmode.sessions).
+SESSION_FILE = DATA_DIR / "sessions.jsonl"
+
 # MangoHud CSV frame logs (the FPS watchdog tails the newest one here).
 MANGOHUD_LOG_DIR = DATA_DIR / "mangohud"
 

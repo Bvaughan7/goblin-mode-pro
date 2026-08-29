@@ -25,6 +25,7 @@ from gi.repository import GLib  # noqa: E402
 from goblinmode import capabilities, config, gpu, runner
 from goblinmode.diagnostics import DiagnosticEngine
 from goblinmode.fpswatch import FpsEvent, FpsWatcher
+from goblinmode.sessions import SessionTracker
 from goblinmode.incidents import Incident, IncidentLog, build_llm_payload, copy_to_clipboard
 from goblinmode.ipc.daemon_bridge import DaemonBridge
 from goblinmode.ipc.helper_client import HelperClient
@@ -47,6 +48,7 @@ class Daemon:
         self.diag = DiagnosticEngine(self.settings.diagnostics_sample_interval)
         self.logwatch = LogWatcher()
         self.fpswatch = FpsWatcher()
+        self.sessions = SessionTracker()
         self.observer = Observer(self.settings, self._on_game_event)
         self.bridge = DaemonBridge(self)
 
@@ -139,9 +141,16 @@ class Daemon:
             self._active_pids[profile.exe] = event.pid or 0
             self.payload.apply(profile, event.pid)
             self._ensure_diagnostics_running()
+            self.sessions.start(
+                profile.exe, profile.display_name, self._tweaks_fingerprint()
+            )
         elif event.profile is not None:
-            self._active_pids.pop(event.profile.exe, None)
+            exe = event.profile.exe
+            game = event.profile.display_name
+            self._active_pids.pop(exe, None)
             self.payload.revert(event.profile)
+            # Give MangoHud a moment to flush its CSV before we summarise it.
+            GLib.timeout_add_seconds(4, self._finish_session, exe, game)
             if not self.observer.active_exes:
                 # Post-mortem a few seconds after exit: did the GPU let go?
                 if self._fps_dip_seen and gpu.available():
@@ -149,6 +158,44 @@ class Daemon:
                 if not self._forced_boost:
                     self._stop_diagnostics()
         self._broadcast_status()
+
+    def _tweaks_fingerprint(self) -> list[str]:
+        """A short, human-readable list of what's currently applied, stored with
+        the session so a regression can be read against what changed."""
+        t = self.payload.status().as_dict()
+        out: list[str] = []
+        if t.get("governor") == "performance" or t.get("epp_boosted"):
+            out.append("governor")
+        if t.get("tearing"):
+            out.append("tearing")
+        if t.get("adaptive_sync"):
+            out.append("vrr")
+        if t.get("reniced"):
+            out.append("renice")
+        plw = t.get("power_limits_w")
+        if t.get("power_limited") and plw:
+            out.append(f"pl:{plw[0]}/{plw[1]}")
+        return out
+
+    def _finish_session(self, exe: str, game: str) -> bool:
+        try:
+            result = self.sessions.end(exe)
+        except Exception:  # noqa: BLE001
+            log.exception("session summary failed")
+            return GLib.SOURCE_REMOVE
+        if result is None:
+            return GLib.SOURCE_REMOVE
+        summary, regression = result
+        payload = {
+            "summary": summary.as_dict(),
+            "regression": regression.as_dict() if regression else None,
+        }
+        self.bridge.emit_session(payload)
+        if regression is not None:
+            log.info("%s", regression.headline(game))
+            if regression.direction == "regression":
+                self.tray.notify("Performance regression", regression.headline(game))
+        return GLib.SOURCE_REMOVE
 
     def _adopt_detected_game(self, cand) -> "config.GameProfile | None":
         """Turn an auto-detected game into a (persistent) default profile and tell
@@ -362,6 +409,12 @@ class Daemon:
         if live:
             return live
         return self.incidents.load_history()
+
+    def get_sessions(self) -> list[dict[str, Any]]:
+        return self.sessions.history(limit=60)
+
+    def get_session_history(self, exe: str) -> list[dict[str, Any]]:
+        return self.sessions.history(exe or None, limit=60)
 
     # -- pre-flight / report (roadmap) --------------------------------
     def run_preflight(self) -> list[dict[str, Any]]:

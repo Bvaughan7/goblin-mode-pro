@@ -53,6 +53,8 @@ class MainWindow(Adw.PreferencesWindow):
             self.diagnostics.push_sample(payload)
         elif name == "IncidentLogged" and payload:
             self.diagnostics.add_incident(payload)
+        elif name == "SessionLogged" and payload:
+            self.diagnostics.add_session(payload)
         elif name == "GameDetected" and payload:
             self.toast(f"Auto-detected {payload.get('display_name', 'a game')} "
                        f"via {payload.get('source', '?')}")
@@ -77,6 +79,10 @@ class MainWindow(Adw.PreferencesWindow):
             )
         except Exception as exc:  # noqa: BLE001
             log.debug("history load failed: %s", exc)
+        try:
+            self.diagnostics.load_sessions(self.bridge.get_sessions())
+        except Exception as exc:  # noqa: BLE001
+            log.debug("session load failed: %s", exc)
 
     def _periodic_refresh(self) -> bool:
         if not self.bridge.available:
