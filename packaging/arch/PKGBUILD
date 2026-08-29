@@ -2,7 +2,7 @@
 #
 # Tagged-release PKGBUILD. For the rolling build, use ../aur/ (goblin-mode-pro-git).
 pkgname=goblin-mode-pro
-pkgver=1.1.0
+pkgver=1.2.0
 pkgrel=1
 pkgdesc="One-switch performance helper for Linux gaming: auto-detects a game, tunes CPU/compositor/Proton, reverts on exit, diagnoses crashes and FPS drops"
 arch=('any')

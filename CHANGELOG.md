@@ -4,6 +4,102 @@ All notable changes to Goblin Mode Pro. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); this project uses
 [SemVer](https://semver.org/).
 
+## [1.2.0] — 2026-08-29
+
+The second roadmap release. Everything in `ROADMAP.md`'s post-1.1 menu,
+shipped — 18 batches across all four sections.
+
+### For people new to Linux gaming
+- **Wizard part two** — a new "missing pieces" step lists whatever's missing
+  (MangoHud, GameMode, a gaming kernel) with a copy-pasteable, distro-correct
+  install command. Nothing is installed automatically or via a new privileged
+  helper method — same trust boundary as the existing Dashboard setup tips.
+- **Guided launch-failure fixes** — the Proton-log analyzer now offers a
+  copyable `protontricks` command inline for the causes that have one
+  (missing vcrun/mono), instead of only prose.
+- **"Explain my score" panel** — expands the health pill into every
+  failing/warn pre-flight check and what it actually breaks in-game.
+- **Tray-only onboarding** — the tray menu shows the readiness score and a
+  "Finish setup" nudge, so someone who never opens the window still sees it.
+- **Full i18n** — every static UI string wrapped (289 msgids, up from 14),
+  with real German, French, Spanish, Brazilian Portuguese and Chinese
+  (Simplified) catalogues shipping instead of placeholders.
+
+### For the community & power users
+- **Benchmark comparison view** — diffs two sessions' FPS/frame-time/thermal
+  metrics side by side, in the GUI (Diagnostics → Compare two sessions) and
+  headlessly (`goblin-mode-pro-cli compare GAME`).
+- **Shareable benchmark cards** — copy a session as JSON, or save a small
+  Cairo-rendered report-card PNG to `~/Pictures/goblin-mode-pro/`.
+  "Community submissions per GPU" is a documented PR flow
+  (`community/benchmarks/README.md`), not a live upload service.
+- **AMD Curve Optimizer undervolt** *(opt-in, ryzenadj)* — re-applies the
+  offsets from `/etc/goblin-mode-pro/amd-undervolt.conf` on launch, mirroring
+  the existing Intel undervolt path exactly. GMP never chooses the values.
+  First "I understand the risk" confirm dialog in the app, also used by fan
+  spin-up below.
+- **GSP-firmware / `nvidia-drm.modeset` info** — read-only state on the
+  Dashboard, with a button that writes the persistent modprobe.d config
+  behind a plain-language "takes effect after reboot" confirm.
+- **Shader pre-warm** *(best-effort, unofficial)* — forces Steam's already-
+  downloaded per-game Fossilize shader-cache archive through
+  `fossilize_replay` on launch instead of waiting on Steam's own background
+  scheduler.
+- **Per-output VRR** and **Hyprland compositor support** — VRR can now be
+  restricted to specific monitors (KDE), and tearing/VRR both work under
+  Hyprland (`hyprctl keyword`), not just KWin.
+- **Gamescope session mode** — `goblin-mode-pro-cli gamescope-session`
+  launches a standalone gamescope session (Steam Big Picture by default, or
+  a specific game), with a matching app-menu entry, instead of only nesting
+  gamescope inside one game's launch wrapper.
+- **Prometheus textfile exporter** — the Dashboard's own metrics as a
+  node_exporter textfile-collector `.prom` file, off by default.
+- **Telemetry-free "works for me" reports** — a "Share what worked" button
+  opens a pre-filled GitHub issue with an anonymized system + profile
+  summary. No server, no account, no telemetry — the issue tracker is the
+  database.
+- **20 new starter profiles** — Elden Ring, Baldur's Gate 3, RDR2, Hogwarts
+  Legacy, Star Citizen, Apex Legends, CS2, Destiny 2, FFXIV, Path of Exile 2,
+  Diablo IV, Monster Hunter Wilds, Helldivers 2, No Man's Sky, Stardew
+  Valley, Terraria, Valheim, Sea of Thieves, Warframe, God of War.
+
+### Handhelds
+- **Battery-vs-AC auto-switch** — a lower TDP preset applies automatically on
+  battery and reverts on plug-in, mid-session, not just at next launch.
+- **TDP presets per handheld model** — Steam Deck / ROG Ally / Legion Go /
+  other each get their own starter AC and battery wattages instead of one
+  generic value.
+- **Per-game refresh-rate cap** on the internal panel, and **preemptive fan
+  spin-up** on launch *(opt-in, where the EC exposes a writable pwm control —
+  most don't)*.
+
+### Project
+- **`.deb` / `.rpm` built and attached by CI** on every published release
+  (`release.yml`), signed with the maintainer's own GPG key when the repo
+  secrets are set (`CONTRIBUTING.md` → "Signing releases") — unsigned,
+  same as before, when they're not.
+- **Flathub** — decision recorded as *not pursuing* (documented in
+  `packaging/README.md` since 1.1.0; the roadmap item is now closed rather
+  than left open).
+- **Helper polkit-gate contract test** and a **GUI smoke test under Xvfb**
+  (constructs the real `MainWindow` headlessly with a stubbed bridge) — 190
+  tests total, up from 90.
+
+### Notes on scope
+A few items were narrowed from the roadmap's original wording rather than
+built as literally described, each for a concrete reason:
+- Wizard part two hands the user a command to copy instead of adding a new
+  "run arbitrary command as root" helper method — the existing helper's
+  methods are all fixed, single-purpose actions, and a generic one would be
+  a real privilege-escalation surface.
+- Shader pre-warm, per-output VRR on Hyprland, fan spin-up, and the AC/
+  battery switch are all genuinely best-effort — they no-op cleanly wherever
+  the hardware/compositor doesn't support them (most systems, for fan
+  control), and none of them were tested on the real hardware they target.
+- Shareable benchmark cards and "works for me" reports both route through
+  GitHub (a PR, or a pre-filled issue) instead of a live upload endpoint —
+  this project has no server and isn't standing one up.
+
 ## [1.1.0] — 2026-08-29
 
 The roadmap release. Everything in `ROADMAP.md`'s 1.0 menu, shipped.
