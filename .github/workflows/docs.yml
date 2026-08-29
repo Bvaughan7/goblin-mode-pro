@@ -32,10 +32,6 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
-    # Tolerated until GitHub Pages is switched on for the repo
-    # (Settings -> Pages -> Source: GitHub Actions). The build job above still
-    # validates the site on every push regardless.
-    continue-on-error: true
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
