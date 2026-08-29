@@ -14,6 +14,7 @@ from gi.repository import Adw, Gdk, Gtk  # noqa: E402
 
 from goblinmode.i18n import _  # noqa: E402
 
+from goblinmode.gui.widgets.buttonrow import button_row
 from goblinmode.gui.widgets.graph import CorrelationGraph, FpsGraph
 from goblinmode.ipc.daemon_bridge import BridgeClient
 
@@ -65,8 +66,7 @@ class DiagnosticsPage(Adw.PreferencesPage):
         )
         self._bench_combo = Adw.ComboRow(title=_("Game to benchmark"))
         bench_group.add(self._bench_combo)
-        self._bench_row = Adw.ButtonRow(title=_("Arm benchmark for the selected game"))
-        self._bench_row.set_start_icon_name("stopwatch-symbolic")
+        self._bench_row = button_row(_("Arm benchmark for the selected game"), "stopwatch-symbolic")
         self._bench_row.connect("activated", self._on_arm_benchmark)
         bench_group.add(self._bench_row)
         self.add(bench_group)
@@ -92,24 +92,19 @@ class DiagnosticsPage(Adw.PreferencesPage):
         export_group = Adw.PreferencesGroup(
             description=_("Package the current state for an LLM, a forum thread, or a bug tracker."),
         )
-        self._export_row = Adw.ButtonRow(title=_("Export last incident for AI"))
-        self._export_row.set_start_icon_name("edit-copy-symbolic")
+        self._export_row = button_row(_("Export last incident for AI"), "edit-copy-symbolic")
         self._export_row.connect("activated", self._on_export)
         export_group.add(self._export_row)
-        self._report_row = Adw.ButtonRow(title=_("Build a bug report"))
-        self._report_row.set_start_icon_name("dialog-question-symbolic")
+        self._report_row = button_row(_("Build a bug report"), "dialog-question-symbolic")
         self._report_row.connect("activated", self._on_report)
         export_group.add(self._report_row)
-        self._setup_row = Adw.ButtonRow(title=_("Export my full setup"))
-        self._setup_row.set_start_icon_name("document-save-symbolic")
+        self._setup_row = button_row(_("Export my full setup"), "document-save-symbolic")
         self._setup_row.connect("activated", self._on_export_setup)
         export_group.add(self._setup_row)
-        self._analyze_row = Adw.ButtonRow(title=_("Analyze the Proton log"))
-        self._analyze_row.set_start_icon_name("system-search-symbolic")
+        self._analyze_row = button_row(_("Analyze the Proton log"), "system-search-symbolic")
         self._analyze_row.connect("activated", self._on_analyze)
         export_group.add(self._analyze_row)
-        self._compare_row = Adw.ButtonRow(title=_("Compare two sessions"))
-        self._compare_row.set_start_icon_name("view-refresh-symbolic")
+        self._compare_row = button_row(_("Compare two sessions"), "view-refresh-symbolic")
         self._compare_row.connect("activated", self._on_compare)
         export_group.add(self._compare_row)
         self.add(export_group)

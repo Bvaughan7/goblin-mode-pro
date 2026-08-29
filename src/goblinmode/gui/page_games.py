@@ -22,6 +22,7 @@ from gi.repository import Adw, Gio, GLib, Gtk  # noqa: E402
 from goblinmode.i18n import _  # noqa: E402
 
 from goblinmode.config import GPU_TUNING_VARS, MANGOHUD_TOGGLES, RUNNER_VARS
+from goblinmode.gui.widgets.buttonrow import button_row
 from goblinmode.gui.widgets.help import help_button
 from goblinmode.ipc.daemon_bridge import BridgeClient
 from goblinmode.runner import LAUNCH_OPTION
@@ -455,16 +456,14 @@ class GamesPage(Adw.PreferencesPage):
         appid.connect("changed", lambda r: self._patch(
             exe, steam_app_id="".join(c for c in r.get_text() if c.isdigit())[:12]))
         comp.add_row(appid)
-        check = Adw.ButtonRow(title=_("Check this game"))
-        check.set_start_icon_name("system-search-symbolic")
+        check = button_row(_("Check this game"), "system-search-symbolic")
         result = Adw.ActionRow(visible=False)
         result.set_css_classes(["dim-label"])
         result.set_title_lines(0)
         check.connect("activated", lambda _r, e=exe, rr=result: self._on_compat_check(e, rr))
         comp.add_row(check)
         comp.add_row(result)
-        share = Adw.ButtonRow(title=_("Share what worked"))
-        share.set_start_icon_name("send-to-symbolic")
+        share = button_row(_("Share what worked"), "send-to-symbolic")
         share.connect("activated", lambda _r, e=exe: self._on_share_works_for_me(e))
         comp.add_row(share)
         exp.add_row(comp)

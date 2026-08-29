@@ -19,6 +19,7 @@ from gi.repository import Adw, Gdk, Gtk  # noqa: E402
 
 from goblinmode.i18n import _  # noqa: E402
 
+from goblinmode.gui.widgets.buttonrow import button_row
 from goblinmode.ipc.daemon_bridge import BridgeClient
 
 log = logging.getLogger(__name__)
@@ -52,13 +53,11 @@ class PreflightPage(Adw.PreferencesPage):
         status_row.set_child(self._status)
         head.add(status_row)
 
-        self._rescan = Adw.ButtonRow(title=_("Scan again"))
-        self._rescan.set_start_icon_name("view-refresh-symbolic")
+        self._rescan = button_row(_("Scan again"), "view-refresh-symbolic")
         self._rescan.connect("activated", lambda _r: self.refresh())
         head.add(self._rescan)
 
-        self._apply_row = Adw.ButtonRow(title=_("Apply the safe fixes"))
-        self._apply_row.set_start_icon_name("emblem-system-symbolic")
+        self._apply_row = button_row(_("Apply the safe fixes"), "emblem-system-symbolic")
         self._apply_row.connect("activated", self._on_apply)
         self._apply_row.set_sensitive(False)
         head.add(self._apply_row)
@@ -154,8 +153,8 @@ class PreflightPage(Adw.PreferencesPage):
 
         sysctl = chk.get("sysctl")
         if sysctl and sysctl[0] in self._applied_keys:
-            undo = Adw.ButtonRow(title=f"Undo — restore {sysctl[0]} to its previous value")
-            undo.set_start_icon_name("edit-undo-symbolic")
+            undo = button_row(f"Undo — restore {sysctl[0]} to its previous value",
+                              "edit-undo-symbolic")
             undo.connect("activated", lambda _r, k=sysctl[0]: self._on_undo(k))
             row.add_row(undo)
 
