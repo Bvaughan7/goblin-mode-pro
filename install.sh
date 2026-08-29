@@ -108,6 +108,7 @@ install_package() {
     sudo python3 -m compileall -q -- "$LIB_DIR/goblinmode" || true
     _shim /usr/bin/goblin-mode-pro-daemon goblinmode.daemon
     _shim /usr/bin/goblin-mode-pro        goblinmode.gui.app
+    _shim /usr/bin/goblin-mode-pro-cli    goblinmode.cli
 }
 
 _shim() {
@@ -170,7 +171,7 @@ uninstall() {
         "$PREFIX/lib/systemd/user/goblin-mode-pro.service" \
         "$PREFIX/share/applications/com.goblinmode.Pro.desktop" \
         "$PREFIX/share/icons/hicolor/scalable/apps/com.goblinmode.Pro.svg" \
-        /usr/bin/goblin-mode-pro-daemon /usr/bin/goblin-mode-pro
+        /usr/bin/goblin-mode-pro-daemon /usr/bin/goblin-mode-pro /usr/bin/goblin-mode-pro-cli
     sudo rm -rf -- "$LIB_DIR" \
         /etc/systemd/system/goblin-mode-pro-helper.service.d
     sudo systemctl daemon-reload

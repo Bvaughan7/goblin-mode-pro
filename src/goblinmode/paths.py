@@ -42,6 +42,8 @@ MANGOHUD_LOG_DIR = DATA_DIR / "mangohud"
 # Written by payload.py so revert knows exactly what to undo on the user side
 # (the privileged snapshot lives in the helper's runtime dir instead).
 APPLIED_STATE_FILE = STATE_DIR / "applied.json"
+#: touched once the first-run wizard has been completed / skipped
+ONBOARDED_MARKER = STATE_DIR / "onboarded"
 
 # MangoHud (not namespaced under APP_DIRNAME - it is MangoHud's own location).
 MANGOHUD_DIR = (

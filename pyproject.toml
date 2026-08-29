@@ -42,6 +42,7 @@ Issues = "https://github.com/Bvaughan7/goblin-mode-pro/issues"
 [project.scripts]
 goblin-mode-pro-daemon = "goblinmode.daemon:main"
 goblin-mode-pro = "goblinmode.gui.app:main"
+goblin-mode-pro-cli = "goblinmode.cli:main"
 
 [tool.setuptools]
 package-dir = { "" = "src" }

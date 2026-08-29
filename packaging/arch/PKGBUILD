@@ -39,6 +39,7 @@ package() {
   }
   _shim goblin-mode-pro-daemon goblinmode.daemon
   _shim goblin-mode-pro        goblinmode.gui.app
+  _shim goblin-mode-pro-cli    goblinmode.cli
 
   install -Dm0644 data/polkit/com.goblinmode.pro.policy \
     "$pkgdir/usr/share/polkit-1/actions/com.goblinmode.pro.policy"

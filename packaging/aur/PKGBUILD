@@ -64,6 +64,7 @@ EOF
   }
   _shim goblin-mode-pro-daemon goblinmode.daemon
   _shim goblin-mode-pro        goblinmode.gui.app
+  _shim goblin-mode-pro-cli    goblinmode.cli
 
   # polkit / D-Bus / systemd / desktop / icon
   install -Dm0644 data/polkit/com.goblinmode.pro.policy \

@@ -45,6 +45,11 @@ class GoblinModeApp(Adw.Application):
             self._window = MainWindow(self, self.bridge)
         self._window.present()
 
+        if connected:
+            from goblinmode.gui import wizard
+            if wizard.should_show():
+                wizard.FirstRunWizard(self._window, self.bridge).present()
+
     def do_startup(self) -> None:  # noqa: N802
         Adw.Application.do_startup(self)
         Adw.init()
