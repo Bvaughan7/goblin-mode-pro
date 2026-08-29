@@ -796,6 +796,15 @@ _MUTATING = {
 }
 
 
+#: methods gated behind the stricter "persistent system config" polkit
+#: action - everything else in _MUTATING uses POLKIT_PERF.
+_KERNEL_ACTION_METHODS = {"SetSysctl", "RevertSysctl", "SetNvidiaModeset"}
+
+
+def _polkit_action_for(method_name: str) -> str:
+    return POLKIT_KERNEL if method_name in _KERNEL_ACTION_METHODS else POLKIT_PERF
+
+
 def _handle_call(
     connection,
     sender,
@@ -807,9 +816,7 @@ def _handle_call(
 ):
     try:
         if method_name in _MUTATING:
-            action = (POLKIT_KERNEL
-                      if method_name in ("SetSysctl", "RevertSysctl", "SetNvidiaModeset")
-                      else POLKIT_PERF)
+            action = _polkit_action_for(method_name)
             if not _check_authorized(sender, action):
                 invocation.return_dbus_error(
                     f"{IFACE}.NotAuthorized", "polkit authorization denied"
