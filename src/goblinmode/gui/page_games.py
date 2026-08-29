@@ -463,6 +463,10 @@ class GamesPage(Adw.PreferencesPage):
         check.connect("activated", lambda _r, e=exe, rr=result: self._on_compat_check(e, rr))
         comp.add_row(check)
         comp.add_row(result)
+        share = Adw.ButtonRow(title=_("Share what worked"))
+        share.set_start_icon_name("send-to-symbolic")
+        share.connect("activated", lambda _r, e=exe: self._on_share_works_for_me(e))
+        comp.add_row(share)
         exp.add_row(comp)
 
         self._group.add(exp)
@@ -599,6 +603,39 @@ class GamesPage(Adw.PreferencesPage):
             GLib.idle_add(lambda: result_row.set_title("\n".join(lines)) or False)
 
         threading.Thread(target=work, name="gmp-compat", daemon=True).start()
+
+    # -- telemetry-free "works for me" report ----------------------
+    def _on_share_works_for_me(self, exe: str) -> None:
+        d = Adw.MessageDialog(
+            transient_for=self.get_root(),
+            heading=_("Share what worked"),
+            body=_(
+                "Opens a pre-filled GitHub issue with your system info and this "
+                "game's tuning settings (no undervolt/fan-control values, no "
+                "usernames or paths) — nothing is sent anywhere until you post it "
+                "yourself. Add a note if you like:"),
+        )
+        entry = Gtk.Entry(placeholder_text=_("e.g. rock solid after enabling DXVK async"))
+        d.set_extra_child(entry)
+        d.add_response("cancel", _("Cancel"))
+        d.add_response("share", _("Open the issue form"))
+        d.set_response_appearance("share", Adw.ResponseAppearance.SUGGESTED)
+        d.connect("response", self._works_for_me_response, exe, entry)
+        d.present()
+
+    def _works_for_me_response(self, _d, response, exe: str, entry: Gtk.Entry) -> None:
+        if response != "share":
+            return
+        note = entry.get_text()
+        self.bridge.build_works_for_me_async(exe, note, self._works_for_me_ready)
+
+    def _works_for_me_ready(self, result, err) -> None:
+        win = self.get_root()
+        if err is not None or not result:
+            if hasattr(win, "toast"):
+                win.toast(_("Couldn't build the report: {err}").format(err=err))
+            return
+        Gio.AppInfo.launch_default_for_uri(result["url"], None)
 
     def _save(self, profile: dict[str, Any]) -> None:
         try:

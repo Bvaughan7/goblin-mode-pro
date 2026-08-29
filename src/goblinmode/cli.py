@@ -13,6 +13,7 @@ in a plain terminal or over SSH with no display.
     goblin-mode-pro-cli games
     goblin-mode-pro-cli gamescope-session [--game NAME] [-- COMMAND...]
     goblin-mode-pro-cli compare GAME
+    goblin-mode-pro-cli works-for-me GAME [--note TEXT]
 """
 
 from __future__ import annotations
@@ -191,12 +192,19 @@ def cmd_gamescope_session(b: BridgeClient, args) -> int:
     os.execvp(argv[0], argv)  # noqa: S606 - fixed binary name, not user input
 
 
+def cmd_works_for_me(b: BridgeClient, args) -> int:
+    result = b.build_works_for_me(args.game, args.note or "")
+    _p(result["markdown"])
+    _p(f"Open this to post it: {result['url']}")
+    return 0
+
+
 _COMMANDS = {
     "status": cmd_status, "boost": cmd_boost, "unboost": cmd_unboost,
     "health": cmd_health, "sessions": cmd_sessions, "benchmark": cmd_benchmark,
     "preflight": cmd_preflight, "report": cmd_report, "games": cmd_games,
     "setup": cmd_setup, "gamescope-session": cmd_gamescope_session,
-    "compare": cmd_compare,
+    "compare": cmd_compare, "works-for-me": cmd_works_for_me,
 }
 
 
@@ -223,6 +231,9 @@ def main(argv: list[str] | None = None) -> int:
                              help="command to run instead of Steam, after --")
         if name == "compare":
             sp.add_argument("game", help="exe name, as shown by 'games'")
+        if name == "works-for-me":
+            sp.add_argument("game", help="exe name, as shown by 'games'")
+            sp.add_argument("--note", default="", help="a short note, e.g. what you changed")
     args = ap.parse_args(argv)
     return _COMMANDS[args.cmd](_connect(), args)
 

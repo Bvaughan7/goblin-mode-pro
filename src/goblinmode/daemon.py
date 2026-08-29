@@ -626,6 +626,17 @@ class Daemon:
             return {"ok": False, "message": str(exc)}
         return {"ok": bool(ok), "message": "reverted" if ok else "failed"}
 
+    def build_works_for_me(self, exe: str, note: str = "") -> dict[str, Any]:
+        from goblinmode import report
+
+        profile = self.settings.profile_for_exe(exe)
+        prof_dict = _profile_dict(profile) if profile else {"exe": exe, "display_name": exe}
+        rep = report.build_works_for_me(prof_dict, note)
+        return {
+            "markdown": report.works_for_me_markdown(rep),
+            "url": report.works_for_me_issue_url(rep),
+        }
+
     def get_nvidia_module_state(self) -> dict[str, Any]:
         from goblinmode import gpu
 

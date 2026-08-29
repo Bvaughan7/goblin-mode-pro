@@ -89,6 +89,10 @@ INTROSPECTION_XML = f"""
     <method name="RevertPreflightFix">
       <arg type="s" name="key" direction="in"/><arg type="s" name="json" direction="out"/>
     </method>
+    <method name="BuildWorksForMe">
+      <arg type="s" name="exe" direction="in"/><arg type="s" name="note" direction="in"/>
+      <arg type="s" name="json" direction="out"/>
+    </method>
     <method name="GetNvidiaModuleState"><arg type="s" name="json" direction="out"/></method>
     <method name="SetNvidiaModeset">
       <arg type="b" name="enabled" direction="in"/><arg type="b" name="ok" direction="out"/>
@@ -130,6 +134,7 @@ class DaemonHandler(Protocol):
     def export_setup(self) -> str: ...
     def revert_preflight_fix(self, key: str) -> dict[str, Any]: ...
     def get_nvidia_module_state(self) -> dict[str, Any]: ...
+    def build_works_for_me(self, exe: str, note: str) -> dict[str, Any]: ...
     def set_nvidia_modeset(self, enabled: bool) -> bool: ...
 
 
@@ -248,6 +253,10 @@ class DaemonBridge:
             elif method == "RevertPreflightFix":
                 k = params.unpack()[0]
                 self._async_str(invocation, lambda: json.dumps(self._handler.revert_preflight_fix(k)))
+            elif method == "BuildWorksForMe":
+                exe, note = params.unpack()
+                self._async_str(invocation, lambda: json.dumps(
+                    self._handler.build_works_for_me(exe, note)))
             elif method == "GetNvidiaModuleState":
                 self._async_str(invocation, lambda: json.dumps(self._handler.get_nvidia_module_state()))
             elif method == "SetNvidiaModeset":
@@ -490,6 +499,15 @@ class BridgeClient:
     def clear_shader_cache_async(self, path: str,
                                  on_done: Callable[[dict | None, object], None]) -> None:
         self._call_async("ClearShaderCache", GLib.Variant("(s)", (path,)),
+                         lambda out, err: on_done(json.loads(out[0]) if out else None, err))
+
+    def build_works_for_me(self, exe: str, note: str = "") -> dict:
+        return json.loads(self._call(
+            "BuildWorksForMe", GLib.Variant("(ss)", (exe, note)), timeout_ms=15000)[0])
+
+    def build_works_for_me_async(self, exe: str, note: str,
+                                 on_done: Callable[[dict | None, object], None]) -> None:
+        self._call_async("BuildWorksForMe", GLib.Variant("(ss)", (exe, note)),
                          lambda out, err: on_done(json.loads(out[0]) if out else None, err))
 
     def get_nvidia_module_state_async(self, on_done: Callable[[dict | None, object], None]) -> None:

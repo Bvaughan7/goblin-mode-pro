@@ -242,6 +242,60 @@ def build_setup_report(settings) -> str:
     return "\n".join(L) + "\n"
 
 
+def build_works_for_me(profile: dict, note: str = "") -> dict[str, Any]:
+    """A small, anonymized 'this setup works' report - no incident, no log
+    excerpt, just the system and which profile settings were active. Field
+    allowlist reused from community.SHAREABLE - the exact set already judged
+    safe to leave a machine (no undervolt/fan-control settings, etc)."""
+    from goblinmode.community import SHAREABLE
+
+    sysinfo = _system_info()
+    sysinfo.update(_desktop())
+    sysinfo["gmp_version"] = __version__
+    return {
+        "schema": "gmp.worksforme.v1",
+        "generated": datetime.now(timezone.utc).isoformat(),
+        "system": sysinfo,
+        "game": profile.get("display_name") or profile.get("exe", ""),
+        "steam_app_id": profile.get("steam_app_id", ""),
+        "note": note[:500],
+        "profile": {k: v for k, v in profile.items() if k in SHAREABLE},
+    }
+
+
+def works_for_me_markdown(rep: dict) -> str:
+    s = rep.get("system", {})
+    lines = [f"## Works for me — {rep.get('game', '?')}", ""]
+    if rep.get("note"):
+        lines += [f"> {rep['note']}", ""]
+    lines += [
+        f"- **CPU** {s.get('cpu', '?')}",
+        f"- **GPU** {s.get('gpu', '?')}",
+        f"- **Kernel** {s.get('kernel', '?')}  ·  {s.get('distro', '?')}  ·  "
+        f"{s.get('desktop', '?')} / {s.get('session_type', '?')}",
+        f"- **GMP** {s.get('gmp_version', '?')}",
+    ]
+    if rep.get("steam_app_id"):
+        lines.append(f"- **Steam AppID** {rep['steam_app_id']}")
+    lines += ["", "### Profile settings", "```json",
+             json.dumps(rep.get("profile", {}), indent=2), "```"]
+    return "\n".join(lines) + "\n"
+
+
+def works_for_me_issue_url(rep: dict, repo: str = "Bvaughan7/goblin-mode-pro") -> str:
+    """A pre-filled 'works for me' issue link - the whole "upload" mechanism:
+    no server, no account, no telemetry. GitHub issues tagged works-for-me
+    are the de-facto community database, browsable without any of this
+    project's own infrastructure."""
+    body = works_for_me_markdown(rep)
+    query = urllib.parse.urlencode({
+        "title": f"[works for me] {rep.get('game') or 'game'}",
+        "body": body,
+        "labels": "works-for-me",
+    })
+    return f"https://github.com/{repo}/issues/new?{query}"
+
+
 def github_issue_url(rep: dict, repo: str = "Bvaughan7/goblin-mode-pro") -> str:
     body = as_markdown(rep)
     if len(body) > 6000:

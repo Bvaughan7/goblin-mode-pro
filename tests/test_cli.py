@@ -46,6 +46,10 @@ class FakeBridge:
     def build_report(self, note):
         return "# report"
 
+    def build_works_for_me(self, exe, note):
+        self.works_for_me_call = (exe, note)
+        return {"markdown": f"# works for me: {exe}", "url": "https://example.invalid/issues/new"}
+
     def export_setup(self):
         return "# setup"
 
@@ -122,6 +126,12 @@ class CliDispatch(unittest.TestCase):
             cli.main(["gamescope-session", "--game", "Wow.exe"])
         self.assertEqual(execvp.call_args[0][0], "gamescope")
         self.assertIn("gamescope", execvp.call_args[0][1])
+
+    def test_works_for_me_prints_markdown_and_url(self):
+        out = self._run("works-for-me", "Wow.exe", "--note", "smooth as butter")
+        self.assertIn("works for me: Wow.exe", out)
+        self.assertIn("https://example.invalid/issues/new", out)
+        self.assertEqual(self._fake.works_for_me_call, ("Wow.exe", "smooth as butter"))
 
     def test_compare_needs_two_sessions(self):
         buf = io.StringIO()
