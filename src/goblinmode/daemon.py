@@ -242,11 +242,9 @@ class Daemon:
         existing = self.settings.profile_for_exe(exe)
         if existing is not None:
             return existing if existing.enabled else None
-        profile = config.GameProfile(
-            exe=exe,
-            display_name=cand.display_name or exe,
-            auto_created=True,
-            match_mode="exact" if exe.lower().endswith(".exe") else "substring",
+        profile = config.new_profile(
+            exe, cand.display_name or exe, auto_created=True,
+            handheld=bool(capabilities.detect().get("handheld")),
         )
         self.settings.profiles.append(profile)
         config.save(self.settings)

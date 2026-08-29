@@ -134,12 +134,18 @@ install_helper() {
 
     # AMD laptop TDP control needs a looser sandbox for ryzenadj; only apply the
     # drop-in when ryzenadj is actually installed.
-    local dropin="/etc/systemd/system/goblin-mode-pro-helper.service.d/amd-tdp.conf"
+    local ddir="/etc/systemd/system/goblin-mode-pro-helper.service.d"
     if need_cmd ryzenadj; then
         msg "ryzenadj found - enabling AMD TDP control (looser helper sandbox)"
-        sudo install -Dm0644 "$REPO_DIR/data/systemd/helper-amd-tdp.conf" "$dropin"
+        sudo install -Dm0644 "$REPO_DIR/data/systemd/helper-amd-tdp.conf" "$ddir/amd-tdp.conf"
     else
-        sudo rm -f -- "$dropin"
+        sudo rm -f -- "$ddir/amd-tdp.conf"
+    fi
+    if need_cmd intel-undervolt; then
+        msg "intel-undervolt found - enabling undervolt re-apply (looser helper sandbox)"
+        sudo install -Dm0644 "$REPO_DIR/data/systemd/helper-undervolt.conf" "$ddir/undervolt.conf"
+    else
+        sudo rm -f -- "$ddir/undervolt.conf"
     fi
 
     sudo systemctl daemon-reload

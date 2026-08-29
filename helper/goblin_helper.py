@@ -62,6 +62,11 @@ NICE_FLOOR = -10  # never let a caller push a process below this
 RYZENADJ = shutil.which("ryzenadj")
 TDP_MIN_W, TDP_MAX_W = 4, 120
 
+#: We never set undervolt offsets ourselves (getting them wrong crashes the
+#: machine). We only re-trigger the offsets the user configured in
+#: /etc/intel-undervolt.conf - suspend / thermald can reset them mid-session.
+INTEL_UNDERVOLT = shutil.which("intel-undervolt")
+
 # sysctl keys the pre-flight check is allowed to set at runtime, each with an
 # accepted numeric range. Nothing outside this table can be touched.
 SYSCTL_ALLOW: dict[str, tuple[int, int]] = {
@@ -129,6 +134,12 @@ INTROSPECTION_XML = f"""
     <method name="RevertSysctl">
       <arg type="s" name="key" direction="in"/>
       <arg type="b" name="ok" direction="out"/>
+    </method>
+    <method name="ApplyUndervolt">
+      <arg type="b" name="ok" direction="out"/>
+    </method>
+    <method name="ReadUndervolt">
+      <arg type="s" name="text" direction="out"/>
     </method>
   </interface>
 </node>
@@ -264,6 +275,31 @@ def _snapshot_sysctl(key: str, path: Path) -> None:
         f.write_text(json.dumps(data, indent=2))
     except OSError as exc:
         log.warning("could not snapshot sysctl %s: %s", key, exc)
+
+
+def apply_undervolt() -> bool:
+    """Re-apply the offsets the user has in /etc/intel-undervolt.conf. We never
+    choose the values - this just runs `intel-undervolt apply`."""
+    if not INTEL_UNDERVOLT:
+        return False
+    try:
+        subprocess.run([INTEL_UNDERVOLT, "apply"], capture_output=True,
+                       text=True, timeout=10, check=True)
+    except (OSError, subprocess.SubprocessError) as exc:
+        log.warning("intel-undervolt apply failed: %s", exc)
+        return False
+    log.info("re-applied intel-undervolt offsets")
+    return True
+
+
+def read_undervolt() -> str:
+    if not INTEL_UNDERVOLT:
+        return ""
+    try:
+        return subprocess.run([INTEL_UNDERVOLT, "read"], capture_output=True,
+                              text=True, timeout=10).stdout[:2000]
+    except (OSError, subprocess.SubprocessError):
+        return ""
 
 
 def revert_sysctl(key: str) -> bool:
@@ -561,6 +597,7 @@ _MUTATING = {
     "RevertAll",
     "SetSysctl",
     "RevertSysctl",
+    "ApplyUndervolt",
 }
 
 
@@ -616,6 +653,10 @@ def _handle_call(
             invocation.return_value(GLib.Variant("(b)", (set_sysctl(args[0], args[1]),)))
         elif method_name == "RevertSysctl":
             invocation.return_value(GLib.Variant("(b)", (revert_sysctl(args[0]),)))
+        elif method_name == "ApplyUndervolt":
+            invocation.return_value(GLib.Variant("(b)", (apply_undervolt(),)))
+        elif method_name == "ReadUndervolt":
+            invocation.return_value(GLib.Variant("(s)", (read_undervolt(),)))
         else:
             invocation.return_dbus_error(
                 "org.freedesktop.DBus.Error.UnknownMethod", method_name

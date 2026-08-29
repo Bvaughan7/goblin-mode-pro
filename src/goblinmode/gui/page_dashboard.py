@@ -169,6 +169,12 @@ class DashboardPage(Adw.PreferencesPage):
                 else "basic (temp / load only)"
             )
             self.set_kernel_nudge(caps)
+            hh = caps.get("handheld")
+            if hh:
+                pretty = {"steamdeck": "Steam Deck", "rog_ally": "ROG Ally",
+                          "legion_go": "Legion Go"}.get(hh, "handheld")
+                self.r_freq_driver.set_subtitle(f"{pretty} detected — TDP presets are "
+                                                "in each game's power-limit section")
 
         self.r_governor._value.set_label(str(status.get("governor") or "-"))
         tweaks = status.get("tweaks") or {}

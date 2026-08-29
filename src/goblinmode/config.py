@@ -145,6 +145,9 @@ class GameProfile:
     power_limit_enabled: bool = False
     pl1_w: int = 0
     pl2_w: int = 0
+    # Re-apply the user's /etc/intel-undervolt.conf offsets on launch (suspend
+    # and thermald can reset them). We never choose the values.
+    undervolt_reapply: bool = False
 
     # Phase C - MangoHud
     per_game_mangohud: bool = False
@@ -256,6 +259,23 @@ class Settings:
         if not self.master_enabled:
             return []
         return [p for p in self.profiles if p.enabled]
+
+
+def new_profile(exe: str, display_name: str = "", *, auto_created: bool = False,
+                handheld: bool = False) -> GameProfile:
+    """A fresh profile with sensible defaults. On a handheld, gamescope is on
+    (fixed panel) and the power-limit section starts enabled so the TDP slider
+    is one tap away."""
+    p = GameProfile(
+        exe=exe, display_name=display_name or exe, auto_created=auto_created,
+        match_mode="exact" if exe.lower().endswith(".exe") else "substring",
+    )
+    if handheld:
+        p.gamescope_enabled = True
+        p.gamescope["borderless"] = False       # fullscreen on a handheld
+        p.power_limit_enabled = True
+        p.fps_dip_floor = 28
+    return p
 
 
 def default_settings() -> Settings:

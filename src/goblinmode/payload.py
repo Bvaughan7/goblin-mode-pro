@@ -99,6 +99,13 @@ class PerformancePayload:
         if profile.core_pin != "off" and pid:
             self._pin_cores(profile, pid)
 
+        if getattr(profile, "undervolt_reapply", False):
+            try:
+                if self.helper.apply_undervolt():
+                    log.info("re-applied intel-undervolt offsets for %s", profile.exe)
+            except HelperUnavailable:
+                pass
+
         if profile.exe != FORCED_EXE:
             try:
                 path = mangohud.apply(profile)

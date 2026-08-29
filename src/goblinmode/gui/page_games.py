@@ -300,6 +300,15 @@ class GamesPage(Adw.PreferencesPage):
             pw.add_row(pl1)
             if not amd:  # ryzenadj takes a single sustained figure
                 pw.add_row(pl2)
+        if self._caps.get("undervolt") == "intel-undervolt":
+            uv = self._switch_row(
+                "Re-apply my undervolt on launch",
+                p.get("undervolt_reapply", False),
+                lambda v: self._patch(exe, undervolt_reapply=v))
+            uv.set_subtitle("Runs `intel-undervolt apply` — uses the offsets you set "
+                            "in /etc/intel-undervolt.conf, never ours")
+            uv.set_title_lines(0)
+            pw.add_row(uv) if pw.get_sensitive() else exp.add_row(uv)
         exp.add_row(pw)
 
         # -- MangoHud nested expander --
