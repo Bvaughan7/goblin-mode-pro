@@ -128,6 +128,9 @@ class HelperClient:
     def apply_undervolt(self) -> bool:
         return self._call("ApplyUndervolt").unpack()[0]
 
+    def apply_amd_undervolt(self) -> bool:
+        return self._call("ApplyAmdUndervolt").unpack()[0]
+
     def read_undervolt(self) -> str:
         try:
             return self._call("ReadUndervolt").unpack()[0]

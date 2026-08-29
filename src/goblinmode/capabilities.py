@@ -331,6 +331,8 @@ def detect() -> dict:
         "handheld": _handheld(),
         "undervolt": "intel-undervolt" if (
             _cpu_vendor() == "intel" and shutil.which("intel-undervolt")) else None,
+        "amd_undervolt": "ryzenadj" if (
+            _cpu_vendor() == "amd" and shutil.which("ryzenadj")) else None,
         "session_recorder": _session_recorder(),
         "vkbasalt": shutil.which("vkBasalt") is not None or Path(
             "/usr/share/vulkan/implicit_layer.d/vkBasalt.json").exists(),

@@ -106,6 +106,13 @@ class PerformancePayload:
             except HelperUnavailable:
                 pass
 
+        if getattr(profile, "amd_undervolt_reapply", False):
+            try:
+                if self.helper.apply_amd_undervolt():
+                    log.info("re-applied AMD Curve Optimizer offsets for %s", profile.exe)
+            except HelperUnavailable:
+                pass
+
         if profile.exe != FORCED_EXE:
             try:
                 path = mangohud.apply(profile)

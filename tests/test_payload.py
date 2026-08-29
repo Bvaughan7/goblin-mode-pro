@@ -59,6 +59,9 @@ class FakeHelper:
     def apply_undervolt(self):
         self._guard(); self.calls.append(("apply_undervolt",)); return True
 
+    def apply_amd_undervolt(self):
+        self._guard(); self.calls.append(("apply_amd_undervolt",)); return True
+
     def revert_all(self):
         self._guard(); self.calls.append(("revert_all",)); self.governor = "powersave"; self.pl_uw = (0, 0); return True
 
@@ -176,6 +179,19 @@ class PayloadRefcountTest(unittest.TestCase):
         p.nice_value = -5
         self.pay.apply(p, pid=777)
         self.assertIn(("renice", 777, -5), self.helper.calls)
+
+    def test_undervolt_reapply_flags_call_the_matching_helper_method(self):
+        p = _profile("A.exe")
+        p.undervolt_reapply = True
+        p.amd_undervolt_reapply = True
+        self.pay.apply(p, pid=1)
+        self.assertIn(("apply_undervolt",), self.helper.calls)
+        self.assertIn(("apply_amd_undervolt",), self.helper.calls)
+
+    def test_undervolt_reapply_off_by_default(self):
+        self.pay.apply(_profile("A.exe"), pid=1)
+        self.assertNotIn(("apply_undervolt",), self.helper.calls)
+        self.assertNotIn(("apply_amd_undervolt",), self.helper.calls)
 
     def test_helper_outage_raises_incident_not_exception(self):
         incidents: list[tuple] = []

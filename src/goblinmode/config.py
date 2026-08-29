@@ -156,6 +156,10 @@ class GameProfile:
     # Re-apply the user's /etc/intel-undervolt.conf offsets on launch (suspend
     # and thermald can reset them). We never choose the values.
     undervolt_reapply: bool = False
+    # Same idea for AMD: re-apply Curve Optimizer offsets from
+    # /etc/goblin-mode-pro/amd-undervolt.conf (the user's own file - GMP
+    # never chooses these either).
+    amd_undervolt_reapply: bool = False
 
     # Phase C - MangoHud
     per_game_mangohud: bool = False

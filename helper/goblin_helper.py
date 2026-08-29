@@ -67,6 +67,16 @@ TDP_MIN_W, TDP_MAX_W = 4, 120
 #: /etc/intel-undervolt.conf - suspend / thermald can reset them mid-session.
 INTEL_UNDERVOLT = shutil.which("intel-undervolt")
 
+#: AMD Curve Optimizer, same "we never choose the values" rule as Intel above.
+#: ryzenadj has no native config-file concept of its own, so this is a small
+#: GMP-specific one the user writes themselves: lines are `coall=<offset>` or
+#: `coper<N>=<offset>` (per-core, N = core index), each a negative integer
+#: (more negative = more aggressive undervolt). Re-applied on demand because
+#: suspend resets the SMU state, same as Intel's offsets.
+AMD_UNDERVOLT_CONF = Path("/etc/goblin-mode-pro/amd-undervolt.conf")
+_AMD_UV_LINE = re.compile(r"^\s*(coall|coper(\d+))\s*=\s*(-?\d+)\s*$")
+_AMD_UV_RANGE = (-30, 0)  # the range every ryzenadj curve-optimizer guide uses
+
 # sysctl keys the pre-flight check is allowed to set at runtime, each with an
 # accepted numeric range. Nothing outside this table can be touched.
 SYSCTL_ALLOW: dict[str, tuple[int, int]] = {
@@ -140,6 +150,9 @@ INTROSPECTION_XML = f"""
     </method>
     <method name="ReadUndervolt">
       <arg type="s" name="text" direction="out"/>
+    </method>
+    <method name="ApplyAmdUndervolt">
+      <arg type="b" name="ok" direction="out"/>
     </method>
   </interface>
 </node>
@@ -300,6 +313,56 @@ def read_undervolt() -> str:
                               text=True, timeout=10).stdout[:2000]
     except (OSError, subprocess.SubprocessError):
         return ""
+
+
+def _parse_amd_undervolt_conf() -> dict[str, int]:
+    """``{"coall": -15, "coper0": -20, ...}`` from AMD_UNDERVOLT_CONF, each
+    clamped to _AMD_UV_RANGE. Malformed or out-of-range lines are skipped,
+    not fatal - this file is user-edited by hand."""
+    try:
+        text = AMD_UNDERVOLT_CONF.read_text()
+    except OSError:
+        return {}
+    out: dict[str, int] = {}
+    lo, hi = _AMD_UV_RANGE
+    for line in text.splitlines():
+        line = line.split("#", 1)[0]
+        m = _AMD_UV_LINE.match(line)
+        if not m:
+            continue
+        key, offset = m.group(1), int(m.group(3))
+        if lo <= offset <= hi:
+            out[key] = offset
+        else:
+            log.warning("amd-undervolt.conf: %s=%d out of range %s, skipping", key, offset, _AMD_UV_RANGE)
+    return out
+
+
+def apply_amd_undervolt() -> bool:
+    """Re-apply the Curve Optimizer offsets from AMD_UNDERVOLT_CONF. We never
+    choose the values - this only re-runs what the user already wrote there
+    (suspend resets the SMU state, same reason the Intel path re-applies)."""
+    if not RYZENADJ:
+        return False
+    offsets = _parse_amd_undervolt_conf()
+    if not offsets:
+        log.info("apply_amd_undervolt: %s has no valid offsets, nothing to do",
+                 AMD_UNDERVOLT_CONF)
+        return False
+    args = []
+    for key, offset in offsets.items():
+        if key == "coall":
+            args.append(f"--set-coall={offset}")
+        else:
+            core = key[len("coper"):]
+            args.append(f"--set-coper={core},{offset}")
+    try:
+        _ryzenadj(*args)
+    except (OSError, subprocess.SubprocessError) as exc:
+        log.warning("ryzenadj curve-optimizer apply failed: %s", exc)
+        return False
+    log.info("re-applied AMD Curve Optimizer offsets: %s", offsets)
+    return True
 
 
 def revert_sysctl(key: str) -> bool:
@@ -599,6 +662,7 @@ _MUTATING = {
     "SetSysctl",
     "RevertSysctl",
     "ApplyUndervolt",
+    "ApplyAmdUndervolt",
 }
 
 
@@ -658,6 +722,8 @@ def _handle_call(
             invocation.return_value(GLib.Variant("(b)", (apply_undervolt(),)))
         elif method_name == "ReadUndervolt":
             invocation.return_value(GLib.Variant("(s)", (read_undervolt(),)))
+        elif method_name == "ApplyAmdUndervolt":
+            invocation.return_value(GLib.Variant("(b)", (apply_amd_undervolt(),)))
         else:
             invocation.return_dbus_error(
                 "org.freedesktop.DBus.Error.UnknownMethod", method_name
