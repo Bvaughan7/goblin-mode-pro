@@ -12,6 +12,7 @@ in a plain terminal or over SSH with no display.
     goblin-mode-pro-cli report [--issue]
     goblin-mode-pro-cli games
     goblin-mode-pro-cli gamescope-session [--game NAME] [-- COMMAND...]
+    goblin-mode-pro-cli compare GAME
 """
 
 from __future__ import annotations
@@ -138,6 +139,25 @@ def cmd_setup(b: BridgeClient, _args) -> int:
     return 0
 
 
+def cmd_compare(b: BridgeClient, args) -> int:
+    from goblinmode.benchmarkcard import diff_sessions
+
+    history = b.get_session_history(args.game)
+    if len(history) < 2:
+        _p(f"need at least two recorded sessions for {args.game!r} to compare "
+           f"(found {len(history)})")
+        return 1
+    b_sess, a_sess = history[-1], history[-2]
+    _p(f"{a_sess.get('started', '')[:16]}  ->  {b_sess.get('started', '')[:16]}")
+    for row in diff_sessions(a_sess, b_sess):
+        line = f"  {row['label']:<22} {row['a']!s:>10}  ->  {row['b']!s:>10}"
+        if row["delta_pct"] is not None:
+            arrow = "^" if row["better"] == "b" else "v" if row["better"] == "a" else "-"
+            line += f"   {arrow} {row['delta_pct']:+.1f}%"
+        _p(line)
+    return 0
+
+
 def cmd_gamescope_session(b: BridgeClient, args) -> int:
     """Launch a standalone gamescope session (Steam Big Picture by default,
     or a specific game's profile) - gamescope becomes the top-level
@@ -176,6 +196,7 @@ _COMMANDS = {
     "health": cmd_health, "sessions": cmd_sessions, "benchmark": cmd_benchmark,
     "preflight": cmd_preflight, "report": cmd_report, "games": cmd_games,
     "setup": cmd_setup, "gamescope-session": cmd_gamescope_session,
+    "compare": cmd_compare,
 }
 
 
@@ -200,6 +221,8 @@ def main(argv: list[str] | None = None) -> int:
                              "default launches Steam Big Picture")
             sp.add_argument("command", nargs="*", default=[],
                              help="command to run instead of Steam, after --")
+        if name == "compare":
+            sp.add_argument("game", help="exe name, as shown by 'games'")
     args = ap.parse_args(argv)
     return _COMMANDS[args.cmd](_connect(), args)
 

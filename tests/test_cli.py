@@ -123,6 +123,22 @@ class CliDispatch(unittest.TestCase):
         self.assertEqual(execvp.call_args[0][0], "gamescope")
         self.assertIn("gamescope", execvp.call_args[0][1])
 
+    def test_compare_needs_two_sessions(self):
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            rc = cli.main(["compare", "Wow.exe"])
+        self.assertEqual(rc, 1)
+        self.assertIn("need at least two", buf.getvalue())
+
+    def test_compare_shows_the_diff(self):
+        self._fake.get_session_history = lambda g: [
+            {"started": "2026-08-20T10:00", "fps_avg": 60.0, "fps_1low": 40.0},
+            {"started": "2026-08-27T10:00", "fps_avg": 75.0, "fps_1low": 40.0},
+        ]
+        out = self._run("compare", "Wow.exe")
+        self.assertIn("Average FPS", out)
+        self.assertIn("+25.0%", out)
+
     def test_gamescope_session_default_launches_steam(self):
         from unittest.mock import patch
 

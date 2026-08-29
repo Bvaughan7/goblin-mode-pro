@@ -443,6 +443,11 @@ class BridgeClient:
     def get_session_history(self, exe: str) -> list[dict]:
         return json.loads(self._call("GetSessionHistory", GLib.Variant("(s)", (exe,)))[0])
 
+    def get_session_history_async(self, exe: str,
+                                  on_done: Callable[[list | None, object], None]) -> None:
+        self._call_async("GetSessionHistory", GLib.Variant("(s)", (exe,)),
+                         lambda out, err: on_done(json.loads(out[0]) if out else None, err))
+
     # -- async reads (never block the GTK main loop) ----------------
     def get_status_async(self, on_done: Callable[[dict | None, object], None]) -> None:
         self._call_async("GetStatus", None, lambda out, err: on_done(

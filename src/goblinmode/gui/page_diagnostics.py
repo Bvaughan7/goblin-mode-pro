@@ -108,6 +108,10 @@ class DiagnosticsPage(Adw.PreferencesPage):
         self._analyze_row.set_start_icon_name("system-search-symbolic")
         self._analyze_row.connect("activated", self._on_analyze)
         export_group.add(self._analyze_row)
+        self._compare_row = Adw.ButtonRow(title=_("Compare two sessions"))
+        self._compare_row.set_start_icon_name("view-refresh-symbolic")
+        self._compare_row.connect("activated", self._on_compare)
+        export_group.add(self._compare_row)
         self.add(export_group)
 
         self._log_group = Adw.PreferencesGroup(title=_("Incident log"))
@@ -228,6 +232,17 @@ class DiagnosticsPage(Adw.PreferencesPage):
         inner.set_child(body)
         row.add_row(inner)
 
+        export = Adw.ActionRow(title=_("Share this session"))
+        json_btn = Gtk.Button(label=_("Copy as JSON"), valign=Gtk.Align.CENTER)
+        json_btn.add_css_class("flat")
+        json_btn.connect("clicked", lambda _b, sess=s: self._export_session_json(sess))
+        export.add_suffix(json_btn)
+        png_btn = Gtk.Button(label=_("Save as image"), valign=Gtk.Align.CENTER)
+        png_btn.add_css_class("flat")
+        png_btn.connect("clicked", lambda _b, sess=s: self._export_session_png(sess))
+        export.add_suffix(png_btn)
+        row.add_row(export)
+
         self._sessions_group.add(row)
         if prepend:
             self._session_rows.insert(0, row)
@@ -310,6 +325,78 @@ class DiagnosticsPage(Adw.PreferencesPage):
             return
         self._toast(f"Benchmark armed — launch {profs[idx].get('display_name') or exe} "
                     "and play for a few minutes. The report card lands in Session history.")
+
+    # -- shareable benchmark cards ----------------------------------
+    def _export_session_json(self, session: dict) -> None:
+        text = json.dumps(session, indent=2)
+        disp = Gdk.Display.get_default()
+        if disp is not None:
+            disp.get_clipboard().set(text)
+        self._toast(_("Session JSON copied — paste it into a community/benchmarks/ PR "
+                      "or a forum thread"))
+
+    def _export_session_png(self, session: dict) -> None:
+        import re
+        import time as _time
+        from pathlib import Path
+
+        from goblinmode.benchmarkcard import render_png
+
+        out_dir = Path.home() / "Pictures" / "goblin-mode-pro"
+        try:
+            out_dir.mkdir(parents=True, exist_ok=True)
+            game = re.sub(r"[^A-Za-z0-9._-]+", "_", str(session.get("game") or session.get("exe") or "session"))
+            path = out_dir / f"{game}-{int(_time.time())}.png"
+            render_png(session, str(path))
+        except Exception as exc:  # noqa: BLE001
+            self._toast(f"Couldn't save the image: {exc}")
+            return
+        self._toast(f"Saved to {path}")
+
+    # -- benchmark comparison -------------------------------------
+    def _on_compare(self, _row) -> None:
+        profs = getattr(self, "_bench_profiles", [])
+        if not profs:
+            self._toast(_("No games with a profile yet"))
+            return
+        idx = self._bench_combo.get_selected()
+        if idx >= len(profs):
+            idx = 0
+        exe = profs[idx]["exe"]
+        self.bridge.get_session_history_async(exe, self._compare_history_ready)
+
+    def _compare_history_ready(self, history, err) -> None:
+        if err is not None or not history or len(history) < 2:
+            self._toast(_("Need at least two recorded sessions for this game to compare"))
+            return
+        b, a = history[-1], history[-2]  # newest = "after", prior = "before"
+        from goblinmode.benchmarkcard import diff_sessions
+
+        rows = diff_sessions(a, b)
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        header = Gtk.Label(
+            label=f"{a.get('started', '')[:16]}  →  {b.get('started', '')[:16]}",
+            xalign=0)
+        header.add_css_class("dim-label")
+        box.append(header)
+        for r in rows:
+            line = f"{r['label']:<22} {r['a']!s:>10}  →  {r['b']!s:>10}"
+            if r["delta_pct"] is not None:
+                arrow = "▲" if r["better"] == "b" else "▼" if r["better"] == "a" else "·"
+                line += f"   {arrow} {r['delta_pct']:+.1f}%"
+            lbl = Gtk.Label(label=line, xalign=0, selectable=True)
+            lbl.add_css_class("monospace")
+            if r["better"] == "b":
+                lbl.add_css_class("success")
+            elif r["better"] == "a":
+                lbl.add_css_class("error")
+            box.append(lbl)
+
+        d = Adw.MessageDialog(transient_for=self._window,
+                              heading=_("Session comparison"))
+        d.set_extra_child(box)
+        d.add_response("ok", _("Close"))
+        d.present()
 
     # -- proton / shader caches -------------------------------
     def load_proton_info(self, info: dict) -> None:
