@@ -31,3 +31,5 @@ packaging/*/src/
 packaging/*/goblin-mode-pro/
 packaging/*/*.pkg.tar*
 packaging/*/*.log
+po/_build/
+*.mo

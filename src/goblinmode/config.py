@@ -158,6 +158,9 @@ class GameProfile:
     fps_watchdog: bool = False
     fps_dip_floor: int = 22        # fps at/below this is a dip regardless of baseline
     fps_dip_ratio: float = 0.5     # ...or below this fraction of the recent median
+    #: keep a 30 s replay buffer running (gpu-screen-recorder) and save a clip
+    #: when the watchdog fires or a GPU fault shows up - footage for a bug report
+    clip_on_incident: bool = False
 
     # Runner env vars (Proton/Wine)
     runner_vars: dict[str, bool] = field(default_factory=_default_runner_vars)

@@ -161,6 +161,17 @@ install_user_bits() {
     sudo install -Dm0644 "$REPO_DIR/data/systemd/goblin-mode-pro.service" \
         "$PREFIX/lib/systemd/user/goblin-mode-pro.service"
     sudo gtk-update-icon-cache -qtf "$PREFIX/share/icons/hicolor" 2>/dev/null || true
+
+    # translation catalogues, if any and if msgfmt is around
+    if need_cmd msgfmt; then
+        for po in "$REPO_DIR"/po/*.po; do
+            [ -e "$po" ] || continue
+            local lang; lang="$(basename "$po" .po)"
+            sudo install -d "$PREFIX/share/locale/$lang/LC_MESSAGES"
+            sudo msgfmt "$po" -o "$PREFIX/share/locale/$lang/LC_MESSAGES/goblin-mode-pro.mo"
+        done
+    fi
+
     systemctl --user daemon-reload
     systemctl --user enable --now goblin-mode-pro.service
     goblin-mode-pro-daemon --write-wrapper >/dev/null

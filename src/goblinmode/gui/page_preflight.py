@@ -17,6 +17,8 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, Gdk, Gtk  # noqa: E402
 
+from goblinmode.i18n import _  # noqa: E402
+
 from goblinmode.ipc.daemon_bridge import BridgeClient
 
 log = logging.getLogger(__name__)
@@ -32,7 +34,7 @@ _PILL = {
 
 class PreflightPage(Adw.PreferencesPage):
     def __init__(self, bridge: BridgeClient, window) -> None:
-        super().__init__(title="System Check", icon_name="emblem-ok-symbolic")
+        super().__init__(title=_("System Check"), icon_name="emblem-ok-symbolic")
         self.bridge = bridge
         self._window = window
         self._busy = False

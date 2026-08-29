@@ -54,6 +54,8 @@ class Daemon:
         self.logwatch = LogWatcher()
         self.fpswatch = FpsWatcher()
         self.sessions = SessionTracker()
+        from goblinmode.clip import ClipBuffer
+        self.clip = ClipBuffer()
         self.observer = Observer(self.settings, self._on_game_event)
         self.bridge = DaemonBridge(self)
 
@@ -121,6 +123,7 @@ class Daemon:
         except Exception:  # noqa: BLE001
             log.exception("error during revert on shutdown")
         self.gpu_monitor.stop()
+        self.clip.stop()
         self.tray.stop()
         if self._loop.is_running():
             self._loop.quit()
@@ -151,6 +154,9 @@ class Daemon:
             self.sessions.start(
                 profile.exe, profile.display_name, self._tweaks_fingerprint()
             )
+            if getattr(profile, "clip_on_incident", False):
+                threading.Thread(target=self.clip.start, name="gmp-clip-start",
+                                 daemon=True).start()
         elif event.profile is not None:
             exe = event.profile.exe
             game = event.profile.display_name
@@ -164,6 +170,9 @@ class Daemon:
                     GLib.timeout_add_seconds(5, self._fps_post_mortem)
                 if not self._forced_boost:
                     self._stop_diagnostics()
+                if self.clip.running():
+                    threading.Thread(target=self.clip.stop, name="gmp-clip-stop",
+                                     daemon=True).start()
         self._broadcast_status()
 
     def _tweaks_fingerprint(self) -> list[str]:
@@ -412,12 +421,21 @@ class Daemon:
         )
         self.incidents.add(incident)
         self.bridge.emit_incident(incident.as_dict())
+        if kind in ("gpu_fault", "fps_dip", "thermal_throttle") and self.clip.running():
+            threading.Thread(target=self._save_clip, args=(kind,),
+                             name="gmp-clip-save", daemon=True).start()
         # a driver fault or a hard throttle is worth a desktop notification
         if kind in ("gpu_fault", "thermal_throttle", "vram_not_freed"):
             nice = {"gpu_fault": "GPU / driver fault",
                     "thermal_throttle": "Thermal throttling",
                     "vram_not_freed": "VRAM not released after exit"}[kind]
             self._notify(nice, detail[:160], urgency=2)
+
+    def _save_clip(self, kind: str) -> None:
+        path = self.clip.save()
+        if path:
+            GLib.idle_add(lambda: self._notify(
+                "Clip saved", f"30 s around the {kind.replace('_', ' ')} → {path}") or False)
 
     def _on_payload_incident(self, kind: str, detail: str) -> None:
         self._raise_incident(kind, detail)

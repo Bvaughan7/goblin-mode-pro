@@ -12,6 +12,8 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, Gdk, Gtk  # noqa: E402
 
+from goblinmode.i18n import _  # noqa: E402
+
 from goblinmode.gui.widgets.graph import CorrelationGraph, FpsGraph
 from goblinmode.ipc.daemon_bridge import BridgeClient
 
@@ -32,7 +34,7 @@ _KIND_LABEL = {
 
 class DiagnosticsPage(Adw.PreferencesPage):
     def __init__(self, bridge: BridgeClient, window) -> None:
-        super().__init__(title="Diagnostics", icon_name="dialog-warning-symbolic")
+        super().__init__(title=_("Diagnostics"), icon_name="dialog-warning-symbolic")
         self.bridge = bridge
         self._window = window
 

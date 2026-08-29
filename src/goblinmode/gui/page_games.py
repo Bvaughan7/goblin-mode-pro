@@ -19,6 +19,8 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, Gio, GLib, Gtk  # noqa: E402
 
+from goblinmode.i18n import _  # noqa: E402
+
 from goblinmode.config import GPU_TUNING_VARS, MANGOHUD_TOGGLES, RUNNER_VARS
 from goblinmode.gui.widgets.help import help_button
 from goblinmode.ipc.daemon_bridge import BridgeClient
@@ -44,7 +46,7 @@ _RUNNER_LABELS = {
 
 class GamesPage(Adw.PreferencesPage):
     def __init__(self, bridge: BridgeClient) -> None:
-        super().__init__(title="Games", icon_name="applications-games-symbolic")
+        super().__init__(title=_("Games"), icon_name="applications-games-symbolic")
         self.bridge = bridge
         self._profiles: dict[str, dict[str, Any]] = {}
         self._building = False
@@ -333,6 +335,14 @@ class GamesPage(Adw.PreferencesPage):
         )
         wd.set_subtitle("Log FPS via MangoHud; raise an incident with GPU state on an extreme dip")
         mh.add_row(wd)
+        if self._caps.get("session_recorder") == "gpu-screen-recorder":
+            clip = self._switch_row(
+                "Auto-clip a problem", p.get("clip_on_incident", False),
+                lambda v: self._patch(exe, clip_on_incident=v))
+            clip.set_subtitle("Keep a 30 s replay buffer; save it when the watchdog "
+                              "fires or a GPU fault appears (→ ~/Videos)")
+            clip.set_title_lines(0)
+            mh.add_row(clip)
         floor = Adw.SpinRow.new_with_range(5, 120, 1)
         floor.set_title("Dip threshold (fps)")
         floor.set_value(p.get("fps_dip_floor", 22))

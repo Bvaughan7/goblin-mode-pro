@@ -10,6 +10,8 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, Gtk  # noqa: E402
 
+from goblinmode.i18n import _  # noqa: E402
+
 from goblinmode.ipc.daemon_bridge import BridgeClient
 
 _GPU_REASON_BITS = {
@@ -48,7 +50,7 @@ def _row(title: str) -> Adw.ActionRow:
 
 class DashboardPage(Adw.PreferencesPage):
     def __init__(self, bridge: BridgeClient) -> None:
-        super().__init__(title="Dashboard", icon_name="utilities-system-monitor-symbolic")
+        super().__init__(title=_("Dashboard"), icon_name="utilities-system-monitor-symbolic")
         self.bridge = bridge
 
         self._banner = Adw.Banner(title="Idle - no game detected")

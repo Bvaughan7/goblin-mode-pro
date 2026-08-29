@@ -15,6 +15,7 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, Gdk, GLib, Gtk  # noqa: E402
 
+from goblinmode.i18n import _
 from goblinmode.paths import ONBOARDED_MARKER, ensure_user_dirs
 from goblinmode.runner import LAUNCH_OPTION
 
@@ -44,14 +45,14 @@ def mark_done() -> None:
 
 class FirstRunWizard(Adw.Window):
     def __init__(self, parent, bridge) -> None:
-        super().__init__(transient_for=parent, modal=True, title="Welcome",
+        super().__init__(transient_for=parent, modal=True, title=_("Welcome"),
                          default_width=560, default_height=520)
         self.bridge = bridge
         self._stack = Adw.ViewStack()
 
         tbv = Adw.ToolbarView()
         header = Adw.HeaderBar()
-        skip = Gtk.Button(label="Skip")
+        skip = Gtk.Button(label=_("Skip"))
         skip.connect("clicked", lambda _b: self._finish())
         header.pack_end(skip)
         tbv.add_top_bar(header)
@@ -78,7 +79,7 @@ class FirstRunWizard(Adw.Window):
                        "Goblin Mode Pro",
                        "Three quick steps: check your system is game-ready, wire up "
                        "your game launcher, and you're done. Takes about a minute.")
-        btn = Gtk.Button(label="Get started", halign=Gtk.Align.CENTER)
+        btn = Gtk.Button(label=_("Get started"), halign=Gtk.Align.CENTER)
         btn.add_css_class("suggested-action")
         btn.add_css_class("pill")
         btn.connect("clicked", lambda _b: self._go("check"))
@@ -90,15 +91,15 @@ class FirstRunWizard(Adw.Window):
                       margin_top=24, margin_bottom=24, margin_start=24, margin_end=24,
                       valign=Gtk.Align.CENTER)
         self._check_icon = Gtk.Image(icon_name="emblem-ok-symbolic", pixel_size=48)
-        self._check_title = Gtk.Label(label="Checking your system…")
+        self._check_title = Gtk.Label(label=_("Checking your system…"))
         self._check_title.add_css_class("title-1")
         self._check_detail = Gtk.Label(wrap=True, justify=Gtk.Justification.CENTER)
         self._check_detail.add_css_class("dim-label")
-        self._fix_btn = Gtk.Button(label="Apply the safe fixes", halign=Gtk.Align.CENTER,
+        self._fix_btn = Gtk.Button(label=_("Apply the safe fixes"), halign=Gtk.Align.CENTER,
                                    visible=False)
         self._fix_btn.add_css_class("pill")
         self._fix_btn.connect("clicked", self._on_fix)
-        nxt = Gtk.Button(label="Next", halign=Gtk.Align.CENTER)
+        nxt = Gtk.Button(label=_("Next"), halign=Gtk.Align.CENTER)
         nxt.add_css_class("pill")
         nxt.connect("clicked", lambda _b: self._go("launcher"))
         for w in (self._check_icon, self._check_title, self._check_detail,
@@ -109,7 +110,7 @@ class FirstRunWizard(Adw.Window):
     def _launcher_page(self) -> Gtk.Widget:
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12,
                       margin_top=24, margin_bottom=24, margin_start=24, margin_end=24)
-        head = Gtk.Label(label="Wire up your launcher")
+        head = Gtk.Label(label=_("Wire up your launcher"))
         head.add_css_class("title-1")
         sub = Gtk.Label(wrap=True, label="Goblin Mode Pro needs a small wrapper on "
                         "your game's launch command so it can inject settings and "
@@ -130,7 +131,7 @@ class FirstRunWizard(Adw.Window):
         row.append(self._launcher_code)
         row.append(copy)
         box.append(row)
-        nxt = Gtk.Button(label="Done", halign=Gtk.Align.CENTER)
+        nxt = Gtk.Button(label=_("Done"), halign=Gtk.Align.CENTER)
         nxt.add_css_class("suggested-action")
         nxt.add_css_class("pill")
         nxt.connect("clicked", lambda _b: self._go("done"))
@@ -143,7 +144,7 @@ class FirstRunWizard(Adw.Window):
                        "Launch a game and Goblin Mode Pro takes over automatically. "
                        "Open it any time from the tray icon or your app menu to tune "
                        "per-game settings.")
-        btn = Gtk.Button(label="Finish", halign=Gtk.Align.CENTER)
+        btn = Gtk.Button(label=_("Finish"), halign=Gtk.Align.CENTER)
         btn.add_css_class("suggested-action")
         btn.add_css_class("pill")
         btn.connect("clicked", lambda _b: self._finish())
