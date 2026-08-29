@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 from typing import Any
 
 import gi
@@ -81,6 +82,11 @@ class GamesPage(Adw.PreferencesPage):
 
         self._group = Adw.PreferencesGroup(title="Game profiles")
         hdr = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+        community_btn = Gtk.Button(icon_name="folder-download-symbolic", valign=Gtk.Align.CENTER)
+        community_btn.add_css_class("flat")
+        community_btn.set_tooltip_text("Browse community profiles")
+        community_btn.connect("clicked", self._on_community)
+        hdr.append(community_btn)
         import_btn = Gtk.Button(icon_name="document-open-symbolic", valign=Gtk.Align.CENTER)
         import_btn.add_css_class("flat")
         import_btn.set_tooltip_text("Import a shared profile (.json)")
@@ -552,6 +558,88 @@ class GamesPage(Adw.PreferencesPage):
         root = self.get_root()
         if hasattr(root, "toast"):
             root.toast(msg)
+
+    # -- community profiles -------------------------------------
+    def _on_community(self, _btn: Gtk.Button) -> None:
+        self._import_toast("Fetching community profiles…")
+
+        def work() -> None:
+            from goblinmode import community
+            try:
+                index = community.fetch_index()
+                err = None
+            except Exception as exc:  # noqa: BLE001
+                index, err = None, str(exc)
+            GLib.idle_add(self._community_index_ready, index, err)
+
+        threading.Thread(target=work, name="gmp-community", daemon=True).start()
+
+    def _community_index_ready(self, index, err) -> bool:
+        if err or not index:
+            self._import_toast(f"Couldn't reach the community profiles ({err})"
+                               if err else "No community profiles listed")
+            return False
+        dialog = Adw.MessageDialog(
+            transient_for=self.get_root(),
+            heading="Community profiles",
+            body="Downloaded from the project repo. Applying one overwrites that "
+            "game's tweaks (it never touches your other games).",
+        )
+        group = Adw.PreferencesGroup()
+        for entry in index:
+            row = Adw.ActionRow(title=entry["display_name"],
+                                subtitle=entry.get("note") or entry["exe"])
+            get = Gtk.Button(label="Apply", valign=Gtk.Align.CENTER)
+            get.add_css_class("flat")
+            get.connect("clicked", lambda _b, e=entry: (dialog.close(), self._fetch_community(e)))
+            row.add_suffix(get)
+            group.add(row)
+        dialog.set_extra_child(group)
+        dialog.add_response("close", "Close")
+        dialog.present()
+        return False
+
+    def _fetch_community(self, entry: dict) -> None:
+        self._import_toast(f"Fetching “{entry['display_name']}”…")
+
+        def work() -> None:
+            from goblinmode import community
+            try:
+                prof = community.fetch_profile(entry["slug"])
+                err = None
+            except Exception as exc:  # noqa: BLE001
+                prof, err = None, str(exc)
+            GLib.idle_add(self._community_profile_ready, prof, err)
+
+        threading.Thread(target=work, name="gmp-community", daemon=True).start()
+
+    def _community_profile_ready(self, prof, err) -> bool:
+        if err or not prof:
+            self._import_toast(f"Fetch failed ({err})" if err else "Empty profile")
+            return False
+        note = prof.pop("note", "")
+        exe = prof.get("exe", "?")
+        existing = exe in self._profiles
+        d = Adw.MessageDialog(
+            transient_for=self.get_root(),
+            heading=f"Apply community settings for {prof.get('display_name') or exe}?",
+            body=(note + "\n\n" if note else "")
+            + (f"This replaces your current tweaks for {exe}."
+               if existing else f"This adds a new profile for {exe}."),
+        )
+        d.add_response("cancel", "Cancel")
+        d.add_response("apply", "Apply")
+        d.set_response_appearance("apply", Adw.ResponseAppearance.SUGGESTED)
+        d.connect("response", lambda _dd, resp: resp == "apply" and self._apply_community(prof))
+        d.present()
+        return False
+
+    def _apply_community(self, prof: dict) -> None:
+        prof.setdefault("enabled", True)
+        if self.bridge.set_profile(prof):
+            self._import_toast(f"Applied community settings for {prof.get('exe')}")
+        else:
+            self._import_toast("The daemon rejected that profile")
 
     def _copy_launch_option(self, _btn: Gtk.Button) -> None:
         clip = self.get_clipboard()

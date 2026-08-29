@@ -1,0 +1,20 @@
+[
+  {
+    "slug": "wow",
+    "exe": "Wow.exe",
+    "display_name": "World of Warcraft",
+    "note": "Governor + tearing + renice; NVAPI/Fsync on. Raid-friendly."
+  },
+  {
+    "slug": "runescape",
+    "exe": "rs2client",
+    "display_name": "RuneScape (native)",
+    "note": "Light: governor + renice only. No compositor tearing (UI game)."
+  },
+  {
+    "slug": "cyberpunk2077",
+    "exe": "Cyberpunk2077.exe",
+    "display_name": "Cyberpunk 2077",
+    "note": "Tearing + VRR + DXVK async; frame-rate watchdog on for VKD3D stalls."
+  }
+]

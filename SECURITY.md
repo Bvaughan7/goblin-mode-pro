@@ -39,6 +39,13 @@ steps if you have them.
   evaluated against length-bounded strings.
 - The generated launch wrapper imports environment variables as strict
   `NAME=VALUE` lines and never uses `eval` or `source`.
+- The **daemon and helper make no network connections** (`IPAddressDeny=any` on
+  the helper). The only outbound request the project makes is the *community
+  profile sync*, which runs in the **GUI** process, only on an explicit click,
+  only an anonymous HTTPS GET, and only to `raw.githubusercontent.com` (the host
+  is pinned and re-checked after redirects; responses are capped at 64 KB). The
+  downloaded JSON is filtered to the known profile fields and re-validated
+  through `GameProfile` before it is saved.
 
 ## Threat model
 

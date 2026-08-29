@@ -1,0 +1,12 @@
+{
+  "exe": "rs2client",
+  "display_name": "RuneScape (native)",
+  "match_mode": "substring",
+  "note": "Light touch for a native client - CPU tuning only.",
+  "renice_enabled": true,
+  "nice_value": -5,
+  "governor_boost": true,
+  "tearing_enabled": false,
+  "adaptive_sync_enabled": false,
+  "focus_mode": false
+}

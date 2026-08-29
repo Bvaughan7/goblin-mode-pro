@@ -1,0 +1,15 @@
+{
+  "exe": "Cyberpunk2077.exe",
+  "display_name": "Cyberpunk 2077",
+  "match_mode": "exact",
+  "note": "Tearing + VRR + async shaders; watchdog on for VKD3D pipeline stalls.",
+  "renice_enabled": true,
+  "nice_value": -5,
+  "governor_boost": true,
+  "tearing_enabled": true,
+  "adaptive_sync_enabled": true,
+  "focus_mode": true,
+  "runner_vars": {"nvapi": true, "fsync": true, "no_esync": false, "dxvk_async": true},
+  "fps_watchdog": true,
+  "fps_dip_floor": 30
+}

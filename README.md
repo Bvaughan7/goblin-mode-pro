@@ -166,6 +166,11 @@ On any game row, the **Export** button (↗) writes the profile to a `.json` fil
 Your friend uses the **Import** button (📂) at the top of the Games list to load
 it. Handy for "here's the exact config that fixed the stutter in <game>".
 
+The **↓ community** button next to it downloads a small set of known-good
+starting profiles (kept in the [`profiles/`](profiles/) directory of this repo)
+straight from GitHub — anonymous HTTPS GET, nothing uploaded, and you confirm
+before anything is applied. Send a pull request to `profiles/` to add your own.
+
 ---
 
 <details>
