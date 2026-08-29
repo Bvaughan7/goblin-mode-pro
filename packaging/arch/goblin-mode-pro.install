@@ -1,15 +1,21 @@
-_activate_amd_dropin() {
+_activate_dropins() {
+    local d=/etc/systemd/system/goblin-mode-pro-helper.service.d
     if command -v ryzenadj >/dev/null 2>&1; then
-        install -Dm0644 /usr/share/goblin-mode-pro/helper-amd-tdp.conf \
-            /etc/systemd/system/goblin-mode-pro-helper.service.d/amd-tdp.conf
+        install -Dm0644 /usr/share/goblin-mode-pro/helper-amd-tdp.conf "$d/amd-tdp.conf"
         echo ">>> ryzenadj found: enabled the AMD TDP sandbox drop-in."
     else
-        rm -f /etc/systemd/system/goblin-mode-pro-helper.service.d/amd-tdp.conf
+        rm -f "$d/amd-tdp.conf"
+    fi
+    if command -v intel-undervolt >/dev/null 2>&1; then
+        install -Dm0644 /usr/share/goblin-mode-pro/helper-undervolt.conf "$d/undervolt.conf"
+        echo ">>> intel-undervolt found: enabled the undervolt re-apply drop-in."
+    else
+        rm -f "$d/undervolt.conf"
     fi
 }
 
 post_install() {
-    _activate_amd_dropin
+    _activate_dropins
     systemctl daemon-reload
     cat <<'EOF'
 
@@ -28,7 +34,7 @@ EOF
 }
 
 post_upgrade() {
-    _activate_amd_dropin
+    _activate_dropins
     systemctl daemon-reload
     systemctl try-restart goblin-mode-pro-helper.service 2>/dev/null || true
     echo ">>> Restart your user daemon:  systemctl --user restart goblin-mode-pro"

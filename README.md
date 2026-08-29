@@ -17,12 +17,14 @@ compositor and power limits automatically per game and reverts them cleanly,
 and when your FPS falls off a cliff it captures the GPU state and names the
 cause. It's the missing piece between "I can see the problem" and "it's fixed."
 
-![version](https://img.shields.io/badge/version-1.0.0-2ea043)
+![version](https://img.shields.io/badge/version-1.1.0-2ea043)
 ![python](https://img.shields.io/badge/python-3.11+-3f7fbf)
 ![license](https://img.shields.io/badge/license-MIT-4E6A24)
 ![CI](https://github.com/Bvaughan7/goblin-mode-pro/actions/workflows/ci.yml/badge.svg)
 ![helper](https://img.shields.io/badge/root_helper-polkit_hardened-4E6A24)
 ![distros](https://img.shields.io/badge/distros-any_systemd-266F64)
+
+**[Documentation](https://bvaughan7.github.io/goblin-mode-pro/)** · [Getting started](https://bvaughan7.github.io/goblin-mode-pro/getting-started/) · [Command line](https://bvaughan7.github.io/goblin-mode-pro/cli/) · [Troubleshooting](https://bvaughan7.github.io/goblin-mode-pro/troubleshooting/)
 
 <img src="docs/demo.gif" alt="Walkthrough of all four tabs: per-game settings, the system pre-flight check, the dashboard as a game launches and the boost engages, and Diagnostics catching a temperature climb and a flagged FPS regression before everything reverts." width="620">
 
@@ -62,6 +64,8 @@ while a game is running and reverts them afterwards. In plain terms:
 | **Core pinning** *(hybrid / chiplet CPUs)* | Threads run on any core | Optionally pins the game to the fast cores (Intel P-cores) or one CCD (Ryzen) | Keeps the game off the slow cores and the cross-CCD latency hop |
 | **Focus mode** | Indexer, notifications and screen-blanking all keep running | Pauses the file indexer, turns on Do Not Disturb, stops the screen sleeping | Removes the background hitches and the "screen dimmed mid-cutscene" problem |
 | **Proton/Wine switches** | Off unless you set them by hand | Flips the common ones (NVAPI, Fsync, async shaders) per game | The settings most Windows games need on Proton, without editing launch options |
+| **GPU driver tuning** | Off unless you set them by hand | Per-game presets — NVIDIA (`__GL_THREADED_OPTIMIZATIONS`, unlimited shader cache, forced G-SYNC) and AMD/RADV (`mesa_glthread`, `RADV_PERFTEST=gpl,nggc,rt`). Only the toggles for *your* GPU are shown | The driver knobs the community reaches for, without hand-editing launch options |
+| **Undervolt re-apply** *(Intel, opt-in)* | Suspend / `thermald` can silently reset your undervolt mid-session | Re-runs `intel-undervolt apply` when the game starts — **never picks the values**, only re-applies the ones you set in `/etc/intel-undervolt.conf` | Your undervolt actually stays on |
 | **MangoHud overlay** | Not shown | Shows FPS / temps on screen if you want it | See what's actually happening |
 | **gamescope** *(optional)* | Not used | Runs the game inside gamescope | Rock-solid FPS cap, FSR/NIS upscaling, and alt-tab that doesn't break the game |
 
@@ -70,11 +74,27 @@ game starts and switch off only when the last one quits.
 
 ### And while you play, it watches for problems
 
+- **System health score** — the System Check rolled up into one traffic-light
+  number on the Dashboard ("your system is 9/10 game-ready"), with the failing
+  items one click away. The first-run wizard shows it too and offers to apply the
+  safe fixes on the spot.
 - **System Check** — a one-page scan of the kernel settings that make Linux games
   crash or stutter (the infamous `vm.max_map_count` that makes Unreal Engine 5
   games crash, the file-descriptor limit that breaks Proton's esync, user
   namespaces that anti-cheat needs, and about a dozen more). Each item is marked
-  **PASS / CHECK / ACTION**, and the safe ones have a one-click fix.
+  **PASS / CHECK / ACTION**, the safe ones have a one-click fix — and now an
+  **Undo** button that restores the previous value.
+- **Benchmark mode** — arm it for a game, play a few minutes, and get a report
+  card: avg / 1% low / 0.1% low FPS, frame-time stutter %, peak CPU/GPU temps.
+  It feeds the regression tracker.
+- **Compatibility check** — type a game's Steam AppID and get its ProtonDB tier
+  and live anti-cheat verdict (from AreWeAntiCheatYet), cached to disk, looked up
+  by the GUI only.
+- **Auto-clip** *(opt-in, needs `gpu-screen-recorder`)* — keeps a 30-second
+  replay buffer while the game runs and saves the clip when the frame-rate
+  watchdog or a GPU fault fires, so a bug report can include footage.
+- **Desktop notifications** — boost engaged / released, a benchmark result, a
+  regression caught, a driver fault matched to a cause.
 - **Proton log analyzer** — reads the Wine/Proton log after a crash and matches it
   against ~16 known Linux-gaming failures (missing Visual C++, VRAM ran out,
   "device lost", anti-cheat didn't start…), then tells you the cause and the fix
@@ -85,6 +105,12 @@ game starts and switch off only when the last one quits.
 - **Bug report** — one button collects your system info, the scan results, the
   last problem and the active settings into a Markdown report on your clipboard,
   ready to paste into a help thread.
+- **Export my full setup** — every profile, kernel flag, custom Proton build and
+  shader-cache size in one shareable Markdown file (paths and notes redacted),
+  for "help me" threads or reproducing a config on another machine.
+- **Proton & shader-cache tools** — see your custom Proton-GE / CachyOS / TKG
+  builds and the size of every DXVK / VKD3D / Steam / Mesa shader cache, with a
+  one-click **Clear** (behind a confirm).
 
 ---
 
@@ -101,6 +127,7 @@ apply — it never just fails silently.
 | **AMD CPU** | Everything. Governor, energy hint and priority work exactly as on Intel; laptop TDP control works if you install `ryzenadj` (the installer then loosens the helper sandbox just enough for it). Core pinning uses your CCD layout. |
 | **NVIDIA GPU** | Everything, including the deep "why did my FPS drop" GPU snapshot. |
 | **AMD or Intel GPU** | Everything **except** that deep snapshot — you still get GPU temperature and load. |
+| **Steam Deck / ROG Ally / Legion Go** | Auto-detected — new game profiles start with a handheld layout: TDP slider enabled, fullscreen gamescope, a lower FPS-dip floor. |
 | **KDE Plasma** | Everything, including the tearing / VRR compositor tweaks. |
 | **GNOME, Hyprland, Sway, other** | Everything **except** the KDE-specific compositor tweaks. GameMode (which the launch wrapper uses automatically) covers most of that ground. |
 | **No systemd** (Void with runit, Gentoo/OpenRC, Alpine…) | Not supported — the daemon and the privileged helper are both systemd units. |
@@ -120,6 +147,11 @@ cd packaging/aur && makepkg -si
 sudo systemctl enable --now goblin-mode-pro-helper.service
 systemctl --user  enable --now goblin-mode-pro.service
 ```
+
+**Debian / Ubuntu** and **Fedora / openSUSE** — source-package directories are in
+[`packaging/debian/`](packaging/debian/) and
+[`packaging/rpm/`](packaging/rpm/) (`dpkg-buildpackage` / `rpmbuild`, or point an
+OBS project at them).
 
 **Everything else** — the installer:
 
@@ -180,14 +212,33 @@ the frame-rate watchdog and the gamescope integration need them.
 ## Using it
 
 1. The daemon starts automatically with your desktop session.
-2. **Set your game's launch wrapper** — this is the important step; without it
+2. **First launch runs a short wizard** — it checks your system, offers the safe
+   fixes, and shows exactly where to paste the launch wrapper for your launcher.
+3. **Set your game's launch wrapper** — this is the important step; without it
    nothing captures the Proton log and env-var injection is skipped:
    - **Steam:** game → Properties → **Launch Options** → `goblin-run %command%`
    - **Lutris:** game → Configure → System options → **Command prefix** → `goblin-run`
    - **Heroic:** Settings → **Wrapper command** → `goblin-run`
-3. Open **Goblin Mode Pro** from your app menu (or the tray icon).
-4. **Games** page → the game should already be listed (auto-detect is on). Turn on
-   the tweaks you want, or add an executable by hand.
+4. Open **Goblin Mode Pro** from your app menu (or the tray icon).
+5. **Games** page → the game should already be listed (auto-detect is on). Turn on
+   the tweaks you want, or add an executable by hand. Every toggle has an ⓘ
+   button with a plain-language explanation.
+
+### From the terminal
+
+`goblin-mode-pro-cli` talks to the running daemon over the session bus — handy
+over SSH or in scripts:
+
+```sh
+goblin-mode-pro-cli status              # what's boosting right now
+goblin-mode-pro-cli health              # the 0–10 readiness score
+goblin-mode-pro-cli boost / unboost     # force performance mode on/off
+goblin-mode-pro-cli benchmark "Wow.exe" # arm a benchmark run
+goblin-mode-pro-cli sessions            # recent session / benchmark report cards
+goblin-mode-pro-cli preflight --fix     # run the System Check, apply safe fixes
+goblin-mode-pro-cli report              # the Markdown bug report
+goblin-mode-pro-cli setup               # the full-setup export
+```
 
 ### Sharing a profile with a friend
 
@@ -241,9 +292,14 @@ game logs: `~/.local/share/goblin-mode-pro/logs/`.
 |---|---|
 | **Observer** | `psutil` poll loop. Per-profile state machine: `ABSENT→PRESENT` applies, `PRESENT→ABSENT` reverts. Global tweaks are refcounted across concurrent games. |
 | **Auto-detect** | Recognises any game, not just the profile list — launcher tags (Steam/Lutris/Heroic) plus a signal stack (DRM `fdinfo` GPU activity, `libSDL2`/`libwine` links, a DE blocklist). New games get a default profile and a **Keep / Ignore** notification. |
-| **Performance Payload** | governor→`performance`, EPP→`performance`, TDP raise (RAPL PL1/PL2 or `ryzenadj`), `renice` (default `-5`), CPU-affinity pinning (P-cores / CCD), KWin `AllowTearing` + VRR via `kscreen-doctor`, Focus mode, MangoHud config, runner env vars, gamescope. |
+| **Performance Payload** | governor→`performance`, EPP→`performance`, TDP raise (RAPL PL1/PL2 or `ryzenadj`), `renice` (default `-5`), CPU-affinity pinning (P-cores / CCD), KWin `AllowTearing` + VRR via `kscreen-doctor`, Focus mode, MangoHud config, runner env vars, per-game GPU-driver tuning, `intel-undervolt` re-apply, gamescope. Global tweaks are refcounted across concurrent games. |
 | **Regression tracking** | On each game exit, summarises the MangoHud frame log (avg / median / 1% low FPS, duration, active tweaks) into `sessions.jsonl` and compares it to the recent history for that game. A >10% swing in the 1% low or average is flagged on the Diagnostics page. |
-| **Capabilities** | One-time hardware probe (CPU vendor, cpufreq driver, EPP/RAPL availability, GPU vendors, `nvidia-smi`, compositor, distro, package manager). Attached to daemon status so the GUI labels or hides features that don't apply. |
+| **Capabilities** | One-time hardware probe (CPU vendor, cpufreq driver, EPP/RAPL availability, GPU vendors, `nvidia-smi`, compositor, distro, package manager, kernel flavour, handheld model, controllers, GameMode, `intel-undervolt`, `gpu-screen-recorder`). Attached to daemon status so the GUI labels or hides features that don't apply. |
+| **Benchmark mode** | Arm a game; on exit the frame log is summarised into a report card (avg / 1% / 0.1% low FPS, frame-time stutter %, peak temps) and stored as a session. |
+| **Web lookups** *(GUI only)* | ProtonDB tier and AreWeAntiCheatYet verdict — anonymous HTTPS GET to a fixed two-host allowlist, size-capped, disk-cached. The daemon and helper make **zero** network connections. |
+| **Proton tools** | Discovers custom Proton/Wine builds and every shader-cache location with sizes; `Clear` deletes a listed cache's contents only. |
+| **First-run wizard** | Shown once (marker file). System check + safe fixes → launcher wrapper → done. |
+| **CLI** | `goblin-mode-pro-cli` — a headless session-bus client (status / boost / health / benchmark / sessions / preflight / report / setup / games). |
 | **System Check** | Pre-flight panel: `vm.max_map_count`, esync FD limit, split-lock mitigation, `nvidia-drm.modeset`, THP, `compaction_proactiveness`, swappiness, kernel fsync support, user namespaces (Steam Runtime + anti-cheat), Vulkan ICD, gamemode/MangoHud presence, plus an anti-cheat status note. Safe fixes are one-click; the `sysctl.d` / kernel-param text is shown for permanence. |
 | **Proton log analyzer** | ~16 known failure patterns → plain-language cause + fix, run on the captured Wine/Proton log. |
 | **Frame-rate watchdog** | Per game. Logs FPS via MangoHud; on a sustained extreme dip (default ≤22 fps or <50% of the recent median) snapshots deep GPU state into an `fps_dip` incident with ranked likely causes. Checks whether VRAM was released after exit (leak detection). |
@@ -256,8 +312,8 @@ game logs: `~/.local/share/goblin-mode-pro/logs/`.
 
 | polkit action | covers | default on the active session |
 |---|---|---|
-| `com.goblinmode.pro.manage-performance` | governor, EPP, renice, RAPL PL1/PL2, ryzenadj TDP | allowed without a prompt |
-| `com.goblinmode.pro.manage-kernel-tunables` | persistent sysctls from the System Check | prompts for admin auth |
+| `com.goblinmode.pro.manage-performance` | governor, EPP, renice, RAPL PL1/PL2, ryzenadj TDP, `intel-undervolt apply` | allowed without a prompt |
+| `com.goblinmode.pro.manage-kernel-tunables` | persistent sysctls from the System Check, and their **Undo** | prompts for admin auth |
 
 `manage-performance` is silent on the active session so a boost applies the
 instant a game launches. To require a prompt there too, set
@@ -279,8 +335,19 @@ allowlist with per-key numeric ranges and the target path is confirmed under
 | Disable Esync | `PROTON_NO_ESYNC=1` |
 | Async shader compile | `DXVK_ASYNC=1` |
 
-The launch wrapper imports these as strict `NAME=VALUE` lines — no `eval`, no
-`source`.
+Plus the per-game **GPU driver tuning** toggles (only those matching your GPU are
+shown):
+
+| Toggle | Environment |
+|---|---|
+| NVIDIA: threaded GL | `__GL_THREADED_OPTIMIZATIONS=1` |
+| NVIDIA: unlimited shader cache | `__GL_SHADER_DISK_CACHE=1`, `__GL_SHADER_DISK_CACHE_SKIP_CLEANUP=1` |
+| NVIDIA: force G-SYNC / VRR | `__GL_GSYNC_ALLOWED=1`, `__GL_VRR_ALLOWED=1` |
+| AMD: Mesa glthread | `mesa_glthread=true` |
+| AMD: RADV pipeline library / NGG culling / ray-tracing | `RADV_PERFTEST=gpl,nggc,rt` (comma-merged) |
+
+The launch wrapper imports all of these as strict `NAME=VALUE` lines — no `eval`,
+no `source`.
 
 ### Compositor tweaks (Wayland note)
 
@@ -327,11 +394,14 @@ also needs `ffmpeg`).
 
 ## Contributing & what's next
 
-Ideas, bug reports and PRs are welcome. [`ROADMAP.md`](ROADMAP.md) is the menu of
-where this could go — a first-run wizard, a system health score, ProtonDB
-lookup, NVIDIA/AMD tuning presets, a benchmark mode, a CLI, handheld profiles.
-👍 an item on the [issue tracker](https://github.com/Bvaughan7/goblin-mode-pro/issues)
-or open a new one.
+Ideas, bug reports and PRs are welcome. See [`CONTRIBUTING.md`](CONTRIBUTING.md)
+to get started. [`ROADMAP.md`](ROADMAP.md) is the menu of where this goes next —
+1.1.0 shipped the first-run wizard, health score, ProtonDB / anti-cheat lookup,
+NVIDIA & RADV tuning presets, benchmark mode, the CLI, handheld profiles,
+auto-clip, undervolt re-apply, i18n scaffolding and a docs site; the roadmap has
+plenty left. 👍 an item on the
+[issue tracker](https://github.com/Bvaughan7/goblin-mode-pro/issues) or open a
+new one.
 
 See [CHANGELOG.md](CHANGELOG.md) for release history.
 

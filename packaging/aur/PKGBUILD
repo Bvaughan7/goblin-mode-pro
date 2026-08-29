@@ -1,7 +1,7 @@
 # Maintainer: Bryan Vaughan <bryanvaughan07@gmail.com>
 pkgname=goblin-mode-pro-git
 _pkgname=goblin-mode-pro
-pkgver=1.0.0.r0.g0000000
+pkgver=1.1.0.r0.g0000000
 pkgrel=1
 pkgdesc="One-switch performance helper for Linux gaming: auto-detects a game, tunes CPU/compositor/Proton, reverts on exit, diagnoses crashes and FPS drops"
 arch=('any')
@@ -84,6 +84,8 @@ EOF
   # ryzenadj is present)
   install -Dm0644 data/systemd/helper-amd-tdp.conf \
     "$pkgdir/usr/share/$_pkgname/helper-amd-tdp.conf"
+  install -Dm0644 data/systemd/helper-undervolt.conf \
+    "$pkgdir/usr/share/$_pkgname/helper-undervolt.conf"
 
   install -Dm0644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
   install -Dm0644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"

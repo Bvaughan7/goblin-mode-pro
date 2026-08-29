@@ -4,6 +4,74 @@ All notable changes to Goblin Mode Pro. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); this project uses
 [SemVer](https://semver.org/).
 
+## [1.1.0] — 2026-08-29
+
+The roadmap release. Everything in `ROADMAP.md`'s 1.0 menu, shipped.
+
+### For people new to Linux gaming
+- **First-run wizard** — a one-minute guided setup on first launch: system
+  check with one-click safe fixes → pick your launcher → exactly where to paste
+  `goblin-run`.
+- **System health score** — the System Check rolled into one 0–10 traffic-light
+  number on the Dashboard, failing items one click away.
+- **ⓘ "what does this do?" popovers** on every per-game toggle.
+- **Undo for pre-flight fixes** — each applied sysctl gets an Undo that restores
+  its previous value (via a new polkit-gated `RevertSysctl` helper method).
+- **Distro-specific setup tips** on the Dashboard — copy-pasteable one-liners: a
+  gaming kernel when yours is stock, the user-namespace fix on Debian/Ubuntu,
+  RPM Fusion NVIDIA on Fedora.
+- **Controller check** and a **GameMode** row (what `gamemoded` reports).
+
+### For the community & power users
+- **Benchmark mode** — arm a game, play, get a report card: avg / 1% / 0.1% low
+  FPS, frame-time stutter %, peak temps. Feeds the regression tracker.
+- **NVIDIA & AMD/RADV tuning presets** — per game, only the toggles for your GPU
+  are shown (`__GL_THREADED_OPTIMIZATIONS`, unlimited shader cache, forced
+  G-SYNC; `mesa_glthread`, `RADV_PERFTEST=gpl,nggc,rt`).
+- **CLI** — `goblin-mode-pro-cli` (status / boost / health / benchmark /
+  sessions / preflight / report / setup / games), a session-bus client for SSH
+  and scripts.
+- **ProtonDB tier + anti-cheat lookup** — by Steam AppID, from ProtonDB and
+  AreWeAntiCheatYet, disk-cached, GUI-only, fixed two-host allowlist.
+- **Proton / Wine version awareness** and **shader-cache management** — list
+  custom builds and every DXVK/VKD3D/Steam/Mesa cache with sizes; one-click
+  Clear behind a confirm.
+- **Desktop notifications** — boost engaged / released, benchmark result,
+  regression, driver fault matched to a cause.
+- **Full setup export** — every profile, kernel flag, Proton build and cache
+  size in one shareable Markdown file (paths/notes redacted).
+- **Auto-clip** *(opt-in, `gpu-screen-recorder`)* — a 30-second replay buffer
+  saved when the FPS watchdog or a GPU fault fires.
+- **Undervolting** *(opt-in, Intel)* — re-applies the offsets from your
+  `/etc/intel-undervolt.conf` on game start (suspend/thermald reset them). GMP
+  never chooses the values.
+- **i18n scaffolding** — gettext plumbing, `po/`, an extraction script, a first
+  pass of wrapped strings.
+
+### Handhelds
+- **Handheld auto-profile** — Steam Deck / ROG Ally / Legion Go detected; new
+  profiles start with TDP enabled, fullscreen gamescope, a lower FPS-dip floor.
+
+### Project
+- **`CONTRIBUTING.md`**, issue / PR templates, `good first issue` labels.
+- **Docs site** — mkdocs-material → GitHub Pages.
+- **`.deb` / `.rpm`** source-package directories (`packaging/debian/`,
+  `packaging/rpm/`).
+- **Integration tests** — the Observer state machine and the Payload
+  apply/revert refcounting, with a fake helper. 90 tests.
+- Flatpak: revisited and documented as *not provided, on purpose*
+  (`packaging/README.md`).
+
+### Fixed
+- `_notify()` was called with keyword args it didn't accept — a `TypeError` on
+  every GPU-fault / thermal-throttle / VRAM incident notification.
+- `ClipBuffer` start/save/stop now lock every access to the recorder process.
+- `GetHealth` is dispatched off the daemon's main loop (it can re-run the full
+  pre-flight probe).
+- Notifications keep a replace-id per category, so routine status can't
+  overwrite a live incident bubble.
+- helper: `RevertSysctl` logged the restored value as `None`.
+
 ## [1.0.0] — 2026-08-29
 
 First public release. 🎉

@@ -1,9 +1,13 @@
 # Roadmap
 
-1.0.0 shipped with the core loop (detect → tune → revert), the diagnostics engine
-and the packaging. This is the "what next" list, grouped by who it's for.
+**1.1.0** cleared the entire 1.0 menu — the first-run wizard, health score,
+ProtonDB / anti-cheat lookup, NVIDIA & RADV tuning presets, benchmark mode, the
+CLI, handheld profiles, auto-clip, undervolt re-apply, GameMode transparency,
+desktop notifications, the docs site, `.deb`/`.rpm` packaging and the integration
+tests. See [`CHANGELOG.md`](CHANGELOG.md).
 
-Nothing here is committed or scheduled — it's a menu. 👍 an item on the
+This is the **next** "what could go here" list, grouped by who it's for. Nothing
+is committed or scheduled — it's a menu. 👍 an item on the
 [issue tracker](https://github.com/Bvaughan7/goblin-mode-pro/issues) or open a
 new one if you want to see it (or build it).
 
@@ -12,97 +16,92 @@ new one if you want to see it (or build it).
 
 ---
 
+## Shipped in 1.1.0
+
+<details>
+<summary>The whole 1.0 menu (click to expand)</summary>
+
+- [x] First-run wizard · [x] System health score · [x] ProtonDB lookup ·
+      [x] "What does this do?" popovers · [x] Undo for pre-flight fixes ·
+      [x] Distro-specific setup tips · [x] Recommended-kernel nudge ·
+      [x] Controller check · [x] Copyable command snippets
+- [x] Benchmark mode · [x] NVIDIA tuning presets · [x] AMD / RADV tuning presets ·
+      [x] CLI / headless mode · [x] Proton/Wine version awareness ·
+      [x] Shader-cache management · [x] GameMode transparency ·
+      [x] Desktop notifications · [x] Full setup export · [x] Auto-clip a highlight ·
+      [x] Undervolting / power-curve profiles (Intel re-apply) ·
+      [x] Anti-cheat status lookup · [x] i18n scaffolding
+- [x] Handheld auto-profile
+- [x] `CONTRIBUTING.md` + templates + labels · [x] Docs site ·
+      [x] `.deb` / `.rpm` · [x] Integration tests · [x] Flatpak decision
+
+</details>
+
+---
+
 ## For people new to Linux gaming
 
-The goal here is to remove the "…now what?" moment after install.
-
-- [ ] ⭐ **First-run wizard.** A guided flow on first launch: run the System
-      Check, ask which launcher you use, then show *exactly* where to paste
-      `goblin-run %command%` (with a screenshot of the Steam / Lutris / Heroic
-      field), and offer to apply sensible defaults.
-- [ ] ⭐ **System health score.** One traffic-light number on the Dashboard —
-      "your system is 9/10 game-ready" — derived from the pre-flight results,
-      with the failing items one click away.
-- [ ] ⭐ **ProtonDB lookup.** Type a game name → show its ProtonDB tier
-      (Platinum / Gold / …) and the top community-reported tweaks, wired into the
-      existing community-profiles feature. 🧪 (needs a caching layer; ProtonDB
-      has no official API.)
-- [ ] 🟢 **"What does this do?" popovers.** An info button on every toggle with a
-      two-sentence plain-language explanation ("Linux slows your CPU down to save
-      power; this keeps it at full speed while you play").
-- [ ] 🟢 **Undo for pre-flight fixes**, and a clearer *temporary vs. permanent*
-      distinction, so applying one feels less scary.
-- [ ] **Distro-specific setup tips.** "You're on Ubuntu — enable user namespaces
-      with this one command" / "You're on Fedora — install the RPM Fusion
-      NVIDIA driver". The capability probe already knows the distro.
-- [ ] **Recommended-kernel nudge.** If you're on a stock non-gaming kernel,
-      gently point at CachyOS / Xanmod / the distro's `-zen` kernel with the
-      exact install command — dismissible, never nagging.
-- [ ] **Controller check.** "Your DualSense is connected, Steam Input is on" —
-      a quick line so a newcomer knows their pad will work.
-- [ ] 🟢 **Copyable command snippets everywhere.** Every `sudo …` line in the UI
-      gets a copy button.
+- [ ] ⭐ **Wizard, part two.** After the launcher step, offer to install the
+      pieces that are missing (MangoHud, GameMode, a gaming kernel) by handing
+      the exact command to a terminal — or, where the distro allows it, running
+      it through the existing polkit helper.
+- [ ] **Guided fix for a failed launch.** When the Proton-log analyzer names a
+      cause ("missing vcrun2019"), offer the `protontricks` / winetricks command
+      inline instead of just describing it.
+- [ ] 🟢 **Translate the UI.** The gettext plumbing is in (`po/`); it needs
+      actual catalogues. A `de`/`fr`/`es`/`pt_BR`/`zh_CN` starter would go far.
+- [ ] 🟢 **"Explain my score" panel.** Expand the health number into a short
+      readout of what each failing check actually breaks in-game.
+- [ ] **Onboarding for the tray-only path.** Some users never open the window —
+      surface Keep/Ignore and the score from the tray menu itself.
 
 ## For the Linux gaming community & power users
 
-Depth, sharing and scriptability.
-
-- [ ] ⭐ **Benchmark mode.** Run a game for N minutes → a clean report card:
-      avg / 1% / 0.1% low FPS, frame-time consistency, thermal headroom used,
-      Proton version. Feeds the regression tracker. The community lives on these
-      numbers.
-- [ ] ⭐ **NVIDIA tuning presets.** `__GL_THREADED_OPTIMIZATIONS`, shader-disk-
-      cache size, GSP-firmware state, `nvidia-drm.modeset`, and a clear readout
-      of what's active. NVIDIA users are a large, under-served, frustrated
-      segment.
-- [ ] ⭐ **AMD / RADV tuning presets.** `RADV_PERFTEST`, `mesa_glthread`,
-      `AMD_VULKAN_ICD` (RADV vs AMDVLK), `RADV_TEX_ANISO`. Per game.
-- [ ] ⭐ **CLI / headless mode.** `goblin-mode-pro status`, `… boost <game>`,
-      `… report` — for the terminal crowd, SSH sessions and scripts.
-- [ ] **Proton/Wine version awareness.** Detect installed Proton-GE /
-      Proton-CachyOS / Wine-TKG builds, show which one a game is using, flag when
-      Steam silently changed it.
-- [ ] **Shader-cache management.** Show DXVK / VKD3D / Steam shader-cache sizes
-      per game; offer to clear or pre-warm. First-run stutter is a top complaint.
-- [ ] **GameMode transparency.** Surface what `gamemoded` is actually doing
-      (governor, GPU perf level, ioprio, screensaver) — it's a black box to most
-      people.
-- [ ] **Desktop notifications.** Boost engaged / released, a regression caught,
-      a crash matched to a known cause ("Cyberpunk crashed — missing
-      vcrun2019").
-- [ ] **Full setup export.** One file with every profile, kernel param, installed
-      Proton version and driver — for "help me" threads or reproducing on another
-      machine.
-- [ ] 🧪 **Auto-clip a highlight.** "New FPS high in <game>" → a short clip via
-      the compositor's recorder. Shareable = visible.
-- [ ] ⚠️ 🧪 **Undervolting / power-curve profiles.** `intel-undervolt`, AMD Curve
-      Optimizer. Big enthusiast draw, genuinely risky — opt-in, heavily
-      caveated, behind an "I understand" gate.
-- [ ] **Anti-cheat status lookup.** Live per-game verdict from
-      areweanticheatyet.com, beyond the current static note.
-- [ ] **i18n scaffolding.** gettext plumbing so the (large) non-English Linux
-      gaming community can translate it.
+- [ ] ⭐ **Benchmark comparison view.** Two runs side by side (before/after a
+      Proton bump, a kernel change, a tweak) with the deltas called out — the
+      report card exists, the diff UI doesn't.
+- [ ] ⭐ **Shareable benchmark cards.** Export a run as a PNG/JSON others can
+      import, and a repo of community submissions per GPU.
+- [ ] ⭐ **AMD Curve Optimizer / `ryzenadj` undervolt.** The Intel side re-applies
+      an existing config; AMD desktops want an actual curve UI. ⚠️ 🧪 genuinely
+      risky — behind an "I understand" gate, same as the Intel path.
+- [ ] **GSP-firmware / `nvidia-drm.modeset` toggles** with a clear readout of
+      what's active and a reboot prompt (NVIDIA preset section groundwork is in).
+- [ ] **Shader pre-warm**, not just clear — kick off Steam's shader pre-cache for
+      a game before first launch.
+- [ ] **Per-output VRR control.** Today VRR is all-or-nothing via
+      `kscreen-doctor`; expose it per monitor.
+- [ ] 🧪 **wlroots / GNOME compositor parity.** Tearing and VRR hooks for
+      Hyprland (`hyprctl`) and GNOME (`ddcutil`-free path) so KDE isn't the only
+      first-class target.
+- [ ] **`gamescope` session mode** — launch a game into a dedicated gamescope
+      session from the GUI, not just wrap it.
+- [ ] **Prometheus / `textfile` exporter** for the metric stream, for people who
+      already run Grafana.
 
 ## Handhelds
 
-- [ ] ⭐ **Handheld auto-profile.** Detect a Steam Deck / ROG Ally / Legion Go and
-      surface a handheld layout: TDP slider front-and-centre, battery-vs-AC
-      auto-switch, per-game refresh-rate cap, preemptive fan spin-up.
+- [ ] ⭐ **Battery-vs-AC auto-switch.** Different TDP / FPS-cap / refresh-rate
+      profile on battery, switched automatically on plug/unplug.
+- [ ] **Per-game refresh-rate cap** on the internal panel (Deck 40/50/60, Ally
+      120…), tied to the FPS cap.
+- [ ] **Preemptive fan spin-up** on launch where the EC allows it.
+- [ ] **TDP presets per handheld** — sensible defaults keyed to the detected
+      model instead of one generic set.
 
 ## Project & community
 
-- [ ] 🟢 **`CONTRIBUTING.md`** + issue / PR templates + `good first issue`
-      labels.
-- [ ] 🟢 **A docs site** (mkdocs → GitHub Pages): the glossary, per-game guides,
-      troubleshooting — community-editable.
-- [ ] **`.deb` / `.rpm` via OBS.** The file layout is already FHS-correct;
-      mostly a control-file exercise. `install.sh` covers those distros
-      meanwhile.
-- [ ] **Restore the test suite's reach.** The pure-logic modules are covered;
-      add integration coverage for `payload` apply/revert and the observer state
-      machine (with a fake helper).
-- [ ] 🧪 **Reconsider Flatpak** for the unprivileged GUI talking to a
-      host-installed daemon — worth it only if the UX doesn't confuse people.
+- [ ] **Ship the `.deb` / `.rpm` from CI.** The packaging dirs exist; wire an
+      OBS project or a `dpkg-buildpackage` GitHub Action + release attachment.
+- [ ] **Publish to Flathub** *only if* the sandboxed-GUI-to-host-daemon path
+      proves worth it (see `packaging/README.md`).
+- [ ] 🟢 **More `profiles/`** — community starter profiles for the top 50 Proton
+      games.
+- [ ] **Restore coverage further** — a GUI smoke test under a headless
+      compositor, and a helper contract test against a fake polkit.
+- [ ] **Signed releases** — sign the tags and the attached packages.
+- [ ] 🧪 **Telemetry-free "works for me" reports** — opt-in, anonymised
+      profile+result submissions to seed the community profile set.
 
 ---
 
