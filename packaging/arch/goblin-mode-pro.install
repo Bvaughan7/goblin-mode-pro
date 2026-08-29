@@ -1,0 +1,45 @@
+_activate_amd_dropin() {
+    if command -v ryzenadj >/dev/null 2>&1; then
+        install -Dm0644 /usr/share/goblin-mode-pro/helper-amd-tdp.conf \
+            /etc/systemd/system/goblin-mode-pro-helper.service.d/amd-tdp.conf
+        echo ">>> ryzenadj found: enabled the AMD TDP sandbox drop-in."
+    else
+        rm -f /etc/systemd/system/goblin-mode-pro-helper.service.d/amd-tdp.conf
+    fi
+}
+
+post_install() {
+    _activate_amd_dropin
+    systemctl daemon-reload
+    cat <<'EOF'
+
+  Goblin Mode Pro is installed. To start it:
+
+      sudo systemctl enable --now goblin-mode-pro-helper.service     # root helper
+      systemctl --user  enable --now goblin-mode-pro.service         # per-user daemon
+      goblin-mode-pro-daemon --write-wrapper                         # ~/.local/bin/goblin-run
+
+  For Steam games, set the launch options to:  goblin-run %command%
+
+  Without the helper it still runs in "limited mode" (no CPU governor / power
+  tuning); skip the first command for that.
+
+EOF
+}
+
+post_upgrade() {
+    _activate_amd_dropin
+    systemctl daemon-reload
+    systemctl try-restart goblin-mode-pro-helper.service 2>/dev/null || true
+    echo ">>> Restart your user daemon:  systemctl --user restart goblin-mode-pro"
+}
+
+pre_remove() {
+    systemctl disable --now goblin-mode-pro-helper.service 2>/dev/null || true
+}
+
+post_remove() {
+    rm -rf /etc/systemd/system/goblin-mode-pro-helper.service.d
+    systemctl daemon-reload
+    echo ">>> Settings in ~/.config/goblin-mode-pro were left in place."
+}

@@ -4,21 +4,24 @@ Goblin Mode Pro is a system-integration tool: it installs a **polkit action**, a
 **systemd system service** (the root helper) and a **systemd user service** (the
 daemon). That shapes what packaging makes sense.
 
-## Arch / CachyOS / Manjaro — AUR
+## Arch / CachyOS / Manjaro
 
-[`aur/`](aur/) is a ready `goblin-mode-pro-git` PKGBUILD.
+Two PKGBUILDs:
 
-```sh
-git clone https://aur.archlinux.org/goblin-mode-pro-git.git   # once published
-cd goblin-mode-pro-git
-makepkg -si
-```
-
-or straight from this repo:
+| Dir | Package | Builds from |
+|---|---|---|
+| [`aur/`](aur/) | `goblin-mode-pro-git` | latest `main` (rolling) |
+| [`arch/`](arch/) | `goblin-mode-pro` | the newest tagged release |
 
 ```sh
-cd packaging/aur && makepkg -si
+cd packaging/arch && makepkg -si      # tagged release
+# or
+cd packaging/aur  && makepkg -si      # rolling
 ```
+
+A pre-built `goblin-mode-pro-<version>-any.pkg.tar.zst` is also attached to each
+[GitHub release](https://github.com/Bvaughan7/goblin-mode-pro/releases) —
+`sudo pacman -U ./goblin-mode-pro-*.pkg.tar.zst`.
 
 After install:
 

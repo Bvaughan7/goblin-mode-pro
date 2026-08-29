@@ -1,0 +1,59 @@
+# Maintainer: Bryan Vaughan <bryanvaughan07@gmail.com>
+#
+# Tagged-release PKGBUILD. For the rolling build, use ../aur/ (goblin-mode-pro-git).
+pkgname=goblin-mode-pro
+pkgver=1.0.0
+pkgrel=1
+pkgdesc="One-switch performance helper for Linux gaming: auto-detects a game, tunes CPU/compositor/Proton, reverts on exit, diagnoses crashes and FPS drops"
+arch=('any')
+url="https://github.com/Bvaughan7/goblin-mode-pro"
+license=('MIT')
+depends=('python' 'python-gobject' 'python-psutil' 'gtk4' 'libadwaita' 'polkit')
+optdepends=(
+  'python-pillow: tray icon rendering'
+  'python-pystray: system tray icon'
+  'mangohud: FPS overlay and the frame-rate watchdog'
+  'gamemode: extra per-game GPU/ioprio tuning via the launch wrapper'
+  'gamescope: the per-game gamescope integration'
+  'wl-clipboard: clipboard export on Wayland'
+  'ryzenadj: AMD laptop TDP control'
+)
+source=("$pkgname-$pkgver.tar.gz::https://github.com/Bvaughan7/goblin-mode-pro/archive/refs/tags/v$pkgver.tar.gz")
+sha256sums=('SKIP')
+install="$pkgname.install"
+
+package() {
+  cd "$pkgname-$pkgver"
+  local libdir="$pkgdir/usr/lib/$pkgname"
+
+  install -d "$libdir"
+  cp -rT src/goblinmode "$libdir/goblinmode"
+  python -m compileall -q "$libdir/goblinmode" || true
+  install -Dm0755 helper/goblin_helper.py "$libdir/goblin_helper.py"
+
+  _shim() {
+    install -d "$pkgdir/usr/bin"
+    printf '#!/usr/bin/python3\nimport sys\nsys.path.insert(0, "/usr/lib/%s")\nfrom %s import main\nraise SystemExit(main())\n' \
+      "$pkgname" "$2" > "$pkgdir/usr/bin/$1"
+    chmod 0755 "$pkgdir/usr/bin/$1"
+  }
+  _shim goblin-mode-pro-daemon goblinmode.daemon
+  _shim goblin-mode-pro        goblinmode.gui.app
+
+  install -Dm0644 data/polkit/com.goblinmode.pro.policy \
+    "$pkgdir/usr/share/polkit-1/actions/com.goblinmode.pro.policy"
+  install -Dm0644 data/dbus/com.goblinmode.ProHelper.conf \
+    "$pkgdir/usr/share/dbus-1/system.d/com.goblinmode.ProHelper.conf"
+  install -Dm0644 data/systemd/goblin-mode-pro-helper.service \
+    "$pkgdir/usr/lib/systemd/system/goblin-mode-pro-helper.service"
+  install -Dm0644 data/systemd/goblin-mode-pro.service \
+    "$pkgdir/usr/lib/systemd/user/goblin-mode-pro.service"
+  install -Dm0644 data/com.goblinmode.Pro.desktop \
+    "$pkgdir/usr/share/applications/com.goblinmode.Pro.desktop"
+  install -Dm0644 data/icons/com.goblinmode.Pro.svg \
+    "$pkgdir/usr/share/icons/hicolor/scalable/apps/com.goblinmode.Pro.svg"
+  install -Dm0644 data/systemd/helper-amd-tdp.conf \
+    "$pkgdir/usr/share/$pkgname/helper-amd-tdp.conf"
+  install -Dm0644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  install -Dm0644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+}

@@ -26,8 +26,8 @@ venv/
 /config.json
 
 # makepkg build output
-packaging/aur/pkg/
-packaging/aur/src/
-packaging/aur/goblin-mode-pro/
-packaging/aur/*.pkg.tar*
-packaging/aur/*.log
+packaging/*/pkg/
+packaging/*/src/
+packaging/*/goblin-mode-pro/
+packaging/*/*.pkg.tar*
+packaging/*/*.log
