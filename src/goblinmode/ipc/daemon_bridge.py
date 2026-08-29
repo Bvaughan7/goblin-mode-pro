@@ -86,6 +86,9 @@ INTROSPECTION_XML = f"""
       <arg type="s" name="path" direction="in"/><arg type="s" name="json" direction="out"/>
     </method>
     <method name="ExportSetup"><arg type="s" name="markdown" direction="out"/></method>
+    <method name="RevertPreflightFix">
+      <arg type="s" name="key" direction="in"/><arg type="s" name="json" direction="out"/>
+    </method>
     <signal name="StatusChanged"><arg type="s" name="json"/></signal>
     <signal name="MetricsUpdated"><arg type="s" name="json"/></signal>
     <signal name="IncidentLogged"><arg type="s" name="json"/></signal>
@@ -121,6 +124,7 @@ class DaemonHandler(Protocol):
     def get_proton_info(self) -> dict[str, Any]: ...
     def clear_shader_cache(self, path: str) -> dict[str, Any]: ...
     def export_setup(self) -> str: ...
+    def revert_preflight_fix(self, key: str) -> dict[str, Any]: ...
 
 
 # --------------------------------------------------------------------------
@@ -235,6 +239,9 @@ class DaemonBridge:
                 self._async_str(invocation, lambda: json.dumps(self._handler.clear_shader_cache(p)))
             elif method == "ExportSetup":
                 self._async_str(invocation, lambda: self._handler.export_setup())
+            elif method == "RevertPreflightFix":
+                k = params.unpack()[0]
+                self._async_str(invocation, lambda: json.dumps(self._handler.revert_preflight_fix(k)))
             else:
                 invocation.return_dbus_error(
                     "org.freedesktop.DBus.Error.UnknownMethod", method
@@ -468,3 +475,8 @@ class BridgeClient:
     def export_setup_async(self, on_done: Callable[[str | None, object], None]) -> None:
         self._call_async("ExportSetup", None,
                          lambda out, err: on_done(out[0] if out else None, err))
+
+    def revert_preflight_fix_async(self, key: str,
+                                   on_done: Callable[[dict | None, object], None]) -> None:
+        self._call_async("RevertPreflightFix", GLib.Variant("(s)", (key,)),
+                         lambda out, err: on_done(json.loads(out[0]) if out else None, err))

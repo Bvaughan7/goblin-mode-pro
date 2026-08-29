@@ -20,6 +20,7 @@ gi.require_version("Adw", "1")
 from gi.repository import Adw, Gio, GLib, Gtk  # noqa: E402
 
 from goblinmode.config import GPU_TUNING_VARS, MANGOHUD_TOGGLES, RUNNER_VARS
+from goblinmode.gui.widgets.help import help_button
 from goblinmode.ipc.daemon_bridge import BridgeClient
 from goblinmode.runner import LAUNCH_OPTION
 
@@ -205,7 +206,7 @@ class GamesPage(Adw.PreferencesPage):
         # -- simple toggles --
         exp.add_row(self._switch_row(
             "Process priority (renice)", p.get("renice_enabled", True),
-            lambda v: self._patch(exe, renice_enabled=v),
+            lambda v: self._patch(exe, renice_enabled=v), help="renice",
         ))
         nice = Adw.SpinRow.new_with_range(-10, 19, 1)
         nice.set_title("Nice value")
@@ -233,19 +234,19 @@ class GamesPage(Adw.PreferencesPage):
 
         exp.add_row(self._switch_row(
             "CPU governor boost", p.get("governor_boost", True),
-            lambda v: self._patch(exe, governor_boost=v),
+            lambda v: self._patch(exe, governor_boost=v), help="governor",
         ))
         exp.add_row(self._switch_row(
             "Compositor: allow tearing", p.get("tearing_enabled", True),
-            lambda v: self._patch(exe, tearing_enabled=v),
+            lambda v: self._patch(exe, tearing_enabled=v), help="tearing",
         ))
         exp.add_row(self._switch_row(
             "Compositor: adaptive sync (VRR)", p.get("adaptive_sync_enabled", False),
-            lambda v: self._patch(exe, adaptive_sync_enabled=v),
+            lambda v: self._patch(exe, adaptive_sync_enabled=v), help="vrr",
         ))
         focus = self._switch_row(
             "Focus mode", p.get("focus_mode", False),
-            lambda v: self._patch(exe, focus_mode=v),
+            lambda v: self._patch(exe, focus_mode=v), help="focus",
         )
         focus.set_subtitle("Pause the file indexer, turn on Do Not Disturb, inhibit idle")
         exp.add_row(focus)
@@ -319,7 +320,7 @@ class GamesPage(Adw.PreferencesPage):
         mh.add_row(per_game)
         wd = self._switch_row(
             "Frame-rate watchdog", p.get("fps_watchdog", False),
-            lambda v: self._patch(exe, fps_watchdog=v),
+            lambda v: self._patch(exe, fps_watchdog=v), help="watchdog",
         )
         wd.set_subtitle("Log FPS via MangoHud; raise an incident with GPU state on an extreme dip")
         mh.add_row(wd)
@@ -419,8 +420,12 @@ class GamesPage(Adw.PreferencesPage):
         return exp
 
     # -- small helpers -------------------------------------------
-    def _switch_row(self, title: str, active: bool, on_change) -> Adw.ActionRow:
+    def _switch_row(self, title: str, active: bool, on_change, help: str = "") -> Adw.ActionRow:
         row = Adw.ActionRow(title=title)
+        if help:
+            hb = help_button(help)
+            if hb is not None:
+                row.add_suffix(hb)
         sw = Gtk.Switch(valign=Gtk.Align.CENTER, active=active)
         sw.connect("notify::active", lambda s, _p: (not self._building) and on_change(s.get_active()))
         row.add_suffix(sw)

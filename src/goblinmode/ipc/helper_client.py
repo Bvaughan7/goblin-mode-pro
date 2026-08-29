@@ -121,3 +121,6 @@ class HelperClient:
         return self._call(
             "SetSysctl", GLib.Variant("(ss)", (key, str(value)))
         ).unpack()[0]
+
+    def revert_sysctl(self, key: str) -> bool:
+        return self._call("RevertSysctl", GLib.Variant("(s)", (key,))).unpack()[0]

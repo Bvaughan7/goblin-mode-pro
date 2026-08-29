@@ -65,6 +65,7 @@ class PreflightPage(Adw.PreferencesPage):
         self._checks_group = Adw.PreferencesGroup(title="Checks")
         self.add(self._checks_group)
         self._rows: list[Gtk.Widget] = []
+        self._applied_keys: set[str] = set()   # sysctls we changed this session
 
         self._persist_group = Adw.PreferencesGroup(
             title="Make it stick after a reboot",
@@ -148,8 +149,30 @@ class PreflightPage(Adw.PreferencesPage):
         body.set_title_lines(0)
         body.set_css_classes(["dim-label"])
         row.add_row(body)
+
+        sysctl = chk.get("sysctl")
+        if sysctl and sysctl[0] in self._applied_keys:
+            undo = Adw.ButtonRow(title=f"Undo — restore {sysctl[0]} to its previous value")
+            undo.set_start_icon_name("edit-undo-symbolic")
+            undo.connect("activated", lambda _r, k=sysctl[0]: self._on_undo(k))
+            row.add_row(undo)
+
         self._checks_group.add(row)
         return row
+
+    def _on_undo(self, key: str) -> None:
+        self._set_busy(True, f"Reverting {key}…")
+        self.bridge.revert_preflight_fix_async(key, lambda res, err: self._on_undone(key, res, err))
+
+    def _on_undone(self, key: str, res, err) -> None:
+        self._set_busy(False)
+        r = res or {}
+        if err or not r.get("ok"):
+            self._toast(f"Couldn't revert {key}: {err or r.get('message')}")
+            return
+        self._applied_keys.discard(key)
+        self._toast(f"{key} reverted")
+        self.refresh()
 
     # -- fixes --------------------------------------------------------
     def _on_apply(self, _row) -> None:
@@ -163,6 +186,8 @@ class PreflightPage(Adw.PreferencesPage):
         if err is not None or res is None:
             self._toast(f"Couldn't apply the fixes: {err}")
             return
+        for entry in res.get("applied") or []:
+            self._applied_keys.add(entry.split("=", 1)[0])
         done = ", ".join(res.get("applied") or []) or "nothing"
         failed = res.get("failed") or []
         self._toast(f"Applied: {done}" + (f" — failed: {', '.join(failed)}" if failed else ""))

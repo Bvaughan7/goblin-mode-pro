@@ -535,6 +535,7 @@ class Daemon:
                     failed.append(key)
             except Exception as exc:  # noqa: BLE001
                 failed.append(f"{key} ({exc})")
+        self._cache_health(preflight.run_all())
         return {
             "applied": applied,
             "failed": failed,
@@ -543,6 +544,14 @@ class Daemon:
             "kernel_params": [r["kernel_param"] for r in results
                               if r["kernel_param"] and r["status"] in ("warn", "fail")],
         }
+
+    def revert_preflight_fix(self, key: str) -> dict[str, Any]:
+        """Undo one applied pre-flight sysctl (restore its pre-change value)."""
+        try:
+            ok = self.helper.revert_sysctl(key)
+        except Exception as exc:  # noqa: BLE001
+            return {"ok": False, "message": str(exc)}
+        return {"ok": bool(ok), "message": "reverted" if ok else "failed"}
 
     def build_report(self, note: str = "") -> str:
         from goblinmode import report

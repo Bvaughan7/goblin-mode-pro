@@ -126,6 +126,10 @@ INTROSPECTION_XML = f"""
       <arg type="s" name="value" direction="in"/>
       <arg type="b" name="ok" direction="out"/>
     </method>
+    <method name="RevertSysctl">
+      <arg type="s" name="key" direction="in"/>
+      <arg type="b" name="ok" direction="out"/>
+    </method>
   </interface>
 </node>
 """
@@ -236,8 +240,53 @@ def set_sysctl(key: str, value: str) -> bool:
     path = (Path("/proc/sys") / key.replace(".", "/")).resolve()
     if not str(path).startswith("/proc/sys/") or not path.is_file():
         raise ValueError(f"refusing to write {path}")
+    _snapshot_sysctl(key, path)          # remember the pre-change value so it's undoable
     _write(path, str(num))
     log.info("sysctl %s = %s", key, num)
+    return True
+
+
+def _sysctl_state_file() -> Path:
+    return STATE_DIR / "sysctls.json"
+
+
+def _snapshot_sysctl(key: str, path: Path) -> None:
+    f = _sysctl_state_file()
+    try:
+        data = json.loads(f.read_text()) if f.exists() else {}
+    except (OSError, json.JSONDecodeError):
+        data = {}
+    if key in data:
+        return
+    try:
+        data[key] = _read(path)
+        STATE_DIR.mkdir(parents=True, exist_ok=True)
+        f.write_text(json.dumps(data, indent=2))
+    except OSError as exc:
+        log.warning("could not snapshot sysctl %s: %s", key, exc)
+
+
+def revert_sysctl(key: str) -> bool:
+    """Restore one pre-flight sysctl to the value it had before we changed it."""
+    if key not in SYSCTL_ALLOW:
+        raise ValueError(f"sysctl not in allowlist: {key}")
+    f = _sysctl_state_file()
+    try:
+        data = json.loads(f.read_text()) if f.exists() else {}
+    except (OSError, json.JSONDecodeError):
+        data = {}
+    if key not in data:
+        return True  # never changed it
+    path = (Path("/proc/sys") / key.replace(".", "/")).resolve()
+    if not str(path).startswith("/proc/sys/") or not path.is_file():
+        raise ValueError(f"refusing to write {path}")
+    _write(path, str(int(data[key])))
+    del data[key]
+    try:
+        f.write_text(json.dumps(data, indent=2))
+    except OSError:
+        pass
+    log.info("sysctl %s reverted to %s", key, data.get(key))
     return True
 
 
@@ -511,6 +560,7 @@ _MUTATING = {
     "ResetTDP",
     "RevertAll",
     "SetSysctl",
+    "RevertSysctl",
 }
 
 
@@ -525,7 +575,8 @@ def _handle_call(
 ):
     try:
         if method_name in _MUTATING:
-            action = POLKIT_KERNEL if method_name == "SetSysctl" else POLKIT_PERF
+            action = (POLKIT_KERNEL if method_name in ("SetSysctl", "RevertSysctl")
+                      else POLKIT_PERF)
             if not _check_authorized(sender, action):
                 invocation.return_dbus_error(
                     f"{IFACE}.NotAuthorized", "polkit authorization denied"
@@ -563,6 +614,8 @@ def _handle_call(
             invocation.return_value(GLib.Variant("(b)", (revert_all(),)))
         elif method_name == "SetSysctl":
             invocation.return_value(GLib.Variant("(b)", (set_sysctl(args[0], args[1]),)))
+        elif method_name == "RevertSysctl":
+            invocation.return_value(GLib.Variant("(b)", (revert_sysctl(args[0]),)))
         else:
             invocation.return_dbus_error(
                 "org.freedesktop.DBus.Error.UnknownMethod", method_name
