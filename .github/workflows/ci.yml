@@ -22,7 +22,10 @@ jobs:
         run: python -m unittest discover -s tests -v
 
       - name: Shell syntax check
-        run: bash -n install.sh
+        run: |
+          bash -n install.sh
+          bash -n packaging/aur/PKGBUILD
+          bash -n packaging/aur/goblin-mode-pro.install
 
       - name: Validate the community profile JSON
         run: |

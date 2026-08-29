@@ -103,8 +103,18 @@ apply — it never just fails silently.
 
 ## Install
 
+**Arch / CachyOS / Manjaro** — from the AUR (see [`packaging/`](packaging/)):
+
 ```sh
-git clone https://github.com/<you>/goblin-mode-pro
+cd packaging/aur && makepkg -si
+sudo systemctl enable --now goblin-mode-pro-helper.service
+systemctl --user  enable --now goblin-mode-pro.service
+```
+
+**Everything else** — the installer:
+
+```sh
+git clone https://github.com/Bvaughan7/goblin-mode-pro
 cd goblin-mode-pro
 ./install.sh
 ```

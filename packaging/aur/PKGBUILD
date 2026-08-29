@@ -1,0 +1,89 @@
+# Maintainer: Bryan Vaughan <bryanvaughan07@gmail.com>
+pkgname=goblin-mode-pro-git
+_pkgname=goblin-mode-pro
+pkgver=0.1.0.r0.g0000000
+pkgrel=1
+pkgdesc="One-switch performance helper for Linux gaming: auto-detects a game, tunes CPU/compositor/Proton, reverts on exit, diagnoses crashes and FPS drops"
+arch=('any')
+url="https://github.com/Bvaughan7/goblin-mode-pro"
+license=('MIT')
+depends=(
+  'python'
+  'python-gobject'
+  'python-psutil'
+  'gtk4'
+  'libadwaita'
+  'polkit'
+)
+optdepends=(
+  'python-pillow: tray icon rendering'
+  'python-pystray: system tray icon'
+  'mangohud: FPS overlay and the frame-rate watchdog'
+  'gamemode: extra per-game GPU/ioprio tuning via the launch wrapper'
+  'gamescope: the per-game gamescope integration'
+  'wl-clipboard: clipboard export on Wayland'
+  'ryzenadj: AMD laptop TDP control'
+)
+makedepends=('git')
+provides=("$_pkgname")
+conflicts=("$_pkgname")
+source=("$_pkgname::git+https://github.com/Bvaughan7/goblin-mode-pro.git")
+sha256sums=('SKIP')
+install="$_pkgname.install"
+
+pkgver() {
+  cd "$_pkgname"
+  local v
+  v=$(python -c "import re,pathlib;print(re.search(r'\"([^\"]+)\"', pathlib.Path('src/goblinmode/__about__.py').read_text()).group(1))")
+  printf '%s.r%s.g%s' "$v" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+}
+
+package() {
+  cd "$_pkgname"
+  local libdir="$pkgdir/usr/lib/$_pkgname"
+
+  # application package + compiled bytecode
+  install -d "$libdir"
+  cp -rT src/goblinmode "$libdir/goblinmode"
+  python -m compileall -q "$libdir/goblinmode" || true
+
+  # privileged helper
+  install -Dm0755 helper/goblin_helper.py "$libdir/goblin_helper.py"
+
+  # /usr/bin entry-point shims (mirror install.sh)
+  _shim() {
+    install -d "$pkgdir/usr/bin"
+    cat > "$pkgdir/usr/bin/$1" <<EOF
+#!/usr/bin/python3
+import sys
+sys.path.insert(0, "/usr/lib/$_pkgname")
+from $2 import main
+raise SystemExit(main())
+EOF
+    chmod 0755 "$pkgdir/usr/bin/$1"
+  }
+  _shim goblin-mode-pro-daemon goblinmode.daemon
+  _shim goblin-mode-pro        goblinmode.gui.app
+
+  # polkit / D-Bus / systemd / desktop / icon
+  install -Dm0644 data/polkit/com.goblinmode.pro.policy \
+    "$pkgdir/usr/share/polkit-1/actions/com.goblinmode.pro.policy"
+  install -Dm0644 data/dbus/com.goblinmode.ProHelper.conf \
+    "$pkgdir/usr/share/dbus-1/system.d/com.goblinmode.ProHelper.conf"
+  install -Dm0644 data/systemd/goblin-mode-pro-helper.service \
+    "$pkgdir/usr/lib/systemd/system/goblin-mode-pro-helper.service"
+  install -Dm0644 data/systemd/goblin-mode-pro.service \
+    "$pkgdir/usr/lib/systemd/user/goblin-mode-pro.service"
+  install -Dm0644 data/com.goblinmode.Pro.desktop \
+    "$pkgdir/usr/share/applications/com.goblinmode.Pro.desktop"
+  install -Dm0644 data/icons/com.goblinmode.Pro.svg \
+    "$pkgdir/usr/share/icons/hicolor/scalable/apps/com.goblinmode.Pro.svg"
+
+  # AMD TDP sandbox drop-in as a sample (activated by the .install hook when
+  # ryzenadj is present)
+  install -Dm0644 data/systemd/helper-amd-tdp.conf \
+    "$pkgdir/usr/share/$_pkgname/helper-amd-tdp.conf"
+
+  install -Dm0644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  install -Dm0644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+}

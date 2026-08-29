@@ -24,3 +24,10 @@ venv/
 # Local runtime output (should never be in the tree)
 *.log
 /config.json
+
+# makepkg build output
+packaging/aur/pkg/
+packaging/aur/src/
+packaging/aur/goblin-mode-pro/
+packaging/aur/*.pkg.tar*
+packaging/aur/*.log
