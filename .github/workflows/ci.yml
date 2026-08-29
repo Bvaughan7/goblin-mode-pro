@@ -63,3 +63,15 @@ jobs:
               importlib.import_module(m.name)
               print("imported", m.name)
           PY
+
+  gui-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install GTK4 / libadwaita + a headless X server and session bus
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 \
+            python3-psutil xvfb dbus-x11
+      - name: Construct MainWindow under Xvfb (tests/gui_smoke.py)
+        run: xvfb-run -a dbus-run-session -- python3 tests/gui_smoke.py
