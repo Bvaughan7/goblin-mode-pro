@@ -76,6 +76,8 @@ class MainWindow(Adw.PreferencesWindow):
                                      and self.dashboard.update_health(h))
         self.bridge.get_system_info_async(lambda i, e: i is not None
                                           and self.dashboard.update_system_info(i))
+        self.bridge.get_nvidia_module_state_async(lambda n, e: n is not None
+                                                  and self.dashboard.update_nvidia_state(n))
         self.request_proton_refresh()
 
     def request_proton_refresh(self) -> None:

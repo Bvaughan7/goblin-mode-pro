@@ -29,7 +29,7 @@ from goblinmode.fpswatch import FpsEvent, FpsWatcher
 from goblinmode.sessions import SessionTracker
 from goblinmode.incidents import Incident, IncidentLog, build_llm_payload, copy_to_clipboard
 from goblinmode.ipc.daemon_bridge import DaemonBridge
-from goblinmode.ipc.helper_client import HelperClient
+from goblinmode.ipc.helper_client import HelperClient, HelperUnavailable
 from goblinmode.logwatch import LogWatcher
 from goblinmode.observer import GameEvent, Observer
 from goblinmode.payload import PerformancePayload
@@ -625,6 +625,17 @@ class Daemon:
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "message": str(exc)}
         return {"ok": bool(ok), "message": "reverted" if ok else "failed"}
+
+    def get_nvidia_module_state(self) -> dict[str, Any]:
+        from goblinmode import gpu
+
+        return gpu.nvidia_module_state()
+
+    def set_nvidia_modeset(self, enabled: bool) -> bool:
+        try:
+            return bool(self.helper.set_nvidia_modeset(enabled))
+        except HelperUnavailable:
+            return False
 
     def build_report(self, note: str = "") -> str:
         from goblinmode import report

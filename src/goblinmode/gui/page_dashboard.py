@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 import gi
@@ -13,6 +14,8 @@ from gi.repository import Adw, Gtk  # noqa: E402
 from goblinmode.i18n import _  # noqa: E402
 
 from goblinmode.ipc.daemon_bridge import BridgeClient
+
+log = logging.getLogger(__name__)
 
 _GPU_REASON_BITS = {
     0x1: "idle",
@@ -52,6 +55,7 @@ class DashboardPage(Adw.PreferencesPage):
     def __init__(self, bridge: BridgeClient) -> None:
         super().__init__(title=_("Dashboard"), icon_name="utilities-system-monitor-symbolic")
         self.bridge = bridge
+        self._nvidia_state: dict[str, Any] = {}
 
         self._banner = Adw.Banner(title=_("Idle - no game detected"))
         self._banner.set_revealed(True)
@@ -126,6 +130,21 @@ class DashboardPage(Adw.PreferencesPage):
                   self.r_vram, self.r_pcie, self.r_gpuclock):
             gpu.add(r)
         self.add(gpu)
+
+        self._nvidia_group = Adw.PreferencesGroup(
+            title=_("NVIDIA driver"),
+            description=_("modeset must be on for Wayland and explicit sync; GSP "
+                          "firmware is the driver's own offload processor."),
+            visible=False,
+        )
+        self._nvidia_modeset_row = Adw.ActionRow(title=_("nvidia-drm modeset"))
+        self._nvidia_modeset_toggle = Gtk.Button(valign=Gtk.Align.CENTER)
+        self._nvidia_modeset_toggle.connect("clicked", self._on_toggle_modeset)
+        self._nvidia_modeset_row.add_suffix(self._nvidia_modeset_toggle)
+        self._nvidia_group.add(self._nvidia_modeset_row)
+        self._nvidia_gsp_row = _row(_("GSP firmware"))
+        self._nvidia_group.add(self._nvidia_gsp_row)
+        self.add(self._nvidia_group)
 
         fps = Adw.PreferencesGroup(
             title=_("Frame rate"),
@@ -247,6 +266,51 @@ class DashboardPage(Adw.PreferencesPage):
         win = self.get_root()
         if win is not None and hasattr(win, "set_visible_page") and hasattr(win, "preflight"):
             win.set_visible_page(win.preflight)
+
+    def update_nvidia_state(self, state: dict[str, Any]) -> None:
+        """Read-only nvidia_drm.modeset + GSP firmware info - see
+        gpu.nvidia_module_state(). modeset is a boot-time modprobe option,
+        so the button here writes a persistent config and asks for a
+        reboot; it never flips anything live."""
+        self._nvidia_state = state or {}
+        self._nvidia_group.set_visible(bool(self._nvidia_state.get("present")))
+        modeset = self._nvidia_state.get("modeset")
+        self._nvidia_modeset_row.set_subtitle(
+            {"Y": _("on"), "N": _("off")}.get(modeset, _("unknown (root-only on this driver)")))
+        self._nvidia_modeset_toggle.set_label(
+            _("Turn off (needs reboot)") if modeset == "Y" else _("Turn on (needs reboot)"))
+        self._nvidia_modeset_toggle.set_sensitive(modeset in ("Y", "N"))
+        gsp = self._nvidia_state.get("gsp_firmware_version")
+        self._nvidia_gsp_row._value.set_label(gsp or _("off / unreported"))
+
+    def _on_toggle_modeset(self, _btn) -> None:
+        target = self._nvidia_state.get("modeset") != "Y"  # flip
+        win = self.get_root()
+        d = Adw.MessageDialog(
+            transient_for=win,
+            heading=_("Change nvidia-drm modeset?"),
+            body=_(
+                "This writes /etc/modprobe.d/goblin-mode-pro-nvidia.conf and takes "
+                "effect after a reboot — nothing changes right now. Turning modeset "
+                "off can break Wayland sessions on NVIDIA; only do this if you "
+                "know why you need to."),
+        )
+        d.add_response("cancel", _("Cancel"))
+        d.add_response("write", _("Write the config"))
+        d.set_response_appearance("write", Adw.ResponseAppearance.SUGGESTED)
+        d.connect("response", lambda _d, r: r == "write" and self._do_toggle_modeset(target))
+        d.present()
+
+    def _do_toggle_modeset(self, enabled: bool) -> None:
+        try:
+            ok = self.bridge.set_nvidia_modeset(enabled)
+        except Exception as exc:  # noqa: BLE001
+            ok = False
+            log.warning("set_nvidia_modeset failed: %s", exc)
+        win = self.get_root()
+        if hasattr(win, "toast"):
+            win.toast(_("Config written — reboot to apply") if ok
+                     else _("Couldn't write the config"))
 
     def _explain_score(self) -> None:
         """Expand the health pill into what each failing/warn check actually
