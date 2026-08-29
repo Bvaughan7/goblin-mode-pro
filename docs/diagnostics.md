@@ -25,9 +25,25 @@ Pick a game, **Arm benchmark**, play a few minutes. On exit you get a report car
 tagged **BENCHMARK**: 0.1% low, 95th percentile, frame-time stutter %, and
 thermal peaks — on top of the usual numbers.
 
+## Comparing sessions
+**Compare two sessions** diffs a game's two most recent sessions — every FPS,
+frame-time and thermal metric side by side, with the % change and which side
+improved (temps/stutter treat *lower* as the improvement, FPS treats *higher*).
+Same thing headlessly: `goblin-mode-pro-cli compare GAME`.
+
+## Shareable benchmark cards
+Each session in the history list has **Copy as JSON** (clipboard, for pasting
+into a PR or forum thread) and **Save as image** (a small report-card PNG to
+`~/Pictures/goblin-mode-pro/`). See
+[`community/benchmarks/`](https://github.com/Bvaughan7/goblin-mode-pro/tree/main/community/benchmarks)
+for the PR-based per-GPU submission flow — there's no upload server.
+
 ## Exports
 - **Export last incident for AI** — the incident + metric window + log tail as a
   structured JSON prompt.
 - **Build a bug report** — system info + pre-flight + last incident + log
   analysis, redacted, as Markdown.
 - **Export my full setup** — the whole machine + every profile.
+- **Analyze the Proton log** — matches the captured log against known Linux-
+  gaming failures; findings with a known fix (e.g. missing vcrun/mono) show a
+  copyable `protontricks` command inline.

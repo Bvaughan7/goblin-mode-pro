@@ -27,7 +27,13 @@ power tuning ("limited mode").
 ## First run
 
 The GUI opens a short wizard the first time: it checks your system, offers the
-safe fixes, and shows exactly where your launcher's wrapper field is.
+safe fixes, lists anything still missing (MangoHud, GameMode, a gaming kernel)
+with a copy-pasteable install command for your distro, and shows exactly where
+your launcher's wrapper field is. If you never open the window, the tray icon
+still shows your readiness score and a "Finish setup" nudge.
+
+The UI is available in English, German, French, Spanish, Brazilian Portuguese
+and Chinese (Simplified) — it follows your system locale automatically.
 
 ## The one step you can't skip
 
@@ -47,5 +53,6 @@ Without it, env-var injection and the Proton-log capture are skipped.
 - Kernel ≥ 5.16 for `WINEFSYNC`
 - Unprivileged user namespaces enabled (some hardened Debian/Ubuntu kernels
   disable them — the System Check catches this)
-- Optional: `mangohud`, `gamemode`, `gamescope`, `ryzenadj` (AMD TDP),
-  `intel-undervolt`, `gpu-screen-recorder` (auto-clip)
+- Optional: `mangohud`, `gamemode`, `gamescope`, `ryzenadj` (AMD TDP +
+  Curve Optimizer undervolt), `intel-undervolt`, `gpu-screen-recorder`
+  (auto-clip), `python3-cairo` (saving a benchmark card as an image)

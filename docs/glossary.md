@@ -35,3 +35,14 @@ Linux. DXVK does Direct3D 9-11 → Vulkan; VKD3D-Proton does D3D12 → Vulkan.
 
 **1% low / 0.1% low FPS** — the average of the slowest 1% (or 0.1%) of frames.
 A much better "is it smooth?" number than the average.
+
+**Curve Optimizer** — AMD's per-core undervolt/frequency-curve tuning, applied
+via `ryzenadj`. Goblin Mode Pro only ever *re-applies* the offsets you already
+put in `/etc/goblin-mode-pro/amd-undervolt.conf` — it never picks values.
+
+**GSP firmware** — NVIDIA's GPU System Processor, an offload microcontroller on
+the card itself that recent drivers use for parts of the kernel-mode work.
+
+**nvidia-drm.modeset** — a boot-time kernel module parameter NVIDIA needs on
+for Wayland and explicit sync. There's no runtime toggle — changing it means
+writing a modprobe.d config and rebooting.
