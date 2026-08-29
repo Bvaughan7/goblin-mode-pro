@@ -41,6 +41,9 @@ goblin-mode-pro = "goblinmode.gui.app:main"
 [tool.setuptools]
 package-dir = { "" = "src" }
 
+[tool.setuptools.package-data]
+goblinmode = ["assets/*.png"]
+
 [tool.setuptools.packages.find]
 where = ["src"]
 

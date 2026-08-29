@@ -13,6 +13,7 @@ from __future__ import annotations
 import logging
 import os
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Callable
 
 os.environ.setdefault("PYSTRAY_BACKEND", "appindicator")
@@ -31,6 +32,28 @@ except Exception as _exc:  # noqa: BLE001 - pystray/Pillow missing or no backend
     log.warning("system tray unavailable (%s) - running without an icon", _exc)
 
 _SIZE = 64
+_ICON_PNG = Path(__file__).with_name("assets") / "goblin-tray.png"
+
+
+def _icon_image(boosting: bool) -> "Image.Image":
+    """The tray icon: the bundled goblin-mark PNG (matches the app icon), with
+    an ember ring + a warm tint while boosting. Falls back to the hand-drawn
+    version if the asset can't be loaded."""
+    try:
+        base = Image.open(_ICON_PNG).convert("RGBA").resize((_SIZE, _SIZE), Image.LANCZOS)
+    except Exception as exc:  # noqa: BLE001
+        log.debug("tray asset unavailable (%s) - drawing the fallback", exc)
+        return _draw_icon(boosting)
+    if not boosting:
+        return base
+    from PIL import ImageEnhance
+
+    base = ImageEnhance.Brightness(base).enhance(1.12)
+    ring = Image.new("RGBA", (_SIZE, _SIZE), (0, 0, 0, 0))
+    ImageDraw.Draw(ring).ellipse((2, 2, _SIZE - 3, _SIZE - 3),
+                                 outline=(226, 88, 42, 255), width=4)
+    base.alpha_composite(ring)
+    return base
 
 
 @dataclass
@@ -105,7 +128,7 @@ class Tray:
         if _TRAY_AVAILABLE:
             self._icon = pystray.Icon(
                 "goblin-mode-pro",
-                icon=_draw_icon(False),
+                icon=_icon_image(False),
                 title="Goblin Mode Pro",
                 menu=self._build_menu(),
             )
@@ -159,7 +182,7 @@ class Tray:
         if self._icon is None:
             return
         try:
-            self._icon.icon = _draw_icon(self._boosting)
+            self._icon.icon = _icon_image(self._boosting)
             self._icon.title = f"Goblin Mode Pro - {self._status_text}"
             self._icon.menu = self._build_menu()
             self._icon.update_menu()
