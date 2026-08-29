@@ -18,11 +18,15 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from typing import TYPE_CHECKING
 
-from goblinmode.ipc.daemon_bridge import BridgeClient
+if TYPE_CHECKING:  # keeps `import gi` (via daemon_bridge) out of the import path
+    from goblinmode.ipc.daemon_bridge import BridgeClient
 
 
-def _connect() -> BridgeClient:
+def _connect() -> "BridgeClient":
+    from goblinmode.ipc.daemon_bridge import BridgeClient
+
     b = BridgeClient()
     if not b.connect():
         sys.exit("goblin-mode-pro daemon is not running "
