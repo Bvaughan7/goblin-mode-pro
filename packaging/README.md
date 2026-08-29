@@ -33,18 +33,47 @@ systemctl --user  enable --now goblin-mode-pro.service
 The `.install` hook activates the AMD-TDP sandbox drop-in automatically when
 `ryzenadj` is present.
 
-## Debian / Ubuntu / Fedora / openSUSE / Nobara / Pop!\_OS …
+## Debian / Ubuntu / Pop!\_OS / Mint …
 
-Use [`../install.sh`](../install.sh) — it detects the package manager, installs
-the runtime dependencies and lays down the same file set as the PKGBUILD. A
-proper `.deb` / `.rpm` built in OBS is a follow-up; the file layout is already
-FHS-correct so it is mostly a control-file exercise.
+[`debian/`](debian/) is a complete `debhelper` (compat 13) source-package
+directory. It mirrors the FHS layout of the PKGBUILD via
+`override_dh_auto_install` in [`debian/rules`](debian/rules), and its maintainer
+scripts enable the helper service and `systemctl --global enable` the user
+daemon.
+
+```sh
+cp -r packaging/debian .          # dpkg-buildpackage expects ./debian
+dpkg-buildpackage -us -uc -b
+```
+
+For [OBS](https://build.opensuse.org/), point the package at this repo and use
+`packaging/debian/` as the `debian` sub-directory.
+
+## Fedora / RHEL / openSUSE / Nobara …
+
+[`rpm/goblin-mode-pro.spec`](rpm/goblin-mode-pro.spec) is a `noarch` spec with
+the Fedora `systemd` scriptlet macros wired up.
+
+```sh
+rpmbuild -ba packaging/rpm/goblin-mode-pro.spec \
+  --define "_sourcedir $PWD"          # after `git archive`-ing a v<ver> tarball
+```
+
+## Other distros
+
+[`../install.sh`](../install.sh) detects the package manager, installs the
+runtime dependencies and lays down the same file set by hand — the fallback when
+no native package exists yet.
 
 ## Flatpak — not provided, on purpose
 
 The helper writes to `/sys/devices/system/cpu`, owns a name on the **system**
 D-Bus, and runs as a root systemd service; none of that fits the Flatpak
 sandbox. Shipping only the GUI as a Flatpak would still need the daemon and
-helper installed on the host, so it saves nothing. If a sandboxed GUI is ever
-worth it, it would talk to a host-installed daemon over the session bus — but
-that is not on the roadmap.
+helper installed on the host (the GUI is a pure session-bus client of the
+daemon and does nothing useful alone), so it saves nothing — a user who can
+install the daemon can install the ~200 KB GUI the same way. A sandboxed GUI
+talking to a host daemon over the session bus is *possible* (`--talk-name`
+`com.goblinmode.Pro.Daemon`), but it trades the whole install story for a
+sandbox the GUI doesn't need. Revisit only if a distro ships the daemon but not
+the GUI. See [`ROADMAP.md`](../ROADMAP.md) → "Reconsider Flatpak".

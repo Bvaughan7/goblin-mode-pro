@@ -1,0 +1,13 @@
+#!/bin/sh
+set -e
+case "$1" in
+    configure)
+        systemctl daemon-reload || true
+        systemctl enable --now goblin-mode-pro-helper.service || true
+        # The user daemon is a systemd --user unit; enable it globally so it
+        # starts for every user session without each user opting in by hand.
+        systemctl --global enable goblin-mode-pro.service || true
+        ;;
+esac
+#DEBHELPER#
+exit 0

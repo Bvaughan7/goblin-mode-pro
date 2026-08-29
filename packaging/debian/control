@@ -1,0 +1,28 @@
+Source: goblin-mode-pro
+Section: utils
+Priority: optional
+Maintainer: Bryan Vaughan <bryanvaughan07@gmail.com>
+Build-Depends: debhelper-compat (= 13), python3
+Standards-Version: 4.6.2
+Homepage: https://github.com/Bvaughan7/goblin-mode-pro
+Rules-Requires-Root: no
+
+Package: goblin-mode-pro
+Architecture: all
+Depends: ${misc:Depends},
+         python3 (>= 3.11),
+         python3-gi,
+         gir1.2-gtk-4.0,
+         gir1.2-adw-1,
+         python3-psutil,
+         policykit-1 | polkitd
+Recommends: mangohud, gamemode, gamescope, wl-clipboard, python3-pystray
+Suggests: gpu-screen-recorder
+Description: One-switch performance helper for Linux gaming
+ Detects a game launching, tunes the CPU governor, process priority,
+ compositor and power limits, and reverts them cleanly on exit - then
+ watches thermals, frame rate and the Proton log and turns a problem into
+ a plain-language report.
+ .
+ An unprivileged systemd --user daemon does the work; a small polkit-gated
+ root helper performs the handful of privileged sysfs writes.

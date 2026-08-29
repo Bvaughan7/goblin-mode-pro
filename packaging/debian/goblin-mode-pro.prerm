@@ -1,0 +1,10 @@
+#!/bin/sh
+set -e
+case "$1" in
+    remove|deconfigure)
+        systemctl disable --now goblin-mode-pro-helper.service || true
+        systemctl --global disable goblin-mode-pro.service || true
+        ;;
+esac
+#DEBHELPER#
+exit 0

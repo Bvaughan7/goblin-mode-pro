@@ -1,0 +1,33 @@
+#!/usr/bin/make -f
+# Goblin Mode Pro - Debian packaging (for OBS / dpkg-buildpackage).
+# Mirrors the FHS layout used by install.sh and the Arch PKGBUILD.
+
+DESTDIR = $(CURDIR)/debian/goblin-mode-pro
+LIBDIR  = /usr/lib/goblin-mode-pro
+
+%:
+	dh $@
+
+override_dh_auto_build:
+	python3 -m compileall -q src/goblinmode || true
+
+override_dh_auto_test:
+
+override_dh_auto_install:
+	install -d $(DESTDIR)$(LIBDIR)
+	cp -rT src/goblinmode $(DESTDIR)$(LIBDIR)/goblinmode
+	install -Dm0755 helper/goblin_helper.py $(DESTDIR)$(LIBDIR)/goblin_helper.py
+	install -d $(DESTDIR)/usr/bin
+	printf '#!/usr/bin/python3\nimport sys\nsys.path.insert(0, "$(LIBDIR)")\nfrom goblinmode.daemon import main\nraise SystemExit(main())\n'  > $(DESTDIR)/usr/bin/goblin-mode-pro-daemon
+	printf '#!/usr/bin/python3\nimport sys\nsys.path.insert(0, "$(LIBDIR)")\nfrom goblinmode.gui.app import main\nraise SystemExit(main())\n' > $(DESTDIR)/usr/bin/goblin-mode-pro
+	printf '#!/usr/bin/python3\nimport sys\nsys.path.insert(0, "$(LIBDIR)")\nfrom goblinmode.cli import main\nraise SystemExit(main())\n'     > $(DESTDIR)/usr/bin/goblin-mode-pro-cli
+	chmod 0755 $(DESTDIR)/usr/bin/goblin-mode-pro-daemon $(DESTDIR)/usr/bin/goblin-mode-pro $(DESTDIR)/usr/bin/goblin-mode-pro-cli
+	install -Dm0644 data/polkit/com.goblinmode.pro.policy $(DESTDIR)/usr/share/polkit-1/actions/com.goblinmode.pro.policy
+	install -Dm0644 data/dbus/com.goblinmode.ProHelper.conf $(DESTDIR)/usr/share/dbus-1/system.d/com.goblinmode.ProHelper.conf
+	install -Dm0644 data/systemd/goblin-mode-pro-helper.service $(DESTDIR)/usr/lib/systemd/system/goblin-mode-pro-helper.service
+	install -Dm0644 data/systemd/goblin-mode-pro.service $(DESTDIR)/usr/lib/systemd/user/goblin-mode-pro.service
+	install -Dm0644 data/com.goblinmode.Pro.desktop $(DESTDIR)/usr/share/applications/com.goblinmode.Pro.desktop
+	install -Dm0644 data/icons/com.goblinmode.Pro.svg $(DESTDIR)/usr/share/icons/hicolor/scalable/apps/com.goblinmode.Pro.svg
+	install -Dm0644 data/systemd/helper-amd-tdp.conf $(DESTDIR)/usr/share/goblin-mode-pro/helper-amd-tdp.conf
+	install -Dm0644 data/systemd/helper-undervolt.conf $(DESTDIR)/usr/share/goblin-mode-pro/helper-undervolt.conf
+	install -Dm0644 LICENSE $(DESTDIR)/usr/share/doc/goblin-mode-pro/copyright
