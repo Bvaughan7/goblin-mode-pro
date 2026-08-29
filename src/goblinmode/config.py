@@ -79,6 +79,14 @@ def _default_runner_vars() -> dict[str, bool]:
     return {"nvapi": True, "fsync": True, "no_esync": False, "dxvk_async": True}
 
 
+GAMESCOPE_UPSCALERS = ("off", "fsr", "nis", "integer")
+
+
+def _default_gamescope() -> dict:
+    return {"w": 0, "h": 0, "refresh": 0, "upscale": "off", "hdr": False,
+            "borderless": True, "steam_overlay": True}
+
+
 @dataclass
 class GameProfile:
     exe: str
@@ -113,6 +121,11 @@ class GameProfile:
     # Runner env vars (Proton/Wine)
     runner_vars: dict[str, bool] = field(default_factory=_default_runner_vars)
 
+    # gamescope: a micro-compositor that gives a rock-solid frame limiter,
+    # FSR/NIS upscaling and clean alt-tab. Off by default.
+    gamescope_enabled: bool = False
+    gamescope: dict = field(default_factory=_default_gamescope)
+
     def __post_init__(self) -> None:
         self.exe = sanitize_exe(self.exe)
         if not self.display_name:
@@ -130,6 +143,12 @@ class GameProfile:
             self.mangohud.setdefault(k, v)
         for k, v in _default_runner_vars().items():
             self.runner_vars.setdefault(k, v)
+        for k, v in _default_gamescope().items():
+            self.gamescope.setdefault(k, v)
+        for k in ("w", "h", "refresh"):
+            self.gamescope[k] = max(0, min(10000, int(self.gamescope.get(k, 0) or 0)))
+        if self.gamescope.get("upscale") not in GAMESCOPE_UPSCALERS:
+            self.gamescope["upscale"] = "off"
 
     def env_assignments(self) -> dict[str, str]:
         """Resolve the enabled runner toggles into concrete env vars."""

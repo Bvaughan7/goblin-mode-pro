@@ -1,111 +1,157 @@
 # Goblin Mode Pro
 
-A lightweight native-Linux gaming utility. It detects a game launching, applies a
-set of system performance tweaks, and reverts them cleanly on exit — then stays
-out of the way. It also runs a diagnostic engine that watches thermals, frame
-rate and the Wine/Proton log, and turns a problem into a shareable report.
+**A one-switch performance helper for Linux gaming.**
 
-A headless `systemd --user` daemon does the work; a GTK4 / Libadwaita window and
-a tray icon are opened on demand. Anything requiring root is delegated to a small
-polkit-gated helper.
+You start a game, Goblin Mode Pro notices, flips a bunch of system settings to
+their "I'm gaming now" positions, and puts every one of them back the moment you
+quit. No launch scripts to maintain, nothing left running in a weird state after
+you're done.
 
-Primary target: **Arch-based** distributions with **KDE Plasma on Wayland** and
-an NVIDIA or AMD GPU. Developed and tested on CachyOS.
+It also keeps an eye on things while you play — temperatures, frame rate, and the
+Proton/Wine log — and if something goes wrong it can hand you a plain-language
+explanation (or a ready-to-paste report for a forum thread).
 
 ---
 
-## What it does
+## What it actually does to boost your FPS
 
-| Module | Behaviour |
+Linux ships with sensible **defaults for a laptop on battery**, not for a game
+that wants every drop of performance. Goblin Mode Pro changes the settings below
+while a game is running and reverts them afterwards. In plain terms:
+
+| Setting | What Linux does by default | What Goblin Mode Pro does | Why it helps |
+|---|---|---|---|
+| **CPU speed ("governor")** | Slows the CPU down whenever it thinks you're idle, to save power | Locks it at full speed while you play | Stops the stutter that happens when the CPU "wakes up" a beat too late |
+| **Game priority ("renice")** | Treats your game the same as every background task | Tells the scheduler your game comes first | Background jobs (updates, indexing, browser tabs) stop stealing CPU mid-fight |
+| **Energy hint ("EPP")** | Leans toward efficiency | Leans toward performance | The CPU stops second-guessing itself and holds higher clocks |
+| **Screen tearing** | Adds a small delay so the picture is always "clean" | Allows tearing while you game | Lower input lag — your mouse feels more connected |
+| **Adaptive sync / VRR** | Often left off | Turns it on for monitors that support it | The monitor matches the game's frame rate, killing a whole class of stutter |
+| **CPU power limit** *(Intel only)* | Caps the watts the CPU may draw | Optionally raises the cap (you choose the number) | If your cooling can keep up, the CPU holds its top speed for longer |
+| **Focus mode** | Indexer, notifications and screen-blanking all keep running | Pauses the file indexer, turns on Do Not Disturb, stops the screen sleeping | Removes the background hitches and the "screen dimmed mid-cutscene" problem |
+| **Proton/Wine switches** | Off unless you set them by hand | Flips the common ones (NVAPI, Fsync, async shaders) per game | The settings most Windows games need on Proton, without editing launch options |
+| **MangoHud overlay** | Not shown | Shows FPS / temps on screen if you want it | See what's actually happening |
+| **gamescope** *(optional)* | Not used | Runs the game inside gamescope | Rock-solid FPS cap, FSR/NIS upscaling, and alt-tab that doesn't break the game |
+
+"Global" changes (CPU speed, tearing) are shared — they switch on when the first
+game starts and switch off only when the last one quits.
+
+### And while you play, it watches for problems
+
+- **System Check** — a one-page scan of the kernel settings that make Linux games
+  crash or stutter (the infamous `vm.max_map_count` that makes Unreal Engine 5
+  games crash, the file-descriptor limit that breaks Proton's esync, user
+  namespaces that anti-cheat needs, and about a dozen more). Each item is marked
+  **PASS / CHECK / ACTION**, and the safe ones have a one-click fix.
+- **Proton log analyzer** — reads the Wine/Proton log after a crash and matches it
+  against ~16 known Linux-gaming failures (missing Visual C++, VRAM ran out,
+  "device lost", anti-cheat didn't start…), then tells you the cause and the fix
+  in one sentence.
+- **Frame-rate watchdog** — optional, per game. If your FPS falls off a cliff and
+  stays there, it snapshots what the GPU was doing (VRAM, PCIe link, clocks,
+  power state) so you can see *why*, instead of guessing.
+- **Bug report** — one button collects your system info, the scan results, the
+  last problem and the active settings into a Markdown report on your clipboard,
+  ready to paste into a help thread.
+
+---
+
+## Will this work on my system?
+
+**The core FPS features work on any Linux PC with systemd.** A few extras depend
+on your hardware, and Goblin Mode Pro detects that and greys out what doesn't
+apply — it never just fails silently.
+
+| Your setup | What you get |
 |---|---|
-| **Observer** | `psutil` poll loop (systemd *user* service). Applies the payload once on launch, reverts once on exit. |
-| **Auto-detect** | Recognises *any* game, not just the profile list — Steam / Lutris / Heroic launcher tags, plus a signal stack (DRM `fdinfo` GPU activity, `libSDL2`/`libwine` links, a desktop-environment blocklist). New games get a default profile and a tray notification with **Keep / Ignore**. Toggle off in **Games**. |
-| **Performance Payload** | CPU governor → `performance` + EPP → `performance`; optional RAPL **PL1/PL2 raise**; `renice` the game (default `-5`); KWin **AllowTearing** + **Adaptive Sync/VRR**; **Focus mode** (pause the file indexer, Do Not Disturb, inhibit idle); MangoHud config; runner env vars. Global tweaks are refcounted across games. |
-| **System Check** | A pre-flight panel: `vm.max_map_count` (UE5 crash guard), esync file-descriptor limit, split-lock mitigation, `nvidia-drm.modeset`, transparent hugepages, memory compaction, swap, Vulkan ICD, gamemode/MangoHud presence — each with a status and, where safe, a one-click fix (plus the `sysctl.d` / kernel-param text to make it permanent). |
-| **Proton log analyzer** | 16 known Linux-gaming failure patterns (esync FD ceiling, VC++/wine-mono missing, `VK_ERROR_DEVICE_LOST`, VRAM OOM, anti-cheat not initialising, shader-cache unwritable, …) → plain-language cause + fix. Runs on the captured Wine/Proton log. |
-| **Bug report** | One button gathers system info + the pre-flight results + the last incident + the log analysis + active tweaks into a Markdown report on your clipboard, ready to paste into a forum thread or issue. |
-| **MangoHud Integrator** | Round-trips `~/.config/MangoHud/MangoHud.conf` (or a per-game `<exe>.conf`), touching only its own managed block. Toggles: overlay, FPS, CPU/GPU temp, RAM, frame timing. |
-| **Diagnostic Engine** | While a game runs: CPU pkg temp, per-core load, package power vs PL1/PL2, GPU load/temp, CPU & GPU throttle flags. Raises a debounced *incident* on a throttle onset or a GPU driver fault seen in the Proton log. |
-| **Frame-rate watchdog** | Optional per game. Logs FPS via MangoHud and, on a sustained extreme dip (default ≤ 22 fps or < 50% of the recent median), snapshots deep GPU state — VRAM used/free, PCIe link gen/width, power-state, core-clock collapse — into an `fps_dip` incident with a ranked list of likely causes. After the game exits it checks whether VRAM was actually released (still allocated → a driver leak that a reboot clears). Built for DX12 / VKD3D-Proton stalls that thermal monitoring can't explain. |
-| **LLM Export** | Packages an incident (+ metric window, FPS trace, GPU state, log tail, active tweaks) into a structured JSON payload wrapped in a diagnostic system prompt, and copies it to the clipboard. |
+| **Any systemd Linux** — Arch, CachyOS, Debian, Ubuntu, Fedora, Nobara, openSUSE, Pop!_OS… | Everything below that your hardware supports. The installer detects your package manager. |
+| **Intel CPU** | All CPU features, including the power-limit boost. |
+| **AMD CPU** | Everything **except** the Intel-only power-limit raise. Governor, energy hint, and priority all work normally. (Laptop TDP control works too if you install `ryzenadj`.) |
+| **NVIDIA GPU** | Everything, including the deep "why did my FPS drop" GPU snapshot. |
+| **AMD or Intel GPU** | Everything **except** that deep snapshot — you still get GPU temperature and load. |
+| **KDE Plasma** | Everything, including the tearing / VRR compositor tweaks. |
+| **GNOME, Hyprland, Sway, other** | Everything **except** the KDE-specific compositor tweaks. GameMode (which the launch wrapper uses automatically) covers most of that ground. |
+| **No systemd** (Void with runit, Gentoo/OpenRC, Alpine…) | Not supported — the daemon and the privileged helper are both systemd units. |
 
-### Privilege model
-
-CPU governor / EPP, `renice`, RAPL power limits and the pre-flight kernel
-tunables are **root-only**. They are handled by a small **system** D-Bus service,
-`goblin-mode-pro-helper`, running as root under a hardened systemd unit. Every
-mutating call is authorised through polkit:
-
-| polkit action | covers | default on the active session |
-|---|---|---|
-| `com.goblinmode.pro.manage-performance` | governor, EPP, renice, RAPL PL1/PL2 | allowed without a prompt |
-| `com.goblinmode.pro.manage-kernel-tunables` | persistent sysctls from the System Check | prompts for admin auth |
-
-Inputs are constrained at the helper: the governor must be one the kernel
-advertises, `renice` only raises priority and only for a process the caller owns,
-RAPL writes are clamped to the firmware maximum, and sysctl keys are a fixed
-allowlist with per-key numeric ranges. `manage-performance` is silent on the
-active session so a boost applies the instant a game launches — to require a
-prompt there too, set `<allow_active>auth_admin_keep</allow_active>` in
-`/usr/share/polkit-1/actions/com.goblinmode.pro.policy`.
-
-Without the helper the daemon runs in **limited mode**: auto-detect, MangoHud,
-compositor tweaks, diagnostics, the log analyzer and reports all work; the CPU
-governor, `renice` and power limits do not.
+> **Is it "Intel only"?** No. That's a common misconception. Only the **CPU
+> power-limit raise** is Intel-specific (it uses Intel's RAPL interface). Every
+> other performance feature is vendor-neutral and works fine on AMD.
 
 ---
 
 ## Install
 
 ```sh
-git clone <repo> goblin-mode-pro && cd goblin-mode-pro
-./install.sh            # full install (prompts for sudo for the root bits)
-# or
-./install.sh --user    # skip the root helper (limited mode)
+git clone https://github.com/<you>/goblin-mode-pro
+cd goblin-mode-pro
+./install.sh
+```
+
+The installer figures out your distribution, installs the dependencies it can,
+and tells you exactly what to install by hand if it doesn't recognise your
+package manager. Options:
+
+```sh
+./install.sh            # full install — asks for your password once, for the root helper
+./install.sh --user     # no root helper: everything works except CPU speed/power tuning
 ./install.sh --uninstall
 ```
 
-Dependencies (Arch package names, all from the official repos):
+**What needs your password, and why:** changing the CPU governor, priority and
+power limit requires root. Goblin Mode Pro does *not* run as root — instead it
+installs one tiny root service (`goblin-mode-pro-helper`) that does only those
+specific writes, each one checked by polkit and validated against a fixed
+allowlist. Skip it with `--user` and everything else still works ("limited
+mode").
 
-```
-python python-gobject python-psutil python-pillow python-pystray
-gtk4 libadwaita wl-clipboard        # mangohud and gamemode recommended
-```
+### Dependencies (if you're installing them yourself)
 
----
+You need Python 3, PyGObject, GTK 4, libadwaita, and `psutil`. Package names:
 
-## Usage
-
-* The daemon starts with your session (`systemctl --user status goblin-mode-pro`).
-  If a game isn't detected, first check `systemctl --user is-active goblin-mode-pro`
-  and `journalctl --user -u goblin-mode-pro -f`.
-* Open the GUI from the app menu or `goblin-mode-pro`, or the tray icon's
-  **Open Goblin Mode Pro**.
-* **Games** page → add your executables, tune per-game toggles.
-* For Proton games, set the Steam **launch options** to:
-
-  ```
-  goblin-run %command%
-  ```
-
-  This lets Goblin Mode Pro inject the runner variables and capture the
-  Wine/Proton log for fault detection. The wrapper also runs the game through
-  `gamemoderun` when available.
-
-### Runner variables
-
-Per-game toggles in the GUI map to:
-
-| Toggle | Env |
+| Distro | Command |
 |---|---|
-| NVAPI | `PROTON_ENABLE_NVAPI=1`, `DXVK_ENABLE_NVAPI=1` |
-| Force Fsync | `WINEFSYNC=1` |
-| Disable Esync | `PROTON_NO_ESYNC=1` |
-| Async shader compile | `DXVK_ASYNC=1` |
+| Arch / CachyOS | `pacman -S python-gobject python-psutil gtk4 libadwaita python-pystray wl-clipboard mangohud gamemode gamescope` |
+| Debian / Ubuntu | `apt install python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 python3-psutil wl-clipboard mangohud gamemode gamescope` |
+| Fedora / Nobara | `dnf install python3-gobject python3-psutil gtk4 libadwaita wl-clipboard mangohud gamemode gamescope` |
+| openSUSE | `zypper install python3-gobject python3-psutil gtk4-tools libadwaita wl-clipboard mangohud gamemode gamescope` |
+
+`mangohud`, `gamemode` and `gamescope` are optional but recommended — the overlay,
+the frame-rate watchdog and the gamescope integration need them.
 
 ---
 
-## Architecture
+## Using it
+
+1. The daemon starts automatically with your desktop session.
+2. Open **Goblin Mode Pro** from your app menu (or the tray icon).
+3. **Games** page → add your game's executable, turn on the tweaks you want.
+   Auto-detect is on by default, so most games get picked up without you adding
+   anything.
+4. **For Steam games**, set the game's **Launch Options** to:
+
+   ```
+   goblin-run %command%
+   ```
+
+   This lets Goblin Mode Pro pass the Proton/Wine switches to the game and
+   capture the log for the crash analyzer. (It also runs the game through
+   `gamemoderun` automatically.)
+
+5. **For Lutris / Heroic**, add `goblin-run` as a command prefix / wrapper.
+
+### Sharing a profile with a friend
+
+On any game row, the **Export** button (↗) writes the profile to a `.json` file.
+Your friend uses the **Import** button (📂) at the top of the Games list to load
+it. Handy for "here's the exact config that fixed the stutter in <game>".
+
+---
+
+<details>
+<summary><b>Technical reference</b> (architecture, the privilege model, every module)</summary>
+
+### Architecture
+
+Three cooperating processes:
 
 ```
  ┌─────────────────────────┐        session bus         ┌──────────────┐
@@ -117,89 +163,97 @@ Per-game toggles in the GUI map to:
              │ system bus  com.goblinmode.ProHelper  (polkit-gated)
              ▼
  ┌─────────────────────────┐
- │ goblin-mode-pro-helper   │  governor · EPP · renice · RAPL PL1/PL2
- │ (systemd system, root)   │  snapshots to /run/goblin-mode-pro/state.json
+ │ goblin-mode-pro-helper   │  governor · EPP · renice · RAPL PL1/PL2 · sysctls
+ │ (systemd system, root)   │  snapshots originals to /run/goblin-mode-pro/state.json
  └─────────────────────────┘
 ```
 
-* **Config**: `~/.config/goblin-mode-pro/config.json` (plain JSON, shared by all
-  three processes).
-* **Incidents**: `~/.local/share/goblin-mode-pro/incidents.jsonl`.
-* **Captured game logs**: `~/.local/share/goblin-mode-pro/logs/`.
+- **Daemon** (unprivileged, `systemd --user`): the `psutil` poll loop that
+  detects games, the diagnostics sampler, the log watcher, the tray icon. Applies
+  the payload once on launch and reverts once on exit.
+- **Helper** (root, `systemd` system service): does *only* the privileged sysfs
+  writes, each gated by polkit and re-validated against a fixed allowlist.
+- **GUI** (on demand): a pure D-Bus client of the daemon. No privileged code.
 
-### Wayland note
+Config is a single JSON file, `~/.config/goblin-mode-pro/config.json`, shared by
+all three. Incidents: `~/.local/share/goblin-mode-pro/incidents.jsonl`. Captured
+game logs: `~/.local/share/goblin-mode-pro/logs/`.
 
-KWin cannot *suspend* compositing on Wayland, so the "compositor" tweaks instead:
+### Modules
 
-* enable **Allow Tearing** (immediate presentation) via `kwriteconfig6` + a KWin
-  reconfigure, and
-* switch **Adaptive Sync / VRR** to `automatic` on any VRR-capable output via
-  `kscreen-doctor`
+| Module | Behaviour |
+|---|---|
+| **Observer** | `psutil` poll loop. Per-profile state machine: `ABSENT→PRESENT` applies, `PRESENT→ABSENT` reverts. Global tweaks are refcounted across concurrent games. |
+| **Auto-detect** | Recognises any game, not just the profile list — launcher tags (Steam/Lutris/Heroic) plus a signal stack (DRM `fdinfo` GPU activity, `libSDL2`/`libwine` links, a DE blocklist). New games get a default profile and a **Keep / Ignore** notification. |
+| **Performance Payload** | governor→`performance`, EPP→`performance`, optional RAPL PL1/PL2 raise, `renice` (default `-5`), KWin `AllowTearing` + VRR via `kscreen-doctor`, Focus mode, MangoHud config, runner env vars, gamescope. |
+| **Capabilities** | One-time hardware probe (CPU vendor, cpufreq driver, EPP/RAPL availability, GPU vendors, `nvidia-smi`, compositor, distro, package manager). Attached to daemon status so the GUI labels or hides features that don't apply. |
+| **System Check** | Pre-flight panel: `vm.max_map_count`, esync FD limit, split-lock mitigation, `nvidia-drm.modeset`, THP, `compaction_proactiveness`, swappiness, kernel fsync support, user namespaces (Steam Runtime + anti-cheat), Vulkan ICD, gamemode/MangoHud presence, plus an anti-cheat status note. Safe fixes are one-click; the `sysctl.d` / kernel-param text is shown for permanence. |
+| **Proton log analyzer** | ~16 known failure patterns → plain-language cause + fix, run on the captured Wine/Proton log. |
+| **Frame-rate watchdog** | Per game. Logs FPS via MangoHud; on a sustained extreme dip (default ≤22 fps or <50% of the recent median) snapshots deep GPU state into an `fps_dip` incident with ranked likely causes. Checks whether VRAM was released after exit (leak detection). |
+| **MangoHud Integrator** | Round-trips `MangoHud.conf` (or a per-game `<exe>.conf`), touching only its managed block. |
+| **Diagnostic Engine** | While a game runs: CPU pkg temp, per-core load, package power vs PL1/PL2, GPU load/temp, throttle flags. Debounced incidents on throttle onset or GPU driver fault. |
+| **Bug report** | System info + pre-flight + last incident + log analysis + active tweaks → Markdown on the clipboard. |
+| **LLM Export** | Packages an incident (+ metric window, FPS trace, GPU state, log tail, active tweaks) into structured JSON wrapped in a diagnostic system prompt. |
 
-…for the duration of the game, restoring both on exit. On **KDE + X11** it does a
-real compositor suspend/resume; on GNOME/wlroots/unknown it no-ops with a log
-line (`gamemoderun`, which the wrapper already uses, covers the rest).
+### Privilege model
 
-Adaptive Sync only takes effect on a VRR-capable output; a display reported as
-`Vrr: incapable` by `kscreen-doctor` is skipped.
+| polkit action | covers | default on the active session |
+|---|---|---|
+| `com.goblinmode.pro.manage-performance` | governor, EPP, renice, RAPL PL1/PL2 | allowed without a prompt |
+| `com.goblinmode.pro.manage-kernel-tunables` | persistent sysctls from the System Check | prompts for admin auth |
 
-### Frame-rate watchdog
+`manage-performance` is silent on the active session so a boost applies the
+instant a game launches. To require a prompt there too, set
+`<allow_active>auth_admin_keep</allow_active>` in
+`/usr/share/polkit-1/actions/com.goblinmode.pro.policy`.
 
-Enable it per game under **Games → \<game\> → MangoHud → Frame-rate watchdog**.
-It needs MangoHud injected into the game (the Steam launch wrapper does this
-automatically; on **Lutris** tick "Enable MangoHud" or set `MANGOHUD=1`). GMP
-then writes continuous CSV logging into `MangoHud.conf` and tails
-`~/.local/share/goblin-mode-pro/mangohud/`.
+Input is constrained at the helper: the governor must be one the kernel
+advertises; `renice` only raises priority and only for a process the caller owns;
+RAPL writes are clamped to the firmware maximum; sysctl keys are a fixed
+allowlist with per-key numeric ranges and the target path is confirmed under
+`/proc/sys/`. See [SECURITY.md](SECURITY.md) for the full threat model.
 
-When the trailing ~2.5 s average frame rate drops to/under the **Dip threshold**
-(default 22) or below half the recent median, it logs an `fps_dip` incident
-holding the FPS trace plus an `nvidia-smi` snapshot — VRAM, PCIe link
-gen/width, power-state, clocks — and a ranked guess at the cause (VRAM
-exhaustion / PCIe down-training / stuck power-state / clock collapse). Export it
-with **Diagnostics → Export for AI Analysis**.
+### Runner variables
 
-*First launch after enabling won't log* — MangoHud reads its config at start and
-GMP writes it a few seconds later. Relaunch once.
+| Toggle | Environment |
+|---|---|
+| NVAPI | `PROTON_ENABLE_NVAPI=1`, `DXVK_ENABLE_NVAPI=1` |
+| Force Fsync | `WINEFSYNC=1` |
+| Disable Esync | `PROTON_NO_ESYNC=1` |
+| Async shader compile | `DXVK_ASYNC=1` |
 
-### Power limits (RAPL)
+The launch wrapper imports these as strict `NAME=VALUE` lines — no `eval`, no
+`source`.
 
-Per game, off by default. `PL1` (sustained) and `PL2` (burst) are in watts; `0`
-keeps the firmware value. Raising them past what the chassis can cool just trades
-a power-limit throttle for a thermal one — watch the Diagnostics graph. Clamped
-to the firmware maximum and restored to the snapshot on game exit.
+### Compositor tweaks (Wayland note)
 
----
+KWin cannot *suspend* compositing on Wayland, so on **KDE Wayland** the
+"compositor" tweaks instead enable **Allow Tearing** (`kwriteconfig6` + a KWin
+reconfigure) and switch **VRR** to `automatic` on VRR-capable outputs
+(`kscreen-doctor`), reverting both on exit. On **KDE + X11** it does a real
+compositor suspend/resume. On **GNOME / wlroots / unknown** it no-ops with a log
+line — `gamemoderun` covers the rest.
 
-## Security notes
-
-- The privileged helper runs as root but under a hardened unit
-  (`CapabilityBoundingSet=CAP_SYS_NICE`, `NoNewPrivileges`, `ProtectSystem=strict`
-  with an explicit `ReadWritePaths` allowlist, `PrivateNetwork`/`IPAddressDeny`,
-  a syscall filter). It imports only the standard library and PyGObject.
-- Every helper method validates its arguments (enum / allowlist / range / process
-  ownership) independently of the caller.
-- The daemon <-> GUI bridge is on the **session** bus (per-user). The helper name
-  can only be owned by root (enforced by the bus policy), so it cannot be
-  impersonated.
-- Profile `exe` values are rejected if they contain a path separator, `..`, or a
-  control character; per-game file names are derived through a separate slug
-  function. User regex patterns are length-capped and matched against
-  length-bounded strings (backtracking guard).
-- The launch wrapper imports runner variables as strict `NAME=VALUE` lines — no
-  `eval`, no `source`.
-
-Report a suspected vulnerability privately via the repository's security advisory
-page rather than a public issue.
-
-## Development
+### Development
 
 ```sh
-python -m goblinmode.daemon -v                       # daemon, foreground
-python -m goblinmode.gui.app                          # GUI
+python -m goblinmode.daemon -v                        # daemon, foreground
+python -m goblinmode.gui.app                           # GUI
 goblin-mode-pro-daemon --write-wrapper
 goblin-mode-pro-daemon --print-env-for -- /path/to/game
+goblin-mode-pro-daemon --print-gamescope -- /path/to/game
 goblin-mode-pro-daemon --revert
 ```
 
-Source is under `src/goblinmode/`; `daemon.py` wires the components together and
-`payload.py` orchestrates apply/revert. The privileged helper is `helper/goblin_helper.py`.
+Source is under `src/goblinmode/`; `daemon.py` wires the components together,
+`payload.py` orchestrates apply/revert, and the privileged helper is
+`helper/goblin_helper.py`.
+
+</details>
+
+---
+
+## Reporting a security issue
+
+Please use the repository's **Security advisories** page ("Report a
+vulnerability"), not a public issue. See [SECURITY.md](SECURITY.md).

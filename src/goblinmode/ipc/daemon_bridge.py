@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 from typing import Any, Callable, Protocol
 
 import gi
@@ -177,21 +178,14 @@ class DaemonBridge:
                     GLib.Variant("(b)", (self._handler.keep_game(params.unpack()[0]),))
                 )
             elif method == "RunPreflight":
-                invocation.return_value(
-                    GLib.Variant("(s)", (json.dumps(self._handler.run_preflight()),))
-                )
+                self._async_str(invocation, lambda: json.dumps(self._handler.run_preflight()))
             elif method == "ApplyPreflightFixes":
-                invocation.return_value(
-                    GLib.Variant("(s)", (json.dumps(self._handler.apply_preflight_fixes()),))
-                )
+                self._async_str(invocation, lambda: json.dumps(self._handler.apply_preflight_fixes()))
             elif method == "BuildReport":
-                invocation.return_value(
-                    GLib.Variant("(s)", (self._handler.build_report(params.unpack()[0]),))
-                )
+                note = params.unpack()[0]
+                self._async_str(invocation, lambda: self._handler.build_report(note))
             elif method == "AnalyzeLog":
-                invocation.return_value(
-                    GLib.Variant("(s)", (json.dumps(self._handler.analyze_log()),))
-                )
+                self._async_str(invocation, lambda: json.dumps(self._handler.analyze_log()))
             else:
                 invocation.return_dbus_error(
                     "org.freedesktop.DBus.Error.UnknownMethod", method
@@ -199,6 +193,27 @@ class DaemonBridge:
         except Exception as exc:  # noqa: BLE001
             log.exception("bridge method %s failed", method)
             invocation.return_dbus_error(f"{IFACE}.Failed", str(exc))
+
+    def _async_str(self, invocation, work: Callable[[], str]) -> None:
+        """Run a slow handler off the main loop so the daemon stays responsive;
+        reply with its ``(s)`` result (or a D-Bus error) from the main context."""
+        def reply_ok(result: str) -> bool:
+            invocation.return_value(GLib.Variant("(s)", (result,)))
+            return GLib.SOURCE_REMOVE
+
+        def reply_err(message: str) -> bool:
+            invocation.return_dbus_error(f"{IFACE}.Failed", message)
+            return GLib.SOURCE_REMOVE
+
+        def run() -> None:
+            try:
+                result = work()
+                GLib.idle_add(reply_ok, result)
+            except Exception as exc:  # noqa: BLE001
+                log.exception("async bridge handler failed")
+                GLib.idle_add(reply_err, str(exc))
+
+        threading.Thread(target=run, name="gmp-bridge-work", daemon=True).start()
 
     # -- signal emitters ---------------------------------------------------
     def _emit(self, signal: str, payload: Any) -> None:
@@ -271,6 +286,21 @@ class BridgeClient:
             method, variant, Gio.DBusCallFlags.NONE, 5000, None
         ).unpack()
 
+    def _call_async(self, method, variant, on_done, timeout_ms=30000):
+        """Call *method* without blocking the GUI loop. ``on_done(result, error)``
+        fires on the main context; ``result`` is the unpacked tuple or None."""
+        if self._proxy is None:
+            on_done(None, RuntimeError("bridge not connected"))
+            return
+
+        def _finish(proxy, res):
+            try:
+                on_done(proxy.call_finish(res).unpack(), None)
+            except GLib.Error as exc:  # pragma: no cover - needs a live bus
+                on_done(None, exc)
+
+        self._proxy.call(method, variant, Gio.DBusCallFlags.NONE, timeout_ms, None, _finish)
+
     # -- typed wrappers ------------------------------------------------
     def get_status(self) -> dict:
         return json.loads(self._call("GetStatus")[0])
@@ -311,11 +341,27 @@ class BridgeClient:
     def run_preflight(self) -> list[dict]:
         return json.loads(self._call("RunPreflight")[0])
 
+    def run_preflight_async(self, on_done: Callable[[list | None, object], None]) -> None:
+        self._call_async("RunPreflight", None, lambda out, err: on_done(
+            json.loads(out[0]) if out else None, err))
+
     def apply_preflight_fixes(self) -> dict:
         return json.loads(self._call("ApplyPreflightFixes")[0])
 
+    def apply_preflight_fixes_async(self, on_done: Callable[[dict | None, object], None]) -> None:
+        self._call_async("ApplyPreflightFixes", None, lambda out, err: on_done(
+            json.loads(out[0]) if out else None, err))
+
     def build_report(self, note: str = "") -> str:
         return self._call("BuildReport", GLib.Variant("(s)", (note,)))[0]
+
+    def build_report_async(self, note: str, on_done: Callable[[str | None, object], None]) -> None:
+        self._call_async("BuildReport", GLib.Variant("(s)", (note,)),
+                         lambda out, err: on_done(out[0] if out else None, err))
+
+    def analyze_log_async(self, on_done: Callable[[list | None, object], None]) -> None:
+        self._call_async("AnalyzeLog", None, lambda out, err: on_done(
+            json.loads(out[0]) if out else None, err))
 
     def analyze_log(self) -> list[dict]:
         return json.loads(self._call("AnalyzeLog")[0])

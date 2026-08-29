@@ -22,7 +22,7 @@ import gi
 gi.require_version("Gio", "2.0")
 from gi.repository import GLib  # noqa: E402
 
-from goblinmode import config, gpu, runner
+from goblinmode import capabilities, config, gpu, runner
 from goblinmode.diagnostics import DiagnosticEngine
 from goblinmode.fpswatch import FpsEvent, FpsWatcher
 from goblinmode.incidents import Incident, IncidentLog, build_llm_payload, copy_to_clipboard
@@ -350,6 +350,7 @@ class Daemon:
             "latest_sample": latest,
             "fps": self.fpswatch.stats(),
             "gpu": _gpu_summary(self._gpu_state),
+            "capabilities": capabilities.detect(),
             "profiles": [_profile_dict(p) for p in self.settings.profiles],
         }
 
@@ -591,33 +592,37 @@ def _downsample(rows: list[dict], target: int) -> list[dict]:
 # entry point
 # --------------------------------------------------------------------------
 def main(argv: list[str] | None = None) -> int:
+    raw = list(sys.argv[1:] if argv is None else argv)
+
+    # The launch wrapper calls these with the game command as trailing args;
+    # handle them before argparse so REMAINDER-style parsing stays simple.
+    for flag, fn in (("--print-env-for", runner.print_env_for),
+                     ("--print-gamescope", runner.print_gamescope)):
+        if raw and raw[0] == flag:
+            rest = raw[1:]
+            if rest and rest[0] == "--":
+                rest = rest[1:]
+            try:
+                print(fn(rest, config.load()))
+            except Exception:  # noqa: BLE001 - never break a game launch
+                pass
+            return 0
+
     parser = argparse.ArgumentParser(prog="goblin-mode-pro-daemon")
     parser.add_argument(
-        "--print-env-for",
-        nargs=argparse.REMAINDER,
-        metavar="CMD",
-        help="print 'export VAR=val' lines for the given launch command (used by goblin-run)",
-    )
-    parser.add_argument(
-        "--write-wrapper", action="store_true", help="(re)generate ~/.local/bin/goblin-run and exit"
+        "--write-wrapper", action="store_true",
+        help="(re)generate ~/.local/bin/goblin-run and exit",
     )
     parser.add_argument(
         "--revert", action="store_true", help="revert any applied tweaks and exit"
     )
     parser.add_argument("-v", "--verbose", action="store_true")
-    args = parser.parse_args(argv)
+    args = parser.parse_args(raw)
 
     logging.basicConfig(
         level=logging.DEBUG if args.verbose else logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
-
-    if args.print_env_for is not None:
-        argv = args.print_env_for
-        if argv and argv[0] == "--":
-            argv = argv[1:]
-        print(runner.print_env_for(argv, config.load()))
-        return 0
 
     if args.write_wrapper:
         print(runner.write_wrapper())

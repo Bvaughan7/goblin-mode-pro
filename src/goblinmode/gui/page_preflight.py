@@ -1,7 +1,9 @@
-"""System Check page - the pre-flight panel.
+"""System Check page.
 
-One row per check with a status pill; a button to apply the runtime sysctl
-fixes; an expander with the persistent drop-in / kernel-param text to install.
+Runs a set of checks on the machine's kernel settings and shows, for each, a
+plain-language status and (where it is safe to do automatically) a one-click
+fix. The scan and the fixes run on the daemon and are called asynchronously so
+the window never freezes; a spinner shows while work is in progress.
 """
 
 from __future__ import annotations
@@ -13,16 +15,16 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, Gdk, GLib, Gtk  # noqa: E402
+from gi.repository import Adw, Gdk, Gtk  # noqa: E402
 
 from goblinmode.ipc.daemon_bridge import BridgeClient
 
 log = logging.getLogger(__name__)
 
 _PILL = {
-    "ok": ("OK", "success"),
-    "warn": ("WARN", "warning"),
-    "fail": ("FAIL", "error"),
+    "ok": ("PASS", "success"),
+    "warn": ("CHECK", "warning"),
+    "fail": ("ACTION", "error"),
     "info": ("FYI", "dim-label"),
     "unknown": ("?", "dim-label"),
 }
@@ -33,21 +35,30 @@ class PreflightPage(Adw.PreferencesPage):
         super().__init__(title="System Check", icon_name="emblem-ok-symbolic")
         self.bridge = bridge
         self._window = window
+        self._busy = False
 
         head = Adw.PreferencesGroup(
-            description="Kernel knobs and limits that make Linux games crash on "
-            "launch, stutter, or leave performance on the table.",
+            description="These are Linux settings that decide whether some games "
+            "run smoothly, stutter, or fail to start. The scan is read-only.",
         )
-        self._summary = Gtk.Label(xalign=0)
-        self._summary.add_css_class("dim-label")
-        head.add(self._summary)
-        rescan = Adw.ButtonRow(title="Re-scan")
-        rescan.set_start_icon_name("view-refresh-symbolic")
-        rescan.connect("activated", lambda _r: self.refresh())
-        head.add(rescan)
-        self._apply_row = Adw.ButtonRow(title="Apply safe fixes now")
+
+        status_row = Adw.ActionRow()
+        self._spinner = Gtk.Spinner()
+        status_row.add_prefix(self._spinner)
+        self._status = Gtk.Label(xalign=0, wrap=True)
+        self._status.add_css_class("dim-label")
+        status_row.set_child(self._status)
+        head.add(status_row)
+
+        self._rescan = Adw.ButtonRow(title="Scan again")
+        self._rescan.set_start_icon_name("view-refresh-symbolic")
+        self._rescan.connect("activated", lambda _r: self.refresh())
+        head.add(self._rescan)
+
+        self._apply_row = Adw.ButtonRow(title="Apply the safe fixes")
         self._apply_row.set_start_icon_name("emblem-system-symbolic")
         self._apply_row.connect("activated", self._on_apply)
+        self._apply_row.set_sensitive(False)
         head.add(self._apply_row)
         self.add(head)
 
@@ -56,24 +67,34 @@ class PreflightPage(Adw.PreferencesPage):
         self._rows: list[Gtk.Widget] = []
 
         self._persist_group = Adw.PreferencesGroup(
-            title="Make it permanent",
-            description="Runtime fixes reset on reboot. Install these to persist.",
+            title="Make it stick after a reboot",
+            description="The one-click fixes above are temporary. To keep them, "
+            "install the text below (ask an admin if you're not sure).",
         )
-        self._persist = Adw.ExpanderRow(title="Config to install")
+        self._persist = Adw.ExpanderRow(title="Settings to install")
         self._dropin = _code_row("/etc/sysctl.d/99-goblin-mode-pro.conf", "")
-        self._kparams = _code_row("Kernel boot parameters", "")
+        self._kparams = _code_row("Startup (kernel) options", "")
         self._persist.add_row(self._dropin)
         self._persist.add_row(self._kparams)
         self._persist_group.add(self._persist)
+        self._persist_group.set_visible(False)
         self.add(self._persist_group)
 
-    # -- data ------------------------------------------------------
+    # -- scan -----------------------------------------------------------
     def refresh(self) -> None:
-        try:
-            results = self.bridge.run_preflight()
-        except Exception as exc:  # noqa: BLE001
-            log.warning("preflight failed: %s", exc)
+        if self._busy:
             return
+        self._set_busy(True, "Scanning your system…")
+        self.bridge.run_preflight_async(self._on_results)
+
+    def _on_results(self, results: list | None, err) -> None:
+        self._set_busy(False)
+        if err is not None or results is None:
+            self._status.set_label(f"Couldn't run the scan: {err}")
+            return
+        self._render(results)
+
+    def _render(self, results: list[dict[str, Any]]) -> None:
         for r in self._rows:
             self._checks_group.remove(r)
         self._rows.clear()
@@ -82,25 +103,29 @@ class PreflightPage(Adw.PreferencesPage):
         for chk in results:
             n[chk["status"]] = n.get(chk["status"], 0) + 1
             self._rows.append(self._build_row(chk))
-        self._summary.set_label(
-            f"{n['ok']} passing · {n['warn']} warnings · {n['fail']} failing"
-            + (f" · {n['info']} FYI" if n['info'] else "")
-        )
-        self._apply_row.set_sensitive(any(
-            c["sysctl"] and c["status"] in ("warn", "fail") for c in results
-        ))
 
-        dropin = "\n".join(
-            f"{c['sysctl'][0]} = {c['sysctl'][1]}"
-            for c in results if c["sysctl"] and c["status"] in ("warn", "fail")
-        )
+        parts = [f"{n['ok']} fine"]
+        if n["fail"]:
+            parts.append(f"{n['fail']} need action")
+        if n["warn"]:
+            parts.append(f"{n['warn']} worth a look")
+        if n["info"]:
+            parts.append(f"{n['info']} for information")
+        self._status.set_label(" · ".join(parts))
+
+        self._pending = [
+            c for c in results if c["sysctl"] and c["status"] in ("warn", "fail")
+        ]
+        self._apply_row.set_sensitive(bool(self._pending) and not self._busy)
+
+        dropin = "\n".join(f"{c['sysctl'][0]} = {c['sysctl'][1]}" for c in self._pending)
         kparams = " ".join(
             c["kernel_param"] for c in results
             if c["kernel_param"] and c["status"] in ("warn", "fail")
         )
         self._dropin.set_text(dropin or "# nothing to add")
         self._kparams.set_text(kparams or "# nothing to add")
-        self._persist_group.set_visible(bool(dropin or kparams))
+        self._persist_group.set_visible(bool(dropin) or bool(kparams and kparams.strip("# ")))
 
     def _build_row(self, chk: dict[str, Any]) -> Adw.ExpanderRow:
         label, css = _PILL.get(chk["status"], _PILL["unknown"])
@@ -116,30 +141,45 @@ class PreflightPage(Adw.PreferencesPage):
         val.set_valign(Gtk.Align.CENTER)
         row.add_suffix(val)
 
-        body = Adw.ActionRow(
-            title=chk["detail"] or "No detail.",
-            subtitle=(chk["fix_hint"] or ""),
-        )
-        body.set_title_lines(4)
-        body.set_subtitle_lines(4)
+        detail = chk["detail"] or "No further detail."
+        if chk["fix_hint"]:
+            detail += f"\n\nTo fix it yourself: {chk['fix_hint']}"
+        body = Adw.ActionRow(title=detail)
+        body.set_title_lines(0)
+        body.set_css_classes(["dim-label"])
         row.add_row(body)
         self._checks_group.add(row)
         return row
 
-    # -- actions -------------------------------------------------
+    # -- fixes --------------------------------------------------------
     def _on_apply(self, _row) -> None:
-        try:
-            res = self.bridge.apply_preflight_fixes()
-        except Exception as exc:  # noqa: BLE001
-            self._toast(f"Fix failed: {exc}")
+        if self._busy:
             return
-        msg = []
-        if res["applied"]:
-            msg.append("applied " + ", ".join(res["applied"]))
-        if res["failed"]:
-            msg.append("failed " + ", ".join(res["failed"]))
-        self._toast("; ".join(msg) or "nothing to apply")
+        self._set_busy(True, "Applying fixes… (you may be asked to authenticate)")
+        self.bridge.apply_preflight_fixes_async(self._on_applied)
+
+    def _on_applied(self, res: dict | None, err) -> None:
+        self._set_busy(False)
+        if err is not None or res is None:
+            self._toast(f"Couldn't apply the fixes: {err}")
+            return
+        done = ", ".join(res.get("applied") or []) or "nothing"
+        failed = res.get("failed") or []
+        self._toast(f"Applied: {done}" + (f" — failed: {', '.join(failed)}" if failed else ""))
         self.refresh()
+
+    # -- busy state -------------------------------------------------
+    def _set_busy(self, busy: bool, message: str = "") -> None:
+        self._busy = busy
+        self._rescan.set_sensitive(not busy)
+        self._apply_row.set_sensitive(not busy and bool(getattr(self, "_pending", None)))
+        if busy:
+            self._spinner.start()
+            self._spinner.set_visible(True)
+            self._status.set_label(message)
+        else:
+            self._spinner.stop()
+            self._spinner.set_visible(False)
 
     def _toast(self, text: str) -> None:
         if hasattr(self._window, "toast"):
@@ -152,20 +192,23 @@ def _code_row(title: str, text: str) -> Adw.ActionRow:
     view = Gtk.TextView(editable=False, monospace=True, top_margin=6, bottom_margin=6,
                         left_margin=8, right_margin=8, wrap_mode=Gtk.WrapMode.WORD_CHAR)
     view.get_buffer().set_text(text)
-    sc = Gtk.ScrolledWindow(min_content_height=60, max_content_height=140, propagate_natural_height=True)
-    sc.set_child(view)
-    row.set_child(sc)
-    copy = Gtk.Button(icon_name="edit-copy-symbolic", valign=Gtk.Align.CENTER)
+    scroller = Gtk.ScrolledWindow(min_content_height=52, max_content_height=140,
+                                  propagate_natural_height=True)
+    scroller.set_child(view)
+    row.set_child(scroller)
+
+    copy = Gtk.Button(icon_name="edit-copy-symbolic", valign=Gtk.Align.CENTER, tooltip_text="Copy")
     copy.add_css_class("flat")
 
     def do_copy(_b):
         buf = view.get_buffer()
         disp = Gdk.Display.get_default()
-        if disp:
-            disp.get_clipboard().set(buf.get_text(buf.get_start_iter(), buf.get_end_iter(), False))
+        if disp is not None:
+            disp.get_clipboard().set(
+                buf.get_text(buf.get_start_iter(), buf.get_end_iter(), False)
+            )
 
     copy.connect("clicked", do_copy)
     row.add_suffix(copy)
-    row._set_text = lambda t: view.get_buffer().set_text(t)  # type: ignore[attr-defined]
-    row.set_text = row._set_text  # type: ignore[attr-defined]
+    row.set_text = lambda t: view.get_buffer().set_text(t)  # type: ignore[attr-defined]
     return row

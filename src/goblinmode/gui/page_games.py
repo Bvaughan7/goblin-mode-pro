@@ -8,6 +8,7 @@ the surface clean (per the brief).
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import Any
 
@@ -15,7 +16,7 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, GLib, Gtk  # noqa: E402
+from gi.repository import Adw, Gio, GLib, Gtk  # noqa: E402
 
 from goblinmode.config import MANGOHUD_TOGGLES, RUNNER_VARS
 from goblinmode.ipc.daemon_bridge import BridgeClient
@@ -46,6 +47,7 @@ class GamesPage(Adw.PreferencesPage):
         self._profiles: dict[str, dict[str, Any]] = {}
         self._building = False
         self._master_enabled = True
+        self._caps: dict[str, Any] = {}
 
         info = Adw.PreferencesGroup(
             title="Steam launch option",
@@ -78,11 +80,18 @@ class GamesPage(Adw.PreferencesPage):
         self.add(auto)
 
         self._group = Adw.PreferencesGroup(title="Game profiles")
+        hdr = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+        import_btn = Gtk.Button(icon_name="document-open-symbolic", valign=Gtk.Align.CENTER)
+        import_btn.add_css_class("flat")
+        import_btn.set_tooltip_text("Import a shared profile (.json)")
+        import_btn.connect("clicked", self._on_import)
+        hdr.append(import_btn)
         add_btn = Gtk.Button(icon_name="list-add-symbolic", valign=Gtk.Align.CENTER)
         add_btn.add_css_class("flat")
         add_btn.set_tooltip_text("Add game executable")
         add_btn.connect("clicked", self._on_add_game)
-        self._group.set_header_suffix(add_btn)
+        hdr.append(add_btn)
+        self._group.set_header_suffix(hdr)
         self.add(self._group)
 
         self._rows: list[Gtk.Widget] = []
@@ -112,6 +121,10 @@ class GamesPage(Adw.PreferencesPage):
     # -- external updates ------------------------------------------
     def update_status(self, status: dict[str, Any]) -> None:
         self._master_enabled = status.get("master_enabled", True)
+        caps = status.get("capabilities") or {}
+        if caps != self._caps:
+            self._caps = caps
+            self._profiles = {}  # force a rebuild so capability gating re-applies
         self._building = True
         self._auto_row.set_active(status.get("auto_detect", True))
         self._building = False
@@ -172,6 +185,12 @@ class GamesPage(Adw.PreferencesPage):
             ignore.connect("clicked", lambda _b: self._ignore(exe))
             exp.add_suffix(ignore)
 
+        share = Gtk.Button(icon_name="send-to-symbolic", valign=Gtk.Align.CENTER)
+        share.add_css_class("flat")
+        share.set_tooltip_text("Export this profile to share it")
+        share.connect("clicked", lambda _b: self._on_export(exe))
+        exp.add_suffix(share)
+
         remove = Gtk.Button(icon_name="user-trash-symbolic", valign=Gtk.Align.CENTER)
         remove.add_css_class("flat")
         remove.connect("clicked", self._on_remove, exe)
@@ -208,27 +227,32 @@ class GamesPage(Adw.PreferencesPage):
         focus.set_subtitle("Pause the file indexer, turn on Do Not Disturb, inhibit idle")
         exp.add_row(focus)
 
-        # -- Power limit nested expander (needs the helper) --
+        # -- Power limit nested expander --
+        rapl_ok = self._caps.get("rapl_control", True)
         pw = Adw.ExpanderRow(
-            title="CPU power limits (RAPL)",
-            subtitle="Raise PL1/PL2 to counter sustained-load downclocking — 0 keeps the firmware value",
+            title="CPU power limit",
+            subtitle="Let the CPU draw more watts to hold its speed under load — "
+            "0 leaves the factory value" if rapl_ok else
+            "Not available on this processor (Intel only for now)",
         )
-        pw.set_show_enable_switch(True)
-        pw.set_enable_expansion(bool(p.get("power_limit_enabled", False)))
-        pw.connect(
-            "notify::enable-expansion",
-            lambda r, _p: (not self._building) and self._patch(exe, power_limit_enabled=r.get_enable_expansion()),
-        )
-        pl1 = Adw.SpinRow.new_with_range(0, 500, 5)
-        pl1.set_title("PL1 — sustained (W)")
-        pl1.set_value(p.get("pl1_w", 0))
-        pl1.connect("notify::value", lambda r, _p: self._patch(exe, pl1_w=int(r.get_value())))
-        pl2 = Adw.SpinRow.new_with_range(0, 500, 5)
-        pl2.set_title("PL2 — burst (W)")
-        pl2.set_value(p.get("pl2_w", 0))
-        pl2.connect("notify::value", lambda r, _p: self._patch(exe, pl2_w=int(r.get_value())))
-        pw.add_row(pl1)
-        pw.add_row(pl2)
+        pw.set_sensitive(rapl_ok)
+        if rapl_ok:
+            pw.set_show_enable_switch(True)
+            pw.set_enable_expansion(bool(p.get("power_limit_enabled", False)))
+            pw.connect(
+                "notify::enable-expansion",
+                lambda r, _p: (not self._building) and self._patch(exe, power_limit_enabled=r.get_enable_expansion()),
+            )
+            pl1 = Adw.SpinRow.new_with_range(0, 500, 5)
+            pl1.set_title("Sustained (watts)")
+            pl1.set_value(p.get("pl1_w", 0))
+            pl1.connect("notify::value", lambda r, _p: self._patch(exe, pl1_w=int(r.get_value())))
+            pl2 = Adw.SpinRow.new_with_range(0, 500, 5)
+            pl2.set_title("Short burst (watts)")
+            pl2.set_value(p.get("pl2_w", 0))
+            pl2.connect("notify::value", lambda r, _p: self._patch(exe, pl2_w=int(r.get_value())))
+            pw.add_row(pl1)
+            pw.add_row(pl2)
         exp.add_row(pw)
 
         # -- MangoHud nested expander --
@@ -276,6 +300,38 @@ class GamesPage(Adw.PreferencesPage):
             ))
         exp.add_row(rv)
 
+        # -- gamescope nested expander --
+        gs_ok = self._caps.get("gamescope", True)
+        gs = Adw.ExpanderRow(
+            title="gamescope",
+            subtitle="A solid frame limiter, FSR/NIS upscaling and clean alt-tab"
+            if gs_ok else "gamescope is not installed",
+        )
+        gcfg = dict(p.get("gamescope", {}))
+        gs.set_sensitive(gs_ok)
+        if gs_ok:
+            gs.set_show_enable_switch(True)
+            gs.set_enable_expansion(bool(p.get("gamescope_enabled", False)))
+            gs.connect("notify::enable-expansion",
+                       lambda r, _p: (not self._building) and self._patch(exe, gamescope_enabled=r.get_enable_expansion()))
+            for k, title, lo, hi, step in (("w", "Width (0 = auto)", 0, 7680, 10),
+                                           ("h", "Height (0 = auto)", 0, 4320, 10),
+                                           ("refresh", "Refresh / FPS cap (0 = off)", 0, 360, 1)):
+                sr = Adw.SpinRow.new_with_range(lo, hi, step)
+                sr.set_title(title)
+                sr.set_value(gcfg.get(k, 0) or 0)
+                sr.connect("notify::value", lambda r, _p, kk=k: self._patch_gamescope(exe, kk, int(r.get_value())))
+                gs.add_row(sr)
+            up = Adw.ComboRow(title="Upscaling")
+            up.set_model(Gtk.StringList.new(["off", "FSR", "NIS", "integer"]))
+            up.set_selected({"off": 0, "fsr": 1, "nis": 2, "integer": 3}.get(gcfg.get("upscale", "off"), 0))
+            up.connect("notify::selected", lambda r, _p: self._patch_gamescope(
+                exe, "upscale", ["off", "fsr", "nis", "integer"][r.get_selected()]))
+            gs.add_row(up)
+            gs.add_row(self._switch_row("HDR (needs an HDR display)", gcfg.get("hdr", False),
+                                        lambda v: self._patch_gamescope(exe, "hdr", v)))
+        exp.add_row(gs)
+
         self._group.add(exp)
         return exp
 
@@ -313,6 +369,16 @@ class GamesPage(Adw.PreferencesPage):
         rv = dict(p.get("runner_vars", {}))
         rv[key] = value
         p["runner_vars"] = rv
+        self._profiles[exe] = p
+        self._save(p)
+
+    def _patch_gamescope(self, exe: str, key: str, value: Any) -> None:
+        if self._building:
+            return
+        p = dict(self._profiles.get(exe, {}))
+        g = dict(p.get("gamescope", {}))
+        g[key] = value
+        p["gamescope"] = g
         self._profiles[exe] = p
         self._save(p)
 
@@ -370,6 +436,82 @@ class GamesPage(Adw.PreferencesPage):
         self._profiles[name] = profile
         self._save(profile)
         self._rebuild()
+
+    # -- profile sharing (export / import) ---------------------
+    _SHARE_KEYS = (
+        "match_mode", "renice_enabled", "nice_value", "tearing_enabled",
+        "adaptive_sync_enabled", "governor_boost", "focus_mode",
+        "power_limit_enabled", "pl1_w", "pl2_w", "per_game_mangohud", "mangohud",
+        "fps_watchdog", "fps_dip_floor", "fps_dip_ratio", "runner_vars",
+        "gamescope_enabled", "gamescope",
+    )
+
+    def _on_export(self, exe: str) -> None:
+        p = self._profiles.get(exe, {})
+        payload = {
+            "goblin_mode_pro_profile": 1,
+            "exe": exe,
+            "display_name": p.get("display_name") or exe,
+            **{k: p[k] for k in self._SHARE_KEYS if k in p},
+        }
+        dialog = Gtk.FileDialog(title="Export profile", initial_name=f"{exe}.gmp.json")
+        blob = json.dumps(payload, indent=2, sort_keys=True) + "\n"
+        dialog.save(self.get_root(), None, self._on_export_chosen, blob)
+
+    def _on_export_chosen(self, dialog: Gtk.FileDialog, result, blob: str) -> None:
+        try:
+            gfile = dialog.save_finish(result)
+        except GLib.Error:
+            return
+        try:
+            gfile.replace_contents(
+                blob.encode(), None, False,
+                Gio.FileCreateFlags.REPLACE_DESTINATION, None,
+            )
+        except GLib.Error as exc:
+            log.warning("profile export failed: %s", exc)
+            return
+        root = self.get_root()
+        if hasattr(root, "toast"):
+            root.toast("Profile exported")
+
+    def _on_import(self, _btn: Gtk.Button) -> None:
+        dialog = Gtk.FileDialog(title="Import a shared profile")
+        dialog.open(self.get_root(), None, self._on_import_chosen)
+
+    def _on_import_chosen(self, dialog: Gtk.FileDialog, result) -> None:
+        try:
+            gfile = dialog.open_finish(result)
+        except GLib.Error:
+            return
+        if not gfile:
+            return
+        try:
+            ok, data, _etag = gfile.load_contents(None)
+            raw = json.loads(bytes(data)[:65536].decode("utf-8", "replace")) if ok else None
+        except (GLib.Error, ValueError) as exc:
+            log.warning("profile import: unreadable file: %s", exc)
+            self._import_toast("Couldn't read that file")
+            return
+        if not isinstance(raw, dict) or not raw.get("exe"):
+            self._import_toast("Not a Goblin Mode Pro profile")
+            return
+        # Keep only the shareable fields; the daemon re-validates everything.
+        profile = {
+            "exe": raw["exe"],
+            "display_name": raw.get("display_name") or raw["exe"],
+            "enabled": True,
+            **{k: raw[k] for k in self._SHARE_KEYS if k in raw},
+        }
+        if self.bridge.set_profile(profile):
+            self._import_toast(f"Imported “{profile['display_name']}”")
+        else:
+            self._import_toast("That profile was rejected as invalid")
+
+    def _import_toast(self, msg: str) -> None:
+        root = self.get_root()
+        if hasattr(root, "toast"):
+            root.toast(msg)
 
     def _copy_launch_option(self, _btn: Gtk.Button) -> None:
         clip = self.get_clipboard()

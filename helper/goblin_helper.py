@@ -61,6 +61,7 @@ SYSCTL_ALLOW: dict[str, tuple[int, int]] = {
     "vm.swappiness": (0, 200),
     "vm.compaction_proactiveness": (0, 100),
     "kernel.split_lock_mitigate": (0, 1),
+    "user.max_user_namespaces": (0, 2147483647),
 }
 
 logging.basicConfig(

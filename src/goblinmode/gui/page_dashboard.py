@@ -57,6 +57,21 @@ class DashboardPage(Adw.PreferencesPage):
         banner_group.add(self._banner)
         self.add(banner_group)
 
+        sysg = Adw.PreferencesGroup(
+            title="Your hardware",
+            description="What Goblin Mode Pro can tune on this machine.",
+        )
+        self.r_cpu_model = _row("Processor")
+        self.r_freq_driver = _row("CPU frequency driver")
+        self.r_gpu_model = _row("Graphics")
+        self.r_can_govern = _row("CPU speed control")
+        self.r_can_power = _row("CPU power-limit control")
+        self.r_can_gpu = _row("Deep GPU stats")
+        for r in (self.r_cpu_model, self.r_freq_driver, self.r_gpu_model,
+                  self.r_can_govern, self.r_can_power, self.r_can_gpu):
+            sysg.add(r)
+        self.add(sysg)
+
         cpu = Adw.PreferencesGroup(title="CPU")
         self.r_governor = _row("Scaling governor")
         self.r_epp = _row("Energy performance preference")
@@ -106,6 +121,31 @@ class DashboardPage(Adw.PreferencesPage):
             self._banner.set_title("Forced performance mode")
         else:
             self._banner.set_title("Idle - no game detected")
+
+        caps = status.get("capabilities") or {}
+        if caps:
+            self.r_cpu_model._value.set_label(
+                caps.get("cpu_model") or (caps.get("cpu_vendor") or "-").title()
+            )
+            self.r_freq_driver._value.set_label(caps.get("cpufreq_driver") or "-")
+            self.r_gpu_model._value.set_label(
+                ", ".join(v.upper() if v in ("amd",) else v.title()
+                          for v in (caps.get("gpu_vendors") or [])) or "-"
+            )
+            self.r_can_govern._value.set_label(
+                "yes — governor + EPP" if caps.get("epp_control")
+                else "yes — governor" if caps.get("governor_control")
+                else "no (needs the helper)"
+            )
+            self.r_can_power._value.set_label(
+                "yes — Intel RAPL" if caps.get("rapl_control")
+                else "yes — ryzenadj" if caps.get("ryzenadj")
+                else "not on this processor"
+            )
+            self.r_can_gpu._value.set_label(
+                "yes — NVIDIA" if caps.get("gpu_deep_stats")
+                else "basic (temp / load only)"
+            )
 
         self.r_governor._value.set_label(str(status.get("governor") or "-"))
         tweaks = status.get("tweaks") or {}

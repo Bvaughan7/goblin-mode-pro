@@ -247,6 +247,44 @@ def _c_vulkan_icd() -> CheckResult:
     return CheckResult(OK, ", ".join(real))
 
 
+def _c_userns() -> CheckResult:
+    """Steam's pressure-vessel container and EAC/BattlEye under Proton need
+    unprivileged user namespaces. Hardened kernels (some Debian/Ubuntu, a few
+    security spins) ship them off, which breaks the Steam Linux Runtime and
+    several anti-cheat games."""
+    max_ns = _read_int("/proc/sys/user/max_user_namespaces")
+    if max_ns is not None and max_ns <= 0:
+        return CheckResult(
+            FAIL, "0",
+            "user.max_user_namespaces is 0 - the Steam Linux Runtime container "
+            "and EAC/BattlEye games will fail to start.",
+        )
+    clone = _read("/proc/sys/kernel/unprivileged_userns_clone")
+    if clone == "0":
+        return CheckResult(
+            FAIL, "disabled",
+            "kernel.unprivileged_userns_clone is 0 - the Steam Linux Runtime "
+            "and some anti-cheat games can't create their sandbox.",
+        )
+    if max_ns is not None:
+        return CheckResult(OK, str(max_ns))
+    return CheckResult(OK, "enabled" if clone in (None, "1") else str(clone))
+
+
+def _c_anticheat() -> CheckResult:
+    """Informational: what the machine needs for EAC / BattlEye games. Both work
+    under Proton when the developer ships the Linux module - there is nothing to
+    install, but the runtime container (see the user-namespaces check) must work
+    and Proton Experimental / a recent Proton is safest."""
+    return CheckResult(
+        INFO, "Proton-native",
+        "Easy Anti-Cheat and BattlEye run on Linux when the game ships the "
+        "Linux module (most do now). If an anti-cheat game won't launch: use "
+        "Proton Experimental, make sure the user-namespaces check above passes, "
+        "and check protondb.com for game-specific notes.",
+    )
+
+
 def _c_swap() -> CheckResult:
     try:
         import psutil
@@ -289,6 +327,12 @@ CHECKS: list[Check] = [
           _c_mangohud, fix_hint="Install the 'mangohud' package."),
     Check("vulkan_icd", "Vulkan driver (ICD)", "no ICD = no game",
           _c_vulkan_icd, fix_hint="Install the vulkan driver for your GPU."),
+    Check("userns", "User namespaces", "Steam Runtime container + anti-cheat",
+          _c_userns, sysctl=("user.max_user_namespaces", "28633"), severity=FAIL,
+          fix_hint="On Debian/Ubuntu also: sysctl kernel.unprivileged_userns_clone=1"),
+    Check("anticheat", "Anti-cheat (EAC / BattlEye)", "how anti-cheat games run on Linux",
+          _c_anticheat, severity=INFO,
+          fix_hint="Nothing to install - set the game to Proton Experimental if it won't launch."),
     Check("swap", "Swap / zram", "OOM protection for RAM spikes",
           _c_swap, severity=INFO,
           fix_hint="Enable zram (e.g. the 'zram-generator' package)."),

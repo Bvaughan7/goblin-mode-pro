@@ -56,6 +56,12 @@ if command -v gamemoderun >/dev/null 2>&1; then
     set -- gamemoderun "$@"
 fi
 
+# gamescope wrapper (tokens come from a fixed allowlist, safe to word-split)
+gmp_gs="$(goblin-mode-pro-daemon --print-gamescope -- "$@" 2>/dev/null || true)"
+if [ -n "$gmp_gs" ] && command -v gamescope >/dev/null 2>&1; then
+    set -- gamescope $gmp_gs -- "$@"
+fi
+
 exec "$@" 2> >(tee -a -- "$gmp_log" >&2)
 """
 
@@ -126,6 +132,40 @@ def print_env_for(argv: list[str], settings: Settings) -> str:
         if _ENV_NAME_RE.match(k) and _ENV_VALUE_RE.match(str(v)):
             lines.append(f"{k}={v}")
     return "\n".join(lines)
+
+
+def gamescope_args(profile: GameProfile) -> list[str]:
+    """The gamescope argv (without the trailing ``--``) for a profile, or []."""
+    if not profile.gamescope_enabled:
+        return []
+    g = profile.gamescope
+    args: list[str] = []
+    w, h, r = int(g.get("w") or 0), int(g.get("h") or 0), int(g.get("refresh") or 0)
+    if w and h:
+        args += ["-W", str(w), "-H", str(h)]
+    if r:
+        args += ["-r", str(r)]
+    up = g.get("upscale", "off")
+    if up == "fsr":
+        args += ["-F", "fsr"]
+    elif up == "nis":
+        args += ["-F", "nis"]
+    elif up == "integer":
+        args += ["-S", "integer"]
+    if g.get("hdr"):
+        args += ["--hdr-enabled"]
+    args += ["-b"] if g.get("borderless", True) else ["-f"]
+    if g.get("steam_overlay", True):
+        args += ["-e"]
+    return args
+
+
+def print_gamescope(argv: list[str], settings: Settings) -> str:
+    """Space-joined gamescope tokens for the launch wrapper (safe to word-split)."""
+    profile = resolve_profile_for_argv(argv, settings)
+    if profile is None:
+        return ""
+    return " ".join(gamescope_args(profile))
 
 
 def latest_log_files(limit: int = 8) -> list[Path]:
