@@ -8,9 +8,25 @@ not explain.
 
 Time comes from the CSV's own ``elapsed`` column (a virtual clock), so detection
 works the same whether rows arrive one-per-poll or in a burst after the file
-appears. Detection: a dip is when the trailing ~2.5 s mean FPS falls to/under
-``dip_floor`` **or** under ``dip_ratio`` x the trailing 30 s median. Fires once
-on onset (with duration on recovery), debounced.
+appears.
+
+Detection is a two-state machine (healthy / dipping) driven off the virtual
+clock, not off how often ``poll`` runs:
+
+* A sample is *low* when the trailing ~3 s mean FPS is at/under ``dip_floor``
+  **or** under ``dip_ratio`` x the baseline.
+* It only becomes a **dip** once low samples have run continuously for
+  ``_MIN_DIP_DURATION_S`` - a 1-3 s dip is a menu, a zone load or shader
+  compilation, not the "a restart clears it" cliff this is here to catch.
+* The baseline is *frozen* at the pre-dip median for the whole episode, so a
+  dip that persists can't drag a rolling median down and fake its own recovery.
+* **Recovery** needs the mean to climb back to ``_RECOVERY_FRAC`` of that frozen
+  baseline (and clear ``dip_floor`` with hysteresis) - "recovered to 24 FPS" is
+  not a recovery.
+* A window that isn't rendering at all (alt-tab / minimised -> FPS ~0 against a
+  healthy baseline) is not a performance dip and is ignored.
+* A dip that never bounces back within ``_MAX_DIP_S`` is taken as the new
+  normal (a heavier zone, a settings change) and the baseline is relearned.
 """
 
 from __future__ import annotations
@@ -25,8 +41,19 @@ from goblinmode.paths import MANGOHUD_LOG_DIR
 log = logging.getLogger(__name__)
 
 REMIND_SECONDS = 120
-_RECENT_S = 2.5
+_RECENT_S = 3.0
 _BASELINE_S = 30.0
+#: low FPS has to persist this long (virtual seconds) before it's an incident
+_MIN_DIP_DURATION_S = 4.0
+#: recovery = trailing mean back to this fraction of the frozen pre-dip baseline
+_RECOVERY_FRAC = 0.85
+#: ...and clear the absolute floor by this margin, so it can't flap on the line
+_EXIT_HYSTERESIS = 1.15
+#: FPS at/under this against a healthy baseline = the window isn't rendering
+#: (alt-tab / minimised), not a performance problem
+_NOT_RENDERING_FPS = 5.0
+#: a dip that never recovers within this long is the new normal, not a dip
+_MAX_DIP_S = 120.0
 
 
 @dataclass
@@ -59,9 +86,10 @@ class FpsWatcher:
         self._last_elapsed: float | None = None
         self._vclock = 0.0
         self._hist: deque[tuple[float, float]] = deque(maxlen=6000)  # (vclock, fps)
-        self._in_dip = False
+        self._state = "healthy"           # "healthy" | "dipping"
         self._dip_started = 0.0
-        self._dip_baseline = 0.0
+        self._frozen_baseline = 0.0       # pre-dip median, held for the episode
+        self._dip_announced = False       # did we emit the "dip" for this episode
         self._last_emit = -1e9
 
     def update(self, dip_floor: float, dip_ratio: float) -> None:
@@ -88,7 +116,8 @@ class FpsWatcher:
             self._last_elapsed = None
             self._vclock = 0.0
             self._hist.clear()
-            self._in_dip = False
+            self._state = "healthy"
+            self._dip_announced = False
             log.info("fps watchdog following %s", newest.name)
 
     # -- parsing ----------------------------------------------------
@@ -172,7 +201,7 @@ class FpsWatcher:
             "fps_avg": round(sum(w) / len(w), 1),
             "fps_min": round(min(w), 1),
             "fps_1low": round(s[max(0, len(s) // 100)], 1),
-            "in_dip": self._in_dip,
+            "in_dip": self._state == "dipping",
         }
 
     def recent_trace(self, seconds: int = 90) -> list[dict]:
@@ -180,32 +209,70 @@ class FpsWatcher:
         return [{"t": round(t, 2), "fps": round(f, 1)} for t, f in self._hist if t >= cut]
 
     # -- dip logic ------------------------------------------------
+    def _is_low(self, fps: float, baseline: float) -> bool:
+        if fps <= self.dip_floor:
+            return True
+        return baseline > 5 and fps <= baseline * self.dip_ratio
+
+    def _low_run_seconds(self, baseline: float) -> float:
+        """Virtual seconds of unbroken *low* samples at the tail of history."""
+        run = 0.0
+        last_t: float | None = None
+        for t, f in reversed(self._hist):
+            if not self._is_low(f, baseline):
+                break
+            if last_t is not None:
+                run += last_t - t
+            last_t = t
+        return run
+
     def _evaluate(self) -> FpsEvent | None:
         recent = self._window(_RECENT_S)
         base = self._window(_BASELINE_S)
         if len(recent) < 3 or len(base) < 12:
             return None
-        mean_recent = sum(recent) / len(recent)
-        med_base = sorted(base)[len(base) // 2]
+        fps = sum(recent) / len(recent)
         now = self._vclock
 
-        is_dip = mean_recent <= self.dip_floor or (
-            med_base > 5 and mean_recent <= med_base * self.dip_ratio
-        )
+        prev_baseline = self._frozen_baseline
+        idle_window = fps <= _NOT_RENDERING_FPS and prev_baseline > 30
 
-        if is_dip and not self._in_dip:
-            self._in_dip = True
-            self._dip_started = now
-            self._dip_baseline = med_base
+        # the baseline is relearned only while healthy and actually rendering;
+        # it's frozen for the length of a dip episode so the episode can't drag
+        # a rolling median down and fake its own recovery
+        if self._state == "healthy" and not idle_window:
+            self._frozen_baseline = sorted(base)[len(base) // 2]
+        baseline = self._frozen_baseline
+
+        low = self._is_low(fps, baseline) and not idle_window
+
+        if self._state != "dipping":
+            run = self._low_run_seconds(baseline) if low else 0.0
+            if run < _MIN_DIP_DURATION_S:
+                self._state = "healthy"
+                return None
+            self._state = "dipping"
+            self._dip_started = now - run
             if now - self._last_emit >= REMIND_SECONDS:
                 self._last_emit = now
-                return FpsEvent("dip", round(mean_recent, 1), round(med_base, 1))
-        elif not is_dip and self._in_dip:
-            self._in_dip = False
+                self._dip_announced = True
+                return FpsEvent("dip", round(fps, 1), round(baseline, 1))
+            self._dip_announced = False
+            return None
+
+        # in a confirmed dip
+        recovered = fps >= max(self.dip_floor * _EXIT_HYSTERESIS,
+                               baseline * _RECOVERY_FRAC)
+        if recovered:
             dur = now - self._dip_started
-            if dur >= 0.5:
-                return FpsEvent(
-                    "recovered", round(mean_recent, 1),
-                    round(self._dip_baseline, 1), round(dur, 1),
-                )
+            self._state = "healthy"
+            if self._dip_announced:
+                self._dip_announced = False
+                return FpsEvent("recovered", round(fps, 1), round(baseline, 1),
+                                round(dur, 1))
+            return None
+        if now - self._dip_started >= _MAX_DIP_S:
+            # never bounced back — treat it as the new normal and relearn
+            self._state = "healthy"
+            self._dip_announced = False
         return None

@@ -4,6 +4,24 @@ All notable changes to Goblin Mode Pro. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); this project uses
 [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+- **The frame-rate watchdog cried wolf.** It flagged a dip the instant the
+  2.5 s mean crossed the threshold, and — because its 30 s baseline median
+  decayed as a dip persisted — it then reported a phantom "recovery" while
+  the frame rate was still on the floor, often at an absurd number
+  ("recovered to 24 FPS"). On a real session it emitted three to four
+  times as many `fps_recovered` events as `fps_dip` ones. Rewritten as a
+  proper state machine: low FPS must persist **4 s** before it's a dip,
+  the baseline is **frozen** at its pre-dip value for the whole episode,
+  recovery requires climbing back to **85 %** of that baseline (with
+  hysteresis on the floor), a non-rendering window (alt-tab → ~0 FPS) is
+  no longer mistaken for a dip, and a dip that never bounces back is
+  relearned as the new baseline. Replayed over recorded sessions this
+  roughly halves the dip incidents and removes the phantom recoveries
+  entirely.
+
 ## [1.2.1] — 2026-08-30
 
 Hardening and correctness pass over the 1.2.0 surface. No new features —

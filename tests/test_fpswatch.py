@@ -27,6 +27,64 @@ class DipDetection(unittest.TestCase):
             self.assertIsNotNone(rec)
             self.assertEqual(rec.kind, "recovered")
 
+    def test_brief_dip_is_ignored(self):
+        with TemporaryDirectory() as td:
+            w = self._watch(td)
+            csv = Path(td) / "game_1.csv"
+            write_mangohud_csv(csv, [90.0] * 200)
+            w.poll()
+            # ~2 s of low FPS at the tail — under the 4 s persistence bar
+            write_mangohud_csv(csv, [90.0] * 200 + [12.0] * 10)
+            self.assertIsNone(w.poll())
+            # ...and it's back before it could ever have confirmed
+            write_mangohud_csv(csv, [90.0] * 200 + [12.0] * 10 + [90.0] * 40)
+            self.assertIsNone(w.poll())
+
+    def test_partial_recovery_is_not_a_recovery(self):
+        with TemporaryDirectory() as td:
+            w = self._watch(td)
+            csv = Path(td) / "game_1.csv"
+            write_mangohud_csv(csv, [90.0] * 200)
+            w.poll()
+            write_mangohud_csv(csv, [90.0] * 200 + [12.0] * 40)
+            self.assertEqual(w.poll().kind, "dip")
+            # climbs to 30 FPS: clears the 22 floor but nowhere near 85 % of 90
+            write_mangohud_csv(csv, [90.0] * 200 + [12.0] * 40 + [30.0] * 40)
+            self.assertIsNone(w.poll())
+            # a real recovery
+            write_mangohud_csv(csv, [90.0] * 200 + [12.0] * 40 + [30.0] * 40 + [85.0] * 40)
+            self.assertEqual(w.poll().kind, "recovered")
+
+    def test_repeated_sub_threshold_dips_do_not_spam(self):
+        with TemporaryDirectory() as td:
+            w = self._watch(td)
+            csv = Path(td) / "game_1.csv"
+            frame = [90.0] * 200
+            write_mangohud_csv(csv, frame)
+            w.poll()
+            kinds = []
+            for _ in range(6):
+                frame = frame + [12.0] * 10          # 2 s deep
+                write_mangohud_csv(csv, frame)
+                e = w.poll()
+                if e:
+                    kinds.append(e.kind)
+                frame = frame + [90.0] * 10          # 2 s healthy
+                write_mangohud_csv(csv, frame)
+                e = w.poll()
+                if e:
+                    kinds.append(e.kind)
+            self.assertEqual(kinds, [])
+
+    def test_not_rendering_window_is_not_a_dip(self):
+        with TemporaryDirectory() as td:
+            w = self._watch(td)
+            csv = Path(td) / "game_1.csv"
+            write_mangohud_csv(csv, [120.0] * 200)
+            w.poll()
+            write_mangohud_csv(csv, [120.0] * 200 + [1.0] * 60)  # alt-tabbed
+            self.assertIsNone(w.poll())
+
 
 class ReadCap(unittest.TestCase):
     def test_huge_backlog_is_capped_not_read_whole(self):
