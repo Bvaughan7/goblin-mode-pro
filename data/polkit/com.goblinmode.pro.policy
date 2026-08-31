@@ -25,14 +25,34 @@
   </action>
 
   <!--
-    Persistent kernel tunables applied from the pre-flight check
-    (vm.max_map_count, vm.swappiness, vm.compaction_proactiveness,
-    kernel.split_lock_mitigate - each range-checked). These change system
-    behaviour beyond the current game, so they always prompt for admin auth.
+    Persistent kernel tunables applied from the pre-flight check (vm.* map
+    count / swappiness / compaction, kernel.split_lock_mitigate,
+    user.max_user_namespaces, kernel.unprivileged_userns_clone - each a fixed
+    allowlist entry with a numeric range), the nvidia-drm.modeset modprobe.d
+    write, and a request to *lower* a power limit / TDP below the firmware
+    baseline. These change system behaviour beyond the current game, so they
+    always prompt for admin auth.
   -->
   <action id="com.goblinmode.pro.manage-kernel-tunables">
     <description>Set a game-related kernel tunable (sysctl)</description>
     <message>Authentication is required to change a kernel tunable</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+  </action>
+
+  <!--
+    Preemptive fan spin-up (SpinUpFans). This switches a hwmon PWM channel out
+    of EC/automatic control, which persists after the calling process dies and
+    directly affects the machine's cooling - so it always prompts, unlike the
+    promptless runtime knobs above. Restoring EC control (ResetFans) stays on
+    manage-performance so it can never be blocked.
+  -->
+  <action id="com.goblinmode.pro.manage-hardware-thermal">
+    <description>Take manual control of the fans for preemptive cooling</description>
+    <message>Authentication is required to spin up the fans for a game</message>
     <defaults>
       <allow_any>no</allow_any>
       <allow_inactive>auth_admin</allow_inactive>

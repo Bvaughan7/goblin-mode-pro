@@ -47,6 +47,7 @@ OBJECT_PATH = "/com/goblinmode/ProHelper"
 IFACE = "com.goblinmode.ProHelper.Manager"
 POLKIT_PERF = "com.goblinmode.pro.manage-performance"
 POLKIT_KERNEL = "com.goblinmode.pro.manage-kernel-tunables"
+POLKIT_THERMAL = "com.goblinmode.pro.manage-hardware-thermal"
 
 STATE_DIR = Path("/run/goblin-mode-pro")
 STATE_FILE = STATE_DIR / "state.json"
@@ -90,6 +91,17 @@ NVIDIA_MODESET_CONF = Path("/etc/modprobe.d/goblin-mode-pro-nvidia.conf")
 #: pwmN_enable=1 switches a channel to manual, pwmN is a 0-255 duty cycle.
 FAN_STATE_FILE = STATE_DIR / "fans.json"
 _HWMON_BASE = Path("/sys/class/hwmon")
+
+#: SpinUpFans only ever spins fans *up* (preemptive cooling on launch). There is
+#: no legitimate reason to drive a duty cycle low through it - doing so would
+#: switch a channel out of EC/automatic control and *reduce* cooling, which is a
+#: hardware-damage vector, not a feature. Anything below this is refused.
+MIN_FAN_PERCENT = 40
+
+#: A power-limit / TDP request more than this fraction below the firmware
+#: baseline counts as "lowering" and needs the stricter (prompting) polkit
+#: action - see _handle_call. 5% slack so rounding never triggers a prompt.
+_POWER_LOWER_SLACK = 0.95
 
 # sysctl keys the pre-flight check is allowed to set at runtime, each with an
 # accepted numeric range. Nothing outside this table can be touched.
@@ -428,10 +440,16 @@ def spin_up_fans(percent: int) -> bool:
     (mirrors the TDP snapshot/revert pattern) so ResetFans / RevertAll can
     put it back exactly as found. Returns False (not an error) wherever the
     EC exposes no writable pwm control at all - most systems."""
+    percent = int(percent)
+    if percent < MIN_FAN_PERCENT:
+        raise ValueError(
+            f"fan duty {percent}% is below the {MIN_FAN_PERCENT}% floor - "
+            f"SpinUpFans only increases cooling, it never drives fans down"
+        )
+    percent = min(100, percent)
     pwms = _pwm_controls()
     if not pwms:
         return False
-    percent = max(0, min(100, int(percent)))
     duty = round(percent / 100 * 255)
 
     if not FAN_STATE_FILE.exists():
@@ -540,6 +558,41 @@ def get_power_limits() -> tuple[int, int]:
     pl1 = int(_read(_rapl_constraint(0, "power_limit_uw")))
     pl2 = int(_read(_rapl_constraint(1, "power_limit_uw")))
     return pl1, pl2
+
+
+def _power_baseline_uw() -> tuple[int, int]:
+    """The firmware PL1/PL2 to compare a request against - the snapshot if we
+    have one (i.e. what the machine looked like before *we* touched it), else
+    the current values."""
+    data = _load_state() or {}
+    if "pl1_uw" in data and "pl2_uw" in data:
+        try:
+            return int(data["pl1_uw"]), int(data["pl2_uw"])
+        except (TypeError, ValueError):
+            pass
+    try:
+        return get_power_limits()
+    except OSError:
+        return 0, 0
+
+
+def _power_request_lowers(pl1_uw: int, pl2_uw: int) -> bool:
+    """True if the request would drop a limit meaningfully below the baseline.
+    SpinUpFans-style DoS guard: SetPowerLimits is a "raise the cap" feature -
+    lowering PL1 to a few watts is a silent local denial of service."""
+    b1, b2 = _power_baseline_uw()
+    for req, base in ((int(pl1_uw), b1), (int(pl2_uw), b2)):
+        if req > 0 and base > 0 and req < base * _POWER_LOWER_SLACK:
+            return True
+    return False
+
+
+def _tdp_request_lowers(watts: int) -> bool:
+    if not RYZENADJ:
+        return False
+    data = _load_state() or {}
+    base_mw = data.get("ryzenadj_stapm_mw") or _ryzenadj_stapm_mw()
+    return bool(base_mw and int(watts) * 1000 < base_mw * _POWER_LOWER_SLACK)
 
 
 #: absolute upper bound for a RAPL power-limit write (µW), used when the firmware
@@ -817,9 +870,20 @@ _MUTATING = {
 #: action - everything else in _MUTATING uses POLKIT_PERF.
 _KERNEL_ACTION_METHODS = {"SetSysctl", "RevertSysctl", "SetNvidiaModeset"}
 
+#: Switching a fan channel out of EC control is a thermal-safety operation and
+#: persists after the caller dies, so it prompts (its own action rather than
+#: the sysctl one - a user may reasonably allow fan spin-up but not sysctl
+#: writes, or vice versa). ResetFans deliberately stays on POLKIT_PERF:
+#: handing control back to the EC must always be possible without a prompt.
+_THERMAL_ACTION_METHODS = {"SpinUpFans"}
+
 
 def _polkit_action_for(method_name: str) -> str:
-    return POLKIT_KERNEL if method_name in _KERNEL_ACTION_METHODS else POLKIT_PERF
+    if method_name in _KERNEL_ACTION_METHODS:
+        return POLKIT_KERNEL
+    if method_name in _THERMAL_ACTION_METHODS:
+        return POLKIT_THERMAL
+    return POLKIT_PERF
 
 
 def _handle_call(
@@ -856,13 +920,29 @@ def _handle_call(
             pl1, pl2 = get_power_limits()
             invocation.return_value(GLib.Variant("(tt)", (pl1, pl2)))
         elif method_name == "SetPowerLimits":
+            pl1, pl2 = int(args[0]), int(args[1])
+            if _power_request_lowers(pl1, pl2) and not _check_authorized(sender, POLKIT_KERNEL):
+                invocation.return_dbus_error(
+                    f"{IFACE}.NotAuthorized",
+                    "lowering a power limit below the firmware baseline needs "
+                    "admin authorization",
+                )
+                return
             invocation.return_value(
-                GLib.Variant("(b)", (set_power_limits(int(args[0]), int(args[1])),))
+                GLib.Variant("(b)", (set_power_limits(pl1, pl2),))
             )
         elif method_name == "ResetPowerLimits":
             invocation.return_value(GLib.Variant("(b)", (reset_power_limits(),)))
         elif method_name == "SetTDP":
-            invocation.return_value(GLib.Variant("(b)", (set_tdp(int(args[0])),)))
+            watts = int(args[0])
+            if _tdp_request_lowers(watts) and not _check_authorized(sender, POLKIT_KERNEL):
+                invocation.return_dbus_error(
+                    f"{IFACE}.NotAuthorized",
+                    "lowering the TDP below the firmware baseline needs admin "
+                    "authorization",
+                )
+                return
+            invocation.return_value(GLib.Variant("(b)", (set_tdp(watts),)))
         elif method_name == "ResetTDP":
             invocation.return_value(GLib.Variant("(b)", (reset_tdp(),)))
         elif method_name == "HasTDPControl":
@@ -918,6 +998,18 @@ def main() -> int:
 
     if len(sys.argv) > 1 and sys.argv[1] == "--revert":
         return 0 if revert_all() else 1
+
+    # Crash recovery: a SIGKILLed / OOM-killed helper never ran ExecStopPost,
+    # so a fan channel it switched to manual is still pinned. Hand it back to
+    # the EC before we accept any request - leaving a fan under manual control
+    # with no daemon watching it is the one state we must never sit in.
+    # (governor / EPP / RAPL are left as-is on purpose: they persist in the
+    # hardware regardless, state.json still holds the pre-game baseline, and
+    # RevertAll on the next game-exit restores them correctly. Reverting them
+    # here would instead kill a boost mid-game after a transient Restart=.)
+    if FAN_STATE_FILE.exists():
+        log.warning("stale fan state from a previous instance - restoring EC control")
+        reset_fans()
 
     loop = GLib.MainLoop()
     for sig in (signal.SIGTERM, signal.SIGINT):

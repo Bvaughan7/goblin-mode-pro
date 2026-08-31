@@ -66,12 +66,73 @@ class PolkitActionSelection(unittest.TestCase):
         for m in ("SetSysctl", "RevertSysctl", "SetNvidiaModeset"):
             self.assertEqual(gh._polkit_action_for(m), gh.POLKIT_KERNEL, m)
 
+    def test_spin_up_fans_uses_the_thermal_action(self):
+        self.assertEqual(gh._polkit_action_for("SpinUpFans"), gh.POLKIT_THERMAL)
+        # restoring EC control must never be gated behind a prompt
+        self.assertEqual(gh._polkit_action_for("ResetFans"), gh.POLKIT_PERF)
+
     def test_everything_else_mutating_uses_the_perf_action(self):
-        for m in gh._MUTATING - gh._KERNEL_ACTION_METHODS:
+        special = gh._KERNEL_ACTION_METHODS | gh._THERMAL_ACTION_METHODS
+        for m in gh._MUTATING - special:
             self.assertEqual(gh._polkit_action_for(m), gh.POLKIT_PERF, m)
 
     def test_every_kernel_action_method_is_in_mutating(self):
         self.assertTrue(gh._KERNEL_ACTION_METHODS <= gh._MUTATING)
+
+    def test_every_thermal_action_method_is_in_mutating(self):
+        self.assertTrue(gh._THERMAL_ACTION_METHODS <= gh._MUTATING)
+
+
+class FanFloor(unittest.TestCase):
+    def test_spin_up_fans_rejects_a_duty_below_the_floor(self):
+        for bad in (0, 1, 39):
+            with self.assertRaises(ValueError):
+                gh.spin_up_fans(bad)
+
+    def test_spin_up_fans_accepts_the_floor_and_above(self):
+        # No writable pwm on the test box -> returns False, but must not raise.
+        for ok in (gh.MIN_FAN_PERCENT, 100):
+            self.assertFalse(gh.spin_up_fans(ok))
+
+
+class PowerLoweringGuard(unittest.TestCase):
+    def test_power_request_below_baseline_is_flagged(self):
+        with patch.object(gh, "_load_state",
+                          return_value={"pl1_uw": 25_000_000, "pl2_uw": 45_000_000}):
+            self.assertTrue(gh._power_request_lowers(4_000_000, 0))
+            self.assertTrue(gh._power_request_lowers(0, 10_000_000))
+            self.assertFalse(gh._power_request_lowers(25_000_000, 45_000_000))
+            self.assertFalse(gh._power_request_lowers(40_000_000, 60_000_000))
+            self.assertFalse(gh._power_request_lowers(0, 0))  # "leave alone"
+
+    def test_lowering_power_needs_the_kernel_action(self):
+        seen: list[str] = []
+
+        def auth(_sender, action):
+            seen.append(action)
+            return action == gh.POLKIT_PERF  # session-active perf yes, admin no
+
+        inv = FakeInvocation()
+        with patch.object(gh, "_check_authorized", side_effect=auth), \
+             patch.object(gh, "_load_state",
+                          return_value={"pl1_uw": 25_000_000, "pl2_uw": 45_000_000}), \
+             patch.object(gh, "set_power_limits") as set_pl:
+            gh._handle_call(None, "s", gh.OBJECT_PATH, gh.IFACE, "SetPowerLimits",
+                            _FakeParams((4_000_000, 0)), inv)
+        set_pl.assert_not_called()
+        self.assertEqual(inv.error[0], f"{gh.IFACE}.NotAuthorized")
+        self.assertIn(gh.POLKIT_KERNEL, seen)
+
+    def test_raising_power_stays_promptless(self):
+        with patch.object(gh, "_check_authorized", return_value=True), \
+             patch.object(gh, "_load_state",
+                          return_value={"pl1_uw": 25_000_000, "pl2_uw": 45_000_000}), \
+             patch.object(gh, "set_power_limits", return_value=True) as set_pl:
+            inv = FakeInvocation()
+            gh._handle_call(None, "s", gh.OBJECT_PATH, gh.IFACE, "SetPowerLimits",
+                            _FakeParams((50_000_000, 60_000_000)), inv)
+        set_pl.assert_called_once_with(50_000_000, 60_000_000)
+        self.assertEqual(inv.value, (True,))
 
 
 class MutatingMethodsAreGated(unittest.TestCase):

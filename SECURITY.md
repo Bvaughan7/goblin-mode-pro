@@ -33,6 +33,27 @@ steps if you have them.
 - Persistent kernel tunables (`manage-kernel-tunables`) always prompt for admin
   authentication; the runtime gaming knobs (`manage-performance`) are silent on
   the active local session by default and can be switched to prompt.
+- Taking manual control of the fans (`SpinUpFans`) has its own action
+  (`manage-hardware-thermal`, always prompts): it switches a PWM channel out of
+  EC control, persists after the caller exits, and directly affects cooling.
+  Its floor is 40 % duty — the method can only ever *increase* airflow, never
+  reduce it — and `ResetFans` (hand control back to the EC) is always allowed
+  without a prompt. A helper that is killed while a fan is under manual control
+  restores EC control on its next start before serving any request.
+- *Lowering* a RAPL power limit or the AMD TDP below the firmware baseline also
+  requires admin authentication (`manage-kernel-tunables`); *raising* it — the
+  actual gaming use — stays silent. This closes a local denial-of-service where
+  a session process pins the CPU to a few watts. On a handheld the daemon's
+  battery-vs-AC TDP preset will prompt once per session when it first steps the
+  limit down.
+
+### What an unprivileged process in the active session can do without a prompt
+
+Governor / EPP to `performance`; renice a process **it already owns** up to
+`-10`; **raise** RAPL PL1/PL2 or AMD TDP up to the firmware ceiling; hand fan
+control back to the EC; trigger `RevertAll`; re-apply the user's *existing*
+intel-undervolt / Curve-Optimizer offsets (never choose values); read status.
+Everything persistent, thermally significant, or cooling-reducing prompts.
 - Configuration input is constrained: a profile's `exe` may not contain a path
   separator, `..`, or a control character; per-game file names are produced by a
   separate slug function; user-supplied regular expressions are length-capped and
