@@ -136,9 +136,7 @@ def anticheat_status(name: str = "", app_id: str = "") -> dict | None:
         if not isinstance(game, dict):
             continue
         store = game.get("storeIds") or {}
-        if app_id and str(store.get("steam") or "").strip() == app_id:
-            pass
-        elif nlow and str(game.get("name") or "").strip().lower() == nlow:
+        if (app_id and str(store.get("steam") or "").strip() == app_id) or (nlow and str(game.get("name") or "").strip().lower() == nlow):
             pass
         else:
             continue

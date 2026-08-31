@@ -245,7 +245,7 @@ def _handheld() -> str | None:
     """Steam Deck / ROG Ally / Legion Go / other known handhelds, from DMI."""
     board = (_read(_DMI / "product_name") + " " + _read(_DMI / "board_name") + " "
              + _read(_DMI / "sys_vendor")).lower()
-    if "jupiter" in board or "galileo" in board or "valve" in board and "steam" in board:
+    if "jupiter" in board or "galileo" in board or ("valve" in board and "steam" in board):
         return "steamdeck"
     if "rog ally" in board or "rc71" in board or "rc72" in board:
         return "rog_ally"

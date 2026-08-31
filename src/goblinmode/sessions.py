@@ -22,7 +22,7 @@ import logging
 import platform
 import time
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from pathlib import Path
 
 from goblinmode.paths import MANGOHUD_LOG_DIR, SESSION_FILE, ensure_user_dirs
@@ -110,7 +110,7 @@ def _percentile(values: list[float], q: float) -> float:
     """Nearest-rank percentile of a *sorted* list; q in [0, 1]."""
     if not values:
         return 0.0
-    idx = max(0, min(len(values) - 1, int(round(q * (len(values) - 1)))))
+    idx = max(0, min(len(values) - 1, round(q * (len(values) - 1))))
     return values[idx]
 
 
@@ -129,7 +129,7 @@ def _parse_csv_full(path: Path):
     ft: list[float] = []
     fps_i = cpu_i = gpu_i = ft_i = None
     try:
-        with open(path, "r", errors="replace") as fh:
+        with open(path, errors="replace") as fh:
             for raw in fh:
                 cells = raw.strip().split(",")
                 if fps_i is None:
@@ -189,7 +189,7 @@ class SessionTracker:
             exe=exe,
             game=game or exe,
             tweaks=list(tweaks),
-            started_wall=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            started_wall=datetime.now(UTC).isoformat(timespec="seconds"),
             started_mono=time.monotonic(),
         )
 
@@ -224,7 +224,7 @@ class SessionTracker:
             exe=op.exe,
             game=op.game,
             started=op.started_wall,
-            ended=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            ended=datetime.now(UTC).isoformat(timespec="seconds"),
             duration_s=round(duration, 1),
             kernel=platform.release(),
             tweaks=op.tweaks,

@@ -13,7 +13,7 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, Gdk, Gtk  # noqa: E402
+from gi.repository import Adw, Gdk, Gtk
 
 from goblinmode import capabilities
 from goblinmode.gui.widgets.snippet import command_row
@@ -41,7 +41,7 @@ def mark_done() -> None:
     try:
         ensure_user_dirs()
         ONBOARDED_MARKER.touch()
-    except OSError as exc:  # noqa: BLE001
+    except OSError as exc:
         log.warning("could not write onboarding marker: %s", exc)
 
 
@@ -166,10 +166,7 @@ class FirstRunWizard(Adw.Window):
                 "automatically - Goblin Mode Pro never installs packages on its own."))
 
         for why, cmd in rows:
-            if cmd:
-                row = command_row(why, cmd)
-            else:
-                row = Adw.ActionRow(title=why)
+            row = command_row(why, cmd) if cmd else Adw.ActionRow(title=why)
             self._install_group.add(row)
             self._install_rows.append(row)
 

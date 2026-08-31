@@ -227,9 +227,7 @@ class Compositor:
             return all(shutil.which(t) for t in (_KWRITE, _KREAD, _QDBUS))
         if _session_type() == "x11" and _is_kde():
             return shutil.which(_QDBUS) is not None
-        if _is_hyprland():
-            return True
-        return False
+        return bool(_is_hyprland())
 
     @property
     def adaptive_sync_supported(self) -> bool:

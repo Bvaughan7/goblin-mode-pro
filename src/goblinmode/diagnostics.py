@@ -21,9 +21,10 @@ import shutil
 import subprocess
 import time
 from collections import deque
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
+from typing import ClassVar
 
 import psutil
 
@@ -259,7 +260,7 @@ class DiagnosticEngine:
     # NVML clock event-reason bits worth alerting on. SwPowerCap (0x4) is
     # deliberately excluded - a laptop dGPU is power-capped under any real load,
     # that's normal and not an incident.
-    _GPU_BAD_BITS = {
+    _GPU_BAD_BITS: ClassVar[dict[int, str]] = {
         0x8: "GPU HW slowdown",
         0x20: "GPU SW thermal slowdown",
         0x40: "GPU HW thermal slowdown",
@@ -269,7 +270,7 @@ class DiagnosticEngine:
     REMIND_SECONDS = 180
     #: Some conditions are chronic on a thermally-marginal laptop. Remind far
     #: less often for those so a warm three-hour raid isn't a stream of popups.
-    _REMIND_BY_KIND = {"thermal_throttle": 900}
+    _REMIND_BY_KIND: ClassVar[dict[str, int]] = {"thermal_throttle": 900}
     #: An episode is only "over" after this long with no recurrence. Without the
     #: grace window a single throttle-free sample resets the episode and the very
     #: next counter tick reads as a brand-new onset -> notification spam.

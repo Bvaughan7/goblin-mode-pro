@@ -26,6 +26,7 @@ Design notes
 
 from __future__ import annotations
 
+import contextlib
 import glob
 import json
 import logging
@@ -40,7 +41,7 @@ from pathlib import Path
 import gi
 
 gi.require_version("Gio", "2.0")
-from gi.repository import Gio, GLib  # noqa: E402
+from gi.repository import Gio, GLib
 
 BUS_NAME = "com.goblinmode.ProHelper"
 OBJECT_PATH = "/com/goblinmode/ProHelper"
@@ -406,10 +407,8 @@ def renice(pid: int, nice: int, caller_uid: int | None = None) -> bool:
         os.setpriority(os.PRIO_PROCESS, pid, nice)
         try:
             for tid in os.listdir(f"/proc/{pid}/task"):
-                try:
+                with contextlib.suppress(OSError, ValueError):
                     os.setpriority(os.PRIO_PROCESS, int(tid), nice)
-                except (OSError, ValueError):
-                    pass
         except OSError:
             pass
         return True
@@ -681,10 +680,8 @@ def revert_sysctl(key: str) -> bool:
         raise ValueError(f"refusing to write {path}")
     _write(path, str(int(original)))
     del data[key]
-    try:
+    with contextlib.suppress(OSError):
         f.write_text(json.dumps(data, indent=2))
-    except OSError:
-        pass
     log.info("sysctl %s reverted to %s", key, original)
     return True
 
@@ -748,16 +745,12 @@ def _snapshot() -> None:
         return
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     data: dict[str, object] = {}
-    try:
+    with contextlib.suppress(OSError):
         data["governor"] = get_governor()
-    except OSError:
-        pass
     epp_paths = _cpu_epp_paths()
     if epp_paths:
-        try:
+        with contextlib.suppress(OSError):
             data["epp"] = _read(epp_paths[0])
-        except OSError:
-            pass
     try:
         pl1, pl2 = get_power_limits()
         data["pl1_uw"], data["pl2_uw"] = pl1, pl2
@@ -1043,7 +1036,7 @@ def _handle_call(
             invocation.return_dbus_error(
                 "org.freedesktop.DBus.Error.UnknownMethod", method_name
             )
-    except Exception as exc:  # noqa: BLE001 - report everything to the caller
+    except Exception as exc:
         log.exception("method %s failed", method_name)
         invocation.return_dbus_error(f"{IFACE}.Failed", str(exc))
 

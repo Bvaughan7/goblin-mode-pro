@@ -134,7 +134,7 @@ def _gpu_load(pid: int) -> int:
     level = 0
     for fdinfo in glob.glob(f"/proc/{pid}/fdinfo/*"):
         try:
-            with open(fdinfo, "r", errors="ignore") as fh:
+            with open(fdinfo, errors="ignore") as fh:
                 blob = fh.read(8192)
         except OSError:
             continue
@@ -151,7 +151,7 @@ def _gpu_load(pid: int) -> int:
 
 def _links_game_libs(pid: int) -> bool:
     try:
-        with open(f"/proc/{pid}/maps", "r", errors="ignore") as fh:
+        with open(f"/proc/{pid}/maps", errors="ignore") as fh:
             for line in fh:
                 if any(h in line for h in _LIB_HINTS):
                     return True
@@ -214,7 +214,7 @@ def _score(name: str, exe: str, cmd: str, cmd_list: list[str], pid: int):
 
 def detect_games(
     min_score: int = GAME_SCORE,
-    procs: list["psutil.Process"] | None = None,
+    procs: list[psutil.Process] | None = None,
 ) -> list[GameCandidate]:
     """One sweep of the process table -> scored game candidates.
 

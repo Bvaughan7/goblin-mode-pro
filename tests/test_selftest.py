@@ -24,9 +24,9 @@ _HELPER_DIR = Path(__file__).resolve().parent.parent / "helper"
 if str(_HELPER_DIR) not in sys.path:
     sys.path.insert(0, str(_HELPER_DIR))
 
-import goblin_helper as gh  # noqa: E402
+import goblin_helper as gh
 
-from goblinmode import selftest  # noqa: E402
+from goblinmode import selftest
 
 
 class MirroredConstants(unittest.TestCase):

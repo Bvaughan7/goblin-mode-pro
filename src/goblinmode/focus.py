@@ -12,6 +12,7 @@ Everything is restored on :meth:`exit`. Unsupported bits no-op with a log line.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 import shutil
@@ -20,7 +21,7 @@ import subprocess
 import gi
 
 gi.require_version("Gio", "2.0")
-from gi.repository import Gio, GLib  # noqa: E402
+from gi.repository import Gio, GLib
 
 log = logging.getLogger(__name__)
 
@@ -114,13 +115,11 @@ class FocusMode:
 
     def _uninhibit_idle(self) -> None:
         if self._ss_proxy is not None and self._ss_cookie is not None:
-            try:
+            with contextlib.suppress(GLib.Error):
                 self._ss_proxy.call_sync(
                     "UnInhibit", GLib.Variant("(u)", (self._ss_cookie,)),
                     Gio.DBusCallFlags.NONE, 3000, None,
                 )
-            except GLib.Error:
-                pass
         self._ss_proxy = None
         self._ss_cookie = None
 

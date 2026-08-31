@@ -25,8 +25,6 @@ result. A blank line is not.
 
 from __future__ import annotations
 
-import glob
-import json
 import os
 import re
 import shutil
@@ -480,9 +478,9 @@ class SelfTest:
         if over:
             # Worth saying out loud: a sustained limit above what the firmware
             # rates the package for is how a laptop ends up pinned at TjMax.
-            summary += (f" - PL1 is above the firmware max, so the package is "
-                        f"allowed to draw more than it is rated for and will "
-                        f"be held back by temperature instead of by power")
+            summary += (" - PL1 is above the firmware max, so the package is "
+                        "allowed to draw more than it is rated for and will "
+                        "be held back by temperature instead of by power")
         self._add("rapl", "Intel RAPL power limits", INFO, summary, sec,
                   zone=zone.name, pl1_uw=pl1, pl2_uw=pl2, firmware_max_uw=fw_max,
                   pl1_above_firmware_max=bool(over))
@@ -568,7 +566,7 @@ class SelfTest:
             return
         names = [f"{c.parent.name}/{c.name}" for c in channels]
         modes = {n: _read_int(c.parent / f"{c.name}_enable")
-                 for n, c in zip(names, channels)}
+                 for n, c in zip(names, channels, strict=False)}
         self._add("fans", "Fan control", INFO,
                   f"{len(channels)} PWM channel(s): {', '.join(names)} "
                   f"(enable modes: {modes})", sec,

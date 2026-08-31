@@ -10,9 +10,9 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, Gdk, Gtk  # noqa: E402
+from gi.repository import Adw, Gdk, Gtk
 
-from goblinmode.i18n import _  # noqa: E402
+from goblinmode.i18n import _
 
 from goblinmode.gui.widgets.buttonrow import button_row
 from goblinmode.gui.widgets.graph import CorrelationGraph, FpsGraph
@@ -170,7 +170,7 @@ class DiagnosticsPage(Adw.PreferencesPage):
             self._sessions_group.remove(self._sessions_empty)
             self._sessions_empty = None
 
-        mins = int(round((s.get("duration_s") or 0) / 60))
+        mins = round((s.get("duration_s") or 0) / 60)
         bits = [s.get("started", "")[:10], f"{mins} min"]
         if s.get("fps_avg") is not None:
             bits.append(f"avg {s['fps_avg']:.0f} fps")

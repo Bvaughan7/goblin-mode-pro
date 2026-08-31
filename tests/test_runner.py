@@ -40,7 +40,7 @@ class EnvPrinting(unittest.TestCase):
             runner_vars={"nvapi": True, "fsync": True, "no_esync": False, "dxvk_async": False},
         )])
         out = runner.print_env_for(["/x/Wow.exe"], s)
-        lines = dict(l.split("=", 1) for l in out.splitlines())
+        lines = dict(line.split("=", 1) for line in out.splitlines())
         self.assertEqual(lines["WINEFSYNC"], "1")
         self.assertEqual(lines["PROTON_ENABLE_NVAPI"], "1")
         self.assertNotIn("PROTON_NO_ESYNC", lines)

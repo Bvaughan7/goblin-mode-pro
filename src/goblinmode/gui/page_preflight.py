@@ -15,9 +15,9 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, Gdk, Gtk  # noqa: E402
+from gi.repository import Adw, Gdk, Gtk
 
-from goblinmode.i18n import _  # noqa: E402
+from goblinmode.i18n import _
 
 from goblinmode.gui.widgets.buttonrow import button_row
 from goblinmode.ipc.daemon_bridge import BridgeClient

@@ -26,11 +26,11 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, Gdk, GLib, Gtk  # noqa: E402
-from PIL import Image, ImageDraw, ImageFont  # noqa: E402
+from gi.repository import Adw, GLib, Gtk
+from PIL import Image, ImageDraw, ImageFont
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-from goblinmode.gui.window import MainWindow  # noqa: E402
+from goblinmode.gui.window import MainWindow
 
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "docs")
 W, H = 760, 812

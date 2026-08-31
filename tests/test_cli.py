@@ -57,7 +57,7 @@ class FakeBridge:
 class CliDispatch(unittest.TestCase):
     def setUp(self):
         self._fake = FakeBridge()
-        cli._connect = lambda: self._fake  # noqa
+        cli._connect = lambda: self._fake
 
     def _run(self, *args) -> str:
         buf = io.StringIO()

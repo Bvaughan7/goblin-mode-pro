@@ -14,15 +14,15 @@ import logging
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
+from collections.abc import Callable
 
 os.environ.setdefault("PYSTRAY_BACKEND", "appindicator")
 
 log = logging.getLogger(__name__)
 
 try:
-    import pystray  # noqa: E402
-    from PIL import Image, ImageDraw  # noqa: E402
+    import pystray
+    from PIL import Image, ImageDraw
 
     _TRAY_AVAILABLE = True
 except Exception as _exc:  # noqa: BLE001 - pystray/Pillow missing or no backend
@@ -99,7 +99,7 @@ def _patch_pystray_tray_icon() -> None:
         log.debug("could not patch pystray tray icon: %s", exc)
 
 
-def _icon_image(boosting: bool) -> "Image.Image":
+def _icon_image(boosting: bool) -> Image.Image:
     """The tray icon: the bundled goblin-mark PNG (matches the app icon), with
     an ember ring + a warm tint while boosting. Falls back to the hand-drawn
     version if the asset can't be loaded."""
@@ -212,7 +212,7 @@ class Tray:
         try:
             self._icon.run_detached()
             log.info("tray icon started (detached)")
-        except Exception:  # noqa: BLE001
+        except Exception:
             log.exception("tray icon failed to start - continuing headless")
 
     def stop(self) -> None:
@@ -270,7 +270,7 @@ class Tray:
             return "Readiness: checking…"
         return f"Readiness: {self._health_score:g}/10"
 
-    def _build_menu(self) -> "pystray.Menu":
+    def _build_menu(self) -> pystray.Menu:
         M = pystray.MenuItem
         items = [
             M(lambda _: self._status_text, None, enabled=False),

@@ -60,15 +60,46 @@ version = { attr = "goblinmode.__about__.__version__" }
 testpaths = ["tests"]
 
 [tool.ruff]
-# Deliberately minimal: pyflakes only (unused imports/vars, undefined names,
-# f-string / dict-key mistakes). It runs in CI as `ruff check` - never
-# `ruff format`, and it must not reformat existing files. Widen the rule set
-# in its own PR, not incidentally.
+# Runs in CI as `ruff check` - never `ruff format`. It must not reformat
+# existing files; every rule here is one that finds a defect or a genuine
+# simplification, not a style preference.
 line-length = 100
 target-version = "py311"
 
 [tool.ruff.lint]
-select = ["F"]
+# F     pyflakes - unused imports/vars, undefined names, f-string mistakes
+# E7/E9 pycodestyle statement + runtime errors (ambiguous names, bare except)
+# B     bugbear - real bug shapes (mutable defaults, zip() without strict=)
+# SIM   simplifications with no behaviour change
+# UP    pyupgrade, against target-version
+# RUF   ruff's own checks (mutable class attrs, unnecessary casts)
+# BLE   blind except. The codebase already documents every intentional one
+#       with `# noqa: BLE001`, so enabling this makes those markers mean
+#       something and flags the next broad except that isn't deliberate.
+select = ["F", "E7", "E9", "B", "SIM", "UP", "RUF", "BLE"]
+
+# Codes that appear in `# noqa` markers in the tree but are not selected above.
+# Listing them here stops RUF100 reporting those markers as dead while leaving
+# it free to catch genuinely dead ones. They document decisions worth keeping:
+# N802 on the GObject vfuncs that must be named do_activate/do_startup, and
+# S310/S606 on the deliberate urllib/subprocess calls.
+external = ["N802", "S310", "S606"]
+
+# Three rules are dropped as noise on this codebase rather than papered over
+# with per-line noqa:
+#   E501  line length. Enforcing it now would reformat files wholesale, which
+#         is exactly what this config is not for. line-length above still
+#         documents the intent.
+#   E402  module import not at top. Structural here: `gi.require_version()`
+#         has to run before `from gi.repository import ...`, so every GTK
+#         module in the tree legitimately trips it.
+#   RUF001 ambiguous unicode in strings. The user-facing text deliberately
+#         uses em dashes and µW; flagging them is a false positive.
+ignore = ["E501", "E402", "RUF001"]
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]
+# The fake helper is written as compact one-line stubs on purpose - it is a
+# table of call recordings, and splitting each into three lines makes it
+# harder to read, not easier.
+"tests/test_payload.py" = ["E702"]

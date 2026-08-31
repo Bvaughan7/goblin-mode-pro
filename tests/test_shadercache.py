@@ -68,9 +68,9 @@ class ShaderArchiveDiscovery(unittest.TestCase):
         self.assertEqual([p.name for p in found], ["a.foz"])
 
     def test_missing_appid_dir_returns_empty(self):
-        with TemporaryDirectory() as d:
-            with patch("goblinmode.shadercache._steam_root", return_value=Path(d)):
-                self.assertEqual(shadercache._shader_archives("999999"), [])
+        with TemporaryDirectory() as d, \
+                patch("goblinmode.shadercache._steam_root", return_value=Path(d)):
+            self.assertEqual(shadercache._shader_archives("999999"), [])
 
 
 if __name__ == "__main__":

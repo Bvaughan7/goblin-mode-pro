@@ -37,7 +37,7 @@ if TYPE_CHECKING:
 class DaemonApi:
     """The bridge's handler. See the module docstring for what lives where."""
 
-    def __init__(self, daemon: "Daemon") -> None:
+    def __init__(self, daemon: Daemon) -> None:
         self._d = daemon
 
     # -- convenience accessors, so the methods below read like the daemon's --
@@ -160,7 +160,7 @@ class DaemonApi:
         if not logs:
             return []
         try:
-            with open(logs[0], "r", errors="replace") as fh:
+            with open(logs[0], errors="replace") as fh:
                 fh.seek(0, 2)
                 fh.seek(max(0, fh.tell() - 200_000))
                 text = fh.read()

@@ -22,7 +22,10 @@ class PystrayTrayIconPatch(unittest.TestCase):
     def test_patched_icon_path_is_the_theme_name_when_installed(self):
         try:
             from pystray._util.gtk import GtkIcon
-        except Exception:  # pragma: no cover - needs gir1.2-gtk-3.0
+        except Exception:  # noqa: BLE001 - a missing GI typelib raises many
+            # different things (ImportError, ValueError, GLib.Error); this is
+            # a skip guard, so the exact type is genuinely not interesting.
+            # pragma: no cover - needs gir1.2-gtk-3.0
             self.skipTest("pystray SNI backend not importable here")
 
         tray._patch_pystray_tray_icon()

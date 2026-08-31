@@ -46,8 +46,11 @@ jobs:
             open('/tmp/goblin-run','w').write(_WRAPPER_TEMPLATE)"
           shellcheck --severity=warning /tmp/goblin-run
 
-      - name: ruff (pyflakes)
-        run: pipx run ruff check src helper tests
+      - name: ruff
+        # Everything Python in the tree, not just src/helper/tests - scripts/
+        # and docs/ were outside the old scope, which is how an unused import
+        # sat in scripts/make-demo.py without CI noticing.
+        run: pipx run ruff check .
 
       - name: Validate the community profile JSON
         run: |

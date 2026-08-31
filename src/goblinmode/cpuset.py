@@ -13,6 +13,7 @@ across every thread of a PID (and its direct children).
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 from pathlib import Path
@@ -86,7 +87,5 @@ def restore(pid: int, cpus: list[int]) -> None:
     mask = set(cpus)
     for target in {pid, *_child_pids(pid)}:
         for tid in _tids(target):
-            try:
+            with contextlib.suppress(OSError):
                 os.sched_setaffinity(tid, mask)
-            except OSError:
-                pass

@@ -11,6 +11,7 @@ Needs ``gpu-screen-recorder`` (AUR / COPR). Everything no-ops without it.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 import shutil
@@ -100,7 +101,5 @@ class ClipBuffer:
             proc.terminate()
             proc.wait(timeout=4)
         except (OSError, subprocess.TimeoutExpired):
-            try:
+            with contextlib.suppress(OSError):
                 proc.kill()
-            except OSError:
-                pass

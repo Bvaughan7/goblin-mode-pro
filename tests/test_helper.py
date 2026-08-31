@@ -25,7 +25,7 @@ _HELPER_DIR = Path(__file__).resolve().parent.parent / "helper"
 if str(_HELPER_DIR) not in sys.path:
     sys.path.insert(0, str(_HELPER_DIR))
 
-import goblin_helper as gh  # noqa: E402
+import goblin_helper as gh
 
 
 class FakeInvocation:
@@ -185,9 +185,10 @@ class ReniceFailsClosed(unittest.TestCase):
 
 class EppValidation(unittest.TestCase):
     def test_rejects_a_value_the_kernel_does_not_advertise(self):
-        with patch.object(gh, "_available_epps", return_value={"performance", "power"}):
-            with self.assertRaises(ValueError):
-                gh.set_epp("balance_power")
+        with patch.object(gh, "_available_epps",
+                          return_value={"performance", "power"}), \
+                self.assertRaises(ValueError):
+            gh.set_epp("balance_power")
 
     def test_falls_back_to_the_standard_set_when_kernel_lists_nothing(self):
         with patch.object(gh, "_available_epps", return_value=set()), \

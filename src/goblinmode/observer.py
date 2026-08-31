@@ -12,7 +12,7 @@ import functools
 import logging
 import re
 from dataclasses import dataclass
-from typing import Callable
+from collections.abc import Callable
 
 import psutil
 
@@ -149,7 +149,7 @@ class Observer:
                     if self.settings.profile_for_exe(key):
                         continue  # a disabled profile exists - respect the user's choice
                     found[key] = (cand.pid, None, cand)
-            except Exception:  # noqa: BLE001
+            except Exception:
                 log.exception("auto-detect sweep failed")
 
         for exe, (pid, profile, cand) in found.items():
@@ -204,7 +204,7 @@ class Observer:
     def _emit(self, event: GameEvent) -> None:
         try:
             self._on_event(event)
-        except Exception:  # noqa: BLE001 - never let a handler kill the loop
+        except Exception:
             log.exception("observer event handler failed")
 
     @property

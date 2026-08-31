@@ -17,7 +17,7 @@ _HELPER_DIR = _REPO / "helper"
 if str(_HELPER_DIR) not in sys.path:
     sys.path.insert(0, str(_HELPER_DIR))
 
-import goblin_helper as gh  # noqa: E402
+import goblin_helper as gh
 
 _POLICY = _REPO / "data" / "polkit" / "com.goblinmode.pro.policy"
 

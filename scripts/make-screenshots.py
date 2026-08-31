@@ -18,12 +18,12 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, Gdk, GLib, Gtk  # noqa: E402
+from gi.repository import Adw, Gdk, GLib, Gtk
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from goblinmode.gui.window import MainWindow  # noqa: E402
-from goblinmode.ipc.daemon_bridge import BridgeClient  # noqa: E402
+from goblinmode.gui.window import MainWindow
+from goblinmode.ipc.daemon_bridge import BridgeClient
 
 OUT = os.path.join(os.path.dirname(__file__), "..", "docs", "screenshots")
 PAGES = ["dashboard", "games", "system-check", "diagnostics"]

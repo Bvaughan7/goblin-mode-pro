@@ -149,7 +149,7 @@ class RefreshRateModeParsing(unittest.TestCase):
 
     def test_set_refresh_rate_same_as_current_is_a_noop(self):
         with patch("goblinmode.compositor._run", return_value=_cp(_KSCREEN_MODES)):
-            ok, prev = compositor._set_refresh_rate("eDP-1", 60)
+            ok, _prev = compositor._set_refresh_rate("eDP-1", 60)
         self.assertFalse(ok)
 
 

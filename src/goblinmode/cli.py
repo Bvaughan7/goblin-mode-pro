@@ -28,7 +28,7 @@ if TYPE_CHECKING:  # keeps `import gi` (via daemon_bridge) out of the import pat
     from goblinmode.ipc.daemon_bridge import BridgeClient
 
 
-def _connect() -> "BridgeClient":
+def _connect() -> BridgeClient:
     from goblinmode.ipc.daemon_bridge import BridgeClient
 
     b = BridgeClient()

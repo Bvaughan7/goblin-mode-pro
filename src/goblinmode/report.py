@@ -18,7 +18,7 @@ import os
 import shutil
 import subprocess
 import urllib.parse
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from typing import Any
 
 from goblinmode import __version__, preflight
@@ -122,7 +122,7 @@ def build_report(
 
     return {
         "schema": "gmp.report.v1",
-        "generated": datetime.now(timezone.utc).isoformat(),
+        "generated": datetime.now(UTC).isoformat(),
         "system": sysinfo,
         "game": game or (incident or {}).get("game", ""),
         "user_note": user_note,
@@ -222,7 +222,7 @@ def build_setup_report(settings) -> str:
     s["mesa_gl"] = _mesa_version()
     caps = capabilities.detect()
 
-    L = [f"# Goblin Mode Pro setup — {datetime.now(timezone.utc).isoformat()[:19]}Z",
+    L = [f"# Goblin Mode Pro setup — {datetime.now(UTC).isoformat()[:19]}Z",
          "", "## System",
          f"- CPU: {s.get('cpu','?')}  ({caps.get('cpufreq_driver','?')})",
          f"- GPU: {s.get('gpu','?')}  ·  {', '.join(caps.get('gpu_vendors') or [])}",
@@ -284,7 +284,7 @@ def build_works_for_me(profile: dict, note: str = "") -> dict[str, Any]:
     sysinfo["gmp_version"] = __version__
     return {
         "schema": "gmp.worksforme.v1",
-        "generated": datetime.now(timezone.utc).isoformat(),
+        "generated": datetime.now(UTC).isoformat(),
         "system": sysinfo,
         "game": profile.get("display_name") or profile.get("exe", ""),
         "steam_app_id": profile.get("steam_app_id", ""),

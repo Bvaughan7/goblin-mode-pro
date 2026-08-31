@@ -42,7 +42,7 @@ class Check:
     id: str
     title: str
     why: str
-    _run: "callable"
+    _run: callable
     sysctl: tuple[str, str] | None = None      # (key, desired) - runtime + drop-in fix
     kernel_param: str | None = None            # persistent boot-param fix
     fix_hint: str = ""                          # free-text remedy when not automatable

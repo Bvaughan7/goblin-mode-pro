@@ -9,6 +9,7 @@ game is running.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import dataclasses
 import logging
 import os
@@ -21,7 +22,7 @@ from typing import Any
 import gi
 
 gi.require_version("Gio", "2.0")
-from gi.repository import GLib  # noqa: E402
+from gi.repository import GLib
 
 from goblinmode import capabilities, config, gpu, runner
 from goblinmode.diagnostics import DiagnosticEngine
@@ -149,11 +150,11 @@ class Daemon:
             self._save_source_id = None
             try:
                 self._flush_profiles()
-            except Exception:  # noqa: BLE001
+            except Exception:
                 log.exception("error flushing profiles on shutdown")
         try:
             self.payload.revert_all()
-        except Exception:  # noqa: BLE001
+        except Exception:
             log.exception("error during revert on shutdown")
         self.gpu_monitor.stop()
         self.clip.stop()
@@ -169,7 +170,7 @@ class Daemon:
     def _poll_tick(self) -> bool:
         try:
             self.observer.poll()
-        except Exception:  # noqa: BLE001
+        except Exception:
             log.exception("observer poll failed")
         self._check_power_source()
         return GLib.SOURCE_CONTINUE
@@ -244,7 +245,7 @@ class Daemon:
             ok, msg = shadercache.prewarm_shader_cache(steam_app_id)
             log.info("shader pre-warm for AppID %s: %s", steam_app_id, msg) if ok \
                 else log.debug("shader pre-warm for AppID %s skipped: %s", steam_app_id, msg)
-        except Exception:  # noqa: BLE001 - background thread, must never crash the daemon
+        except Exception:
             log.exception("shader pre-warm failed for AppID %s", steam_app_id)
 
     def _tweaks_fingerprint(self) -> list[str]:
@@ -275,7 +276,7 @@ class Daemon:
         is_bench = bool(self._benchmark and self._benchmark.get("exe") == exe)
         try:
             result = self.sessions.end(exe, benchmark=is_bench)
-        except Exception:  # noqa: BLE001
+        except Exception:
             log.exception("session summary failed")
             self._benchmark = None
             return GLib.SOURCE_REMOVE
@@ -316,7 +317,7 @@ class Daemon:
         notify.send(title, body, urgency=urgency, tag=tag)
         self.tray.notify(title, body)
 
-    def _adopt_detected_game(self, cand) -> "config.GameProfile | None":
+    def _adopt_detected_game(self, cand) -> config.GameProfile | None:
         """Turn an auto-detected game into a (persistent) default profile and tell
         the user."""
         try:
@@ -382,7 +383,7 @@ class Daemon:
             try:
                 idle = gpu.deep_state()
                 verdict = gpu.post_mortem(idle)
-            except Exception:  # noqa: BLE001
+            except Exception:
                 log.exception("fps post-mortem failed")
                 return
             if verdict:
@@ -438,7 +439,7 @@ class Daemon:
             ev = self.fpswatch.poll()
             if ev is not None:
                 self._on_fps_event(ev)
-        except Exception:  # noqa: BLE001
+        except Exception:
             log.exception("diagnostics tick failed")
         return GLib.SOURCE_CONTINUE
 
@@ -463,7 +464,7 @@ class Daemon:
         def work() -> None:
             try:
                 state = self.gpu_monitor.deep(force=True)
-            except Exception:  # noqa: BLE001
+            except Exception:
                 log.exception("fps-dip gpu snapshot failed")
                 state = {}
             try:
@@ -472,7 +473,7 @@ class Daemon:
                     cpu_load=cpu_load, disk_read=disk_read,
                     cpu_core_max=cpu_core_max,
                 )
-            except Exception:  # noqa: BLE001
+            except Exception:
                 log.exception("fps-dip classification failed")
                 detail, real = (
                     f"Frame rate dropped to {ev.fps:.0f} FPS "
@@ -594,7 +595,7 @@ class Daemon:
             try:
                 from goblinmode import preflight
                 self._cache_health(preflight.run_all())
-            except Exception:  # noqa: BLE001
+            except Exception:
                 log.exception("health check failed")
                 return self._health or {"score": None}
         return self._health
@@ -666,10 +667,8 @@ class Daemon:
             self.fpswatch.update(p.fps_dip_floor, p.fps_dip_ratio)
             # keep the MangoHud config file current so the *next* launch is right
             if p.fps_watchdog or p.mangohud.get("enabled"):
-                try:
+                with contextlib.suppress(OSError):
                     mangohud.apply(p)
-                except OSError:
-                    pass
             if exe in self._active_pids:
                 self.payload.reapply(p)  # governor/tearing/PL only - MangoHud can't hot-reload
         return GLib.SOURCE_REMOVE
@@ -802,10 +801,9 @@ def main(argv: list[str] | None = None) -> int:
             rest = raw[1:]
             if rest and rest[0] == "--":
                 rest = rest[1:]
-            try:
+            # Never break a game launch because a hook failed.
+            with contextlib.suppress(Exception):
                 print(fn(rest, config.load()))
-            except Exception:  # noqa: BLE001 - never break a game launch
-                pass
             return 0
 
     parser = argparse.ArgumentParser(prog="goblin-mode-pro-daemon")

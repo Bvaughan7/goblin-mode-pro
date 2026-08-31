@@ -29,7 +29,7 @@ class _Conf:
     lines: list[str] = field(default_factory=list)
 
     @classmethod
-    def load(cls, path: Path) -> "_Conf":
+    def load(cls, path: Path) -> _Conf:
         if not path.exists():
             return cls([])
         return cls(path.read_text().splitlines())

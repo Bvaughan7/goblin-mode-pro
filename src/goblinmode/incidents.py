@@ -20,7 +20,7 @@ import subprocess
 import time
 from collections import deque
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from pathlib import Path
 from typing import Any
 
@@ -48,7 +48,7 @@ class Incident:
     detail: str
     game: str = ""
     game_pid: int | None = None
-    ts: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    ts: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
     mono: float = field(default_factory=time.monotonic)
     metrics_window: list[dict] = field(default_factory=list)
     logs_tail: list[str] = field(default_factory=list)

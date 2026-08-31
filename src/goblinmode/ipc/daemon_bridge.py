@@ -15,12 +15,13 @@ from __future__ import annotations
 import json
 import logging
 import threading
-from typing import Any, Callable, Protocol
+from typing import Any, Protocol
+from collections.abc import Callable
 
 import gi
 
 gi.require_version("Gio", "2.0")
-from gi.repository import Gio, GLib  # noqa: E402
+from gi.repository import Gio, GLib
 
 from goblinmode import BRIDGE_BUS_NAME, BRIDGE_OBJECT_PATH
 
@@ -266,7 +267,7 @@ class DaemonBridge:
                 invocation.return_dbus_error(
                     "org.freedesktop.DBus.Error.UnknownMethod", method
                 )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             log.exception("bridge method %s failed", method)
             invocation.return_dbus_error(f"{IFACE}.Failed", str(exc))
 
@@ -285,7 +286,7 @@ class DaemonBridge:
             try:
                 result = work()
                 GLib.idle_add(reply_ok, result)
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 log.exception("async bridge handler failed")
                 GLib.idle_add(reply_err, str(exc))
 

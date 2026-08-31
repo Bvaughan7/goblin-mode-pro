@@ -12,7 +12,7 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, Gio, GLib, Gtk  # noqa: E402
+from gi.repository import Adw, Gio, GLib, Gtk
 
 from goblinmode import APP_ID, __version__
 from goblinmode.gui.page_dashboard import DashboardPage
@@ -41,7 +41,7 @@ class MainWindow(Adw.ApplicationWindow):
 
         self._stack = Adw.ViewStack()
         for page, name in zip(
-            (self.dashboard, self.games, self.preflight, self.diagnostics), _PAGES
+            (self.dashboard, self.games, self.preflight, self.diagnostics), _PAGES, strict=False
         ):
             self._stack.add_titled_with_icon(
                 page, name, page.get_title(),

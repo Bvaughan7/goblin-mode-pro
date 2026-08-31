@@ -271,7 +271,7 @@ class FpsWatcher:
             size = self._path.stat().st_size
             if size < self._pos:            # file was truncated / replaced
                 self._pos = 0
-            with open(self._path, "r", errors="replace") as fh:
+            with open(self._path, errors="replace") as fh:
                 if size - self._pos > self._MAX_READ:
                     # jump near the end; realign to the next full line
                     fh.seek(size - self._MAX_READ)

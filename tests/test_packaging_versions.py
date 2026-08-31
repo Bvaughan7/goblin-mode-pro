@@ -14,7 +14,7 @@ from pathlib import Path
 
 from tests._support import _SRC  # noqa: F401
 
-from goblinmode.__about__ import __version__  # noqa: E402
+from goblinmode.__about__ import __version__
 
 _REPO = Path(__file__).resolve().parent.parent
 _PKG = _REPO / "packaging"
