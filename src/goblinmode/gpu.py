@@ -313,27 +313,50 @@ def describe_dip(
     baseline: float,
     cpu_load: float | None,
     disk_read: float | None,
+    cpu_core_max: float | None = None,
 ) -> tuple[str, bool]:
     """Turn a fresh GPU snapshot + the dip numbers into an incident line.
 
-    Returns ``(detail, is_real)`` - ``is_real`` is False only for a dip we're
-    confident was the game withholding frames (focus loss / loading screen),
-    which shouldn't arm the post-game post-mortem. Mutates ``state`` with the
-    at-dip context the exporter and Diagnostics page read back.
+    Returns ``(detail, is_real)``. ``is_real`` is False for a dip that isn't a
+    hardware *fault* - frames withheld (focus loss / loading), or a scene that's
+    simply GPU- or CPU-bound at the current settings - so it doesn't arm the
+    post-game post-mortem. Mutates ``state`` with the at-dip context the
+    exporter and Diagnostics page read back.
     """
     gpu_busy = (state.get("util_gpu") or 0) >= 25 or (cpu_load or 0) >= 60
     benign = classify_dip(state, cpu_load, disk_read)
     causes = assess(state, fps=fps, under_load=gpu_busy)
     state["likely_causes"] = causes
     state["cpu_load_at_dip"] = round(cpu_load, 1) if cpu_load is not None else None
+    state["cpu_core_max_at_dip"] = round(cpu_core_max, 1) if cpu_core_max is not None else None
     state["disk_read_mbps_at_dip"] = disk_read
 
+    util = state.get("util_gpu")
     at = f"(baseline ~{baseline:.0f})"
+
     if benign and not causes:
         state["assessment"] = "benign - not a hardware bottleneck"
         return f"Frame rate dipped to {fps:.0f} FPS {at}. {benign}", False
     if causes:
         return f"Frame rate collapsed to {fps:.0f} FPS {at}. {causes[0]}", True
+
+    dropped = baseline > 0 and fps <= baseline * 0.75
+    if dropped and util is not None and util >= 92:
+        state["assessment"] = "GPU-bound scene"
+        return (
+            f"Frame rate dropped to {fps:.0f} FPS {at}. GPU pegged at {util:.0f}% - "
+            f"this spot is heavier than your settings can sustain, not a fault. "
+            f"Lower a setting or cap the frame rate here.",
+            False,
+        )
+    if dropped and util is not None and util < 80 and cpu_core_max is not None and cpu_core_max >= 95:
+        state["assessment"] = "CPU-bound scene"
+        return (
+            f"Frame rate dropped to {fps:.0f} FPS {at}. A CPU core was pegged at "
+            f"{cpu_core_max:.0f}% while the GPU had headroom ({util:.0f}%) - a "
+            f"single-threaded hotspot (busy city, raid), not a hardware fault.",
+            False,
+        )
     return (
         f"Frame rate dropped to {fps:.0f} FPS {at}. No single cause stood out - "
         f"the GPU snapshot is attached. A short drop like this is usually a zone "

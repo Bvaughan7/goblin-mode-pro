@@ -450,6 +450,7 @@ class Daemon:
         # cause" - by the time we looked, the GPU was busy again.
         recent = self.diag.recent(6)
         cpu_load = max((s.cpu_load for s in recent), default=None)
+        cpu_core_max = max((max(s.per_core) for s in recent if s.per_core), default=None)
         disk_read = max((s.disk_read_mbps or 0 for s in recent), default=None)
         trace = self.fpswatch.recent_trace()
 
@@ -463,6 +464,7 @@ class Daemon:
                 detail, real = gpu.describe_dip(
                     state, fps=ev.fps, baseline=ev.baseline,
                     cpu_load=cpu_load, disk_read=disk_read,
+                    cpu_core_max=cpu_core_max,
                 )
             except Exception:  # noqa: BLE001
                 log.exception("fps-dip classification failed")

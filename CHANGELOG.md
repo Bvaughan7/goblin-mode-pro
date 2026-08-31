@@ -4,6 +4,16 @@ All notable changes to Goblin Mode Pro. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); this project uses
 [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+- An FPS dip that isn't a fault now says *why* instead of "no single
+  cause stood out": a **GPU-bound scene** (card pegged at ≥ 92 % — the
+  spot is heavier than the settings can sustain) or a **CPU-bound scene**
+  (a core pegged at ≥ 95 % while the GPU has headroom — a single-threaded
+  hotspot, i.e. a busy city or raid). Both are marked "not a fault" so
+  they don't arm the post-game VRAM post-mortem.
+
 ## [1.2.2] — 2026-08-31
 
 The diagnostics engine stops crying wolf. Three fixes to how it decides

@@ -81,6 +81,33 @@ class DescribeDip(unittest.TestCase):
         self.assertNotIn("no obvious cause", detail)
         self.assertIn("zone load", detail)
 
+    def test_gpu_bound_scene_is_named_and_not_a_fault(self):
+        state = {"util_gpu": 98}
+        detail, real = gpu.describe_dip(
+            state, fps=45, baseline=140, cpu_load=40, disk_read=0, cpu_core_max=70
+        )
+        self.assertFalse(real)
+        self.assertIn("GPU pegged at 98%", detail)
+        self.assertEqual(state["assessment"], "GPU-bound scene")
+
+    def test_cpu_bound_scene_is_named_and_not_a_fault(self):
+        state = {"util_gpu": 55}
+        detail, real = gpu.describe_dip(
+            state, fps=48, baseline=150, cpu_load=35, disk_read=0, cpu_core_max=99
+        )
+        self.assertFalse(real)
+        self.assertIn("CPU core was pegged at 99%", detail)
+        self.assertEqual(state["assessment"], "CPU-bound scene")
+
+    def test_small_drop_is_not_flagged_gpu_bound(self):
+        # 120 vs 140 baseline is only a 14% drop - below the 25% bar
+        state = {"util_gpu": 99}
+        detail, real = gpu.describe_dip(
+            state, fps=120, baseline=140, cpu_load=40, disk_read=0, cpu_core_max=99
+        )
+        self.assertTrue(real)
+        self.assertIn("zone load", detail)
+
 
 class PostMortem(unittest.TestCase):
     def test_flags_unreleased_vram(self):
