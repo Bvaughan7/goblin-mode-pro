@@ -7,12 +7,38 @@ with vertical marks at throttle events; the **Frame rate** chart shows the
 MangoHud watchdog log with the dip threshold.
 
 ## Frame-rate watchdog
-Enable it per game (Games → MangoHud → Frame-rate watchdog). If your FPS falls
-to/under the threshold (or below half the recent median) and stays there, it
-snapshots deep GPU state — VRAM, PCIe link, clocks, power state — classifies it
-*withheld* (focus loss / loading) vs *starved* (a real bottleneck), and raises an
-incident with a ranked cause. After the game exits it checks whether VRAM was
-actually released.
+Enable it per game (Games → MangoHud → Frame-rate watchdog). It watches the
+MangoHud log for a **sustained** drop — the trailing mean has to sit at/under
+the threshold (or under `dip_ratio` × the pre-dip baseline) for about 4
+seconds before it counts. A 1–3 second drop is a menu, a zone load or shader
+compilation, so it's ignored; a window that isn't rendering at all (alt-tabbed)
+isn't a dip either. The baseline is frozen for the length of the dip, and
+recovery isn't declared until the frame rate climbs back to ~85 % of it — so
+you won't see "recovered to 24 FPS" any more.
+
+On a real dip it takes a fresh deep GPU snapshot (VRAM, PCIe link, clocks,
+power state) and files the incident as one of:
+
+- **withheld** — CPU and GPU both near-idle: focus loss, a loading screen or a
+  menu. Not a hardware problem.
+- **GPU-bound scene** — the card is pegged (≥ 92 %): this spot is heavier than
+  your settings can sustain. Lower a setting or cap the frame rate here.
+- **CPU-bound scene** — a CPU core is pinned (≥ 95 %) while the GPU has
+  headroom: a single-threaded hotspot, e.g. a busy city or a raid. More cores
+  won't help.
+- **starved** — a real fault, with a ranked cause (VRAM exhaustion, a
+  down-trained PCIe link, a stuck power state, a collapsed core clock…).
+
+Only *starved* arms the post-exit check for whether VRAM was actually released.
+
+## Notifications
+Desktop notifications are reserved for things you'd want to act on: a GPU /
+driver fault, VRAM that leaked after a game exited, and sustained CPU thermal
+throttling. Thermal throttling has to persist across a 20-second window before
+it notifies (a laptop nicks the throttle counter under any turbo load), then
+reminds at most once every 15 minutes while it lasts. Frame-rate dips and
+benign incidents are logged to the Diagnostics page but never pop a
+notification.
 
 ## Regression tracking
 Every session is summarised (avg / median / 1% low, duration, active tweaks) into
