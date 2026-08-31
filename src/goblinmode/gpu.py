@@ -306,6 +306,42 @@ def assess(state: dict, *, fps: float | None = None, under_load: bool = True) ->
     return out
 
 
+def describe_dip(
+    state: dict,
+    *,
+    fps: float,
+    baseline: float,
+    cpu_load: float | None,
+    disk_read: float | None,
+) -> tuple[str, bool]:
+    """Turn a fresh GPU snapshot + the dip numbers into an incident line.
+
+    Returns ``(detail, is_real)`` - ``is_real`` is False only for a dip we're
+    confident was the game withholding frames (focus loss / loading screen),
+    which shouldn't arm the post-game post-mortem. Mutates ``state`` with the
+    at-dip context the exporter and Diagnostics page read back.
+    """
+    gpu_busy = (state.get("util_gpu") or 0) >= 25 or (cpu_load or 0) >= 60
+    benign = classify_dip(state, cpu_load, disk_read)
+    causes = assess(state, fps=fps, under_load=gpu_busy)
+    state["likely_causes"] = causes
+    state["cpu_load_at_dip"] = round(cpu_load, 1) if cpu_load is not None else None
+    state["disk_read_mbps_at_dip"] = disk_read
+
+    at = f"(baseline ~{baseline:.0f})"
+    if benign and not causes:
+        state["assessment"] = "benign - not a hardware bottleneck"
+        return f"Frame rate dipped to {fps:.0f} FPS {at}. {benign}", False
+    if causes:
+        return f"Frame rate collapsed to {fps:.0f} FPS {at}. {causes[0]}", True
+    return (
+        f"Frame rate dropped to {fps:.0f} FPS {at}. No single cause stood out - "
+        f"the GPU snapshot is attached. A short drop like this is usually a zone "
+        f"load, shader compilation or a background task.",
+        True,
+    )
+
+
 def post_mortem(idle_state: dict) -> tuple[str, str] | None:
     """After the game exits: did the GPU actually let go? Returns (kind, detail).
 

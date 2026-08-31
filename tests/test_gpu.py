@@ -51,6 +51,37 @@ class ClassifyDip(unittest.TestCase):
         self.assertIsNone(gpu.classify_dip({"util_gpu": 80}, cpu_load=70, disk_read_mbps=0))
 
 
+class DescribeDip(unittest.TestCase):
+    def test_idle_system_reads_as_benign_and_not_real(self):
+        state = {"util_gpu": 3}
+        detail, real = gpu.describe_dip(
+            state, fps=35, baseline=190, cpu_load=8, disk_read=1
+        )
+        self.assertFalse(real)
+        self.assertIn("withheld", detail)
+        self.assertEqual(state["assessment"], "benign - not a hardware bottleneck")
+        self.assertEqual(state["cpu_load_at_dip"], 8.0)
+
+    def test_real_cause_is_named_and_flagged_real(self):
+        state = {"util_gpu": 95, "vram_used_mb": 5950, "vram_total_mb": 6000,
+                 "vram_free_mb": 50}
+        detail, real = gpu.describe_dip(
+            state, fps=20, baseline=120, cpu_load=70, disk_read=0
+        )
+        self.assertTrue(real)
+        self.assertIn("collapsed", detail)
+        self.assertIn("VRAM", detail)
+
+    def test_unclassified_dip_is_real_but_calmly_worded(self):
+        state = {"util_gpu": 45}          # busy enough to not be "withheld", no cause
+        detail, real = gpu.describe_dip(
+            state, fps=60, baseline=140, cpu_load=30, disk_read=0
+        )
+        self.assertTrue(real)
+        self.assertNotIn("no obvious cause", detail)
+        self.assertIn("zone load", detail)
+
+
 class PostMortem(unittest.TestCase):
     def test_flags_unreleased_vram(self):
         v = gpu.post_mortem({"vram_used_mb": 1500})

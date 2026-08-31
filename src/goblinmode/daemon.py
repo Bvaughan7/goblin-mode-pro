@@ -460,31 +460,15 @@ class Daemon:
                 log.exception("fps-dip gpu snapshot failed")
                 state = {}
             try:
-                gpu_busy = (state.get("util_gpu") or 0) >= 25 or (cpu_load or 0) >= 60
-                benign = gpu.classify_dip(state, cpu_load, disk_read)
-                causes = gpu.assess(state, fps=ev.fps, under_load=gpu_busy)
+                detail, real = gpu.describe_dip(
+                    state, fps=ev.fps, baseline=ev.baseline,
+                    cpu_load=cpu_load, disk_read=disk_read,
+                )
             except Exception:  # noqa: BLE001
                 log.exception("fps-dip classification failed")
-                benign, causes = None, []
-            state["likely_causes"] = causes
-            state["cpu_load_at_dip"] = round(cpu_load, 1) if cpu_load is not None else None
-            state["disk_read_mbps_at_dip"] = disk_read
-
-            base = f"(baseline ~{ev.baseline:.0f})"
-            if benign and not causes:
-                detail = f"Frame rate dipped to {ev.fps:.0f} FPS {base}. {benign}"
-                state["assessment"] = "benign - not a hardware bottleneck"
-                real = False
-            elif causes:
-                detail = f"Frame rate collapsed to {ev.fps:.0f} FPS {base}. {causes[0]}"
-                real = True
-            else:
-                detail = (
-                    f"Frame rate dropped to {ev.fps:.0f} FPS {base}. No single cause "
-                    f"stood out - the GPU snapshot is attached. A short drop like this "
-                    f"is usually a zone load, shader compilation or a background task."
-                )
-                real = True
+                detail, real = (
+                    f"Frame rate dropped to {ev.fps:.0f} FPS "
+                    f"(baseline ~{ev.baseline:.0f})."), True
 
             def report() -> bool:
                 if real:
