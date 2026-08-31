@@ -46,9 +46,11 @@ mkdir -p -- "$gmp_logdir"
 # Import the runner variables for this launch. No eval: each line is a strict
 # NAME=VALUE that the daemon has already validated.
 while IFS='=' read -r gmp_k gmp_v; do
-    case "$gmp_k" in
-        [A-Za-z_]*) export "$gmp_k=$gmp_v" ;;
-    esac
+    # Strict NAME check on the whole token, not just the first char - "$gmp_k"
+    # must be a plain identifier or the line is skipped. Defence in depth; the
+    # daemon already validates upstream (_ENV_NAME_RE).
+    [[ "$gmp_k" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
+    export "$gmp_k=$gmp_v"
 done < <(goblin-mode-pro-daemon --print-env-for -- "$@" 2>/dev/null || true)
 
 gmp_tag="$(basename -- "${{1:-game}}" | tr -cd 'A-Za-z0-9._-')"

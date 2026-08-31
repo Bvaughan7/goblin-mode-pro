@@ -14,6 +14,8 @@ Gio.DBusMethodInvocation.
 
 from __future__ import annotations
 
+import os
+import subprocess
 import sys
 import unittest
 from pathlib import Path
@@ -174,6 +176,60 @@ class MutatingMethodsAreGated(unittest.TestCase):
     def test_readonly_methods_are_never_gated(self):
         for m in ("GetGovernor", "GetPowerLimits", "HasTDPControl", "ReadUndervolt"):
             self.assertNotIn(m, gh._MUTATING)
+
+
+class ReniceFailsClosed(unittest.TestCase):
+    def _spawn(self) -> subprocess.Popen:
+        p = subprocess.Popen(["sleep", "30"])
+        self.addCleanup(lambda: (p.kill(), p.wait()))
+        return p
+
+    def test_owned_process_can_be_reniced_down(self):
+        p = self._spawn()
+        self.assertTrue(gh.renice(p.pid, 12, caller_uid=os.getuid()))
+
+    def test_wrong_owner_is_refused(self):
+        p = self._spawn()
+        with self.assertRaises(PermissionError):
+            gh.renice(p.pid, 12, caller_uid=os.getuid() + 40001)
+
+    def test_unknown_uid_fails_closed_not_open(self):
+        p = self._spawn()
+        # None used to be treated like root (uid in (None, 0)) - now untrusted.
+        with self.assertRaises(PermissionError):
+            gh.renice(p.pid, 12, caller_uid=None)
+
+    def test_dispatch_refuses_renice_when_uid_lookup_fails(self):
+        with patch.object(gh, "_check_authorized", return_value=True), \
+             patch.object(gh, "_caller_uid", return_value=None), \
+             patch.object(gh, "renice") as renice_fn:
+            inv = _call_with_connection("Renice", (1234, 0))
+        renice_fn.assert_not_called()
+        self.assertEqual(inv.error[0], f"{gh.IFACE}.NotAuthorized")
+
+
+class EppValidation(unittest.TestCase):
+    def test_rejects_a_value_the_kernel_does_not_advertise(self):
+        with patch.object(gh, "_available_epps", return_value={"performance", "power"}):
+            with self.assertRaises(ValueError):
+                gh.set_epp("balance_power")
+
+    def test_falls_back_to_the_standard_set_when_kernel_lists_nothing(self):
+        with patch.object(gh, "_available_epps", return_value=set()), \
+             patch.object(gh, "_snapshot"), \
+             patch.object(gh, "_cpu_epp_paths", return_value=[]):
+            self.assertFalse(gh.set_epp("balance_power"))  # valid name, no cores
+            with self.assertRaises(ValueError):
+                gh.set_epp("ludicrous-speed")
+
+
+def _call_with_connection(method_name: str, args: tuple):
+    """Like _call() but leaves _check_authorized/_caller_uid to the caller's
+    own patches (the Renice dispatch path resolves a uid off the connection)."""
+    inv = FakeInvocation()
+    gh._handle_call(None, "fake-sender", gh.OBJECT_PATH, gh.IFACE,
+                    method_name, _FakeParams(args), inv)
+    return inv
 
 
 if __name__ == "__main__":

@@ -82,6 +82,12 @@ class GamescopeArgs(unittest.TestCase):
     def assertFalseStartsWith(self, text, prefix):
         self.assertFalse(text.startswith(prefix), f"{text!r} starts with {prefix!r}")
 
+    def test_wrapper_env_name_guard_anchors_the_whole_token(self):
+        # the old guard was `case "$gmp_k" in [A-Za-z_]*)` which also matched
+        # "A B" and "A;x" - the fix anchors both ends of the identifier.
+        self.assertIn("=~ ^[A-Za-z_][A-Za-z0-9_]*$", runner._WRAPPER_TEMPLATE)
+        self.assertNotIn("[A-Za-z_]*) export", runner._WRAPPER_TEMPLATE)
+
 
 class GamescopeSessionArgv(unittest.TestCase):
     def test_no_profile_defaults_to_steam_big_picture(self):

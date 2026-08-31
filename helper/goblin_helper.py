@@ -268,41 +268,97 @@ def set_governor(governor: str) -> bool:
     return ok
 
 
+#: EPP values to accept when the kernel doesn't advertise a list (the standard
+#: intel_pstate / amd_pstate set).
+_EPP_FALLBACK = {
+    "default", "performance", "balance_performance", "balance_power", "power",
+}
+
+
+def _available_epps() -> set[str]:
+    p = CPU_BASE / "cpu0" / "cpufreq" / "energy_performance_available_preferences"
+    try:
+        return set(_read(p).split())
+    except OSError:
+        return set()
+
+
 def set_epp(epp: str) -> bool:
+    """Set the energy/performance preference on every core.
+
+    Return semantics: all-must-succeed - True only if every writable EPP file
+    accepted the value, matching ``set_governor``. A partial write (some cores
+    took it, others errored) returns False so the caller isn't told the box is
+    in a state it isn't.
+    """
+    if epp not in (_available_epps() or _EPP_FALLBACK):
+        raise ValueError(f"unsupported EPP: {epp!r}")
     _snapshot()
-    ok = False
-    for path in _cpu_epp_paths():
+    paths = _cpu_epp_paths()
+    ok = bool(paths)
+    for path in paths:
         try:
             _write(path, epp)
-            ok = True
         except OSError as exc:
             log.warning("EPP write failed for %s: %s", path, exc)
+            ok = False
     return ok
 
 
 def renice(pid: int, nice: int, caller_uid: int | None = None) -> bool:
-    proc = Path(f"/proc/{int(pid)}")
-    if pid <= 1 or not proc.exists():
+    """Raise a process's scheduling priority.
+
+    Ownership: the target must be owned by ``caller_uid``. ``caller_uid == 0``
+    (an explicit root caller) is the *only* thing that skips the check - a
+    ``None`` uid means "the bus lookup failed" and is treated as untrusted,
+    never as root (fail closed).
+
+    PID-reuse: the pid is pinned with a pidfd, ownership is re-checked *after*
+    the pidfd is open, and liveness is confirmed with a null signal before the
+    setpriority call, so a pid recycled mid-request can't slip a different
+    process past the ownership gate.
+    """
+    pid = int(pid)
+    if pid <= 1:
         raise ValueError(f"no such process: {pid}")
-    # only renice a process the caller actually owns (root may renice anything)
-    if caller_uid not in (None, 0):
-        try:
-            owner = proc.stat().st_uid
-        except OSError as exc:
-            raise ValueError(f"cannot stat process {pid}: {exc}") from exc
-        if owner != caller_uid:
-            raise PermissionError(f"process {pid} is not owned by uid {caller_uid}")
     nice = max(NICE_FLOOR, min(19, int(nice)))
-    os.setpriority(os.PRIO_PROCESS, pid, nice)
+    enforce_owner = caller_uid != 0
+
+    pidfd: int | None = None
     try:
-        for tid in os.listdir(proc / "task"):
+        pidfd = os.pidfd_open(pid)
+    except (OSError, AttributeError):
+        pidfd = None  # pre-5.3 kernel / unsupported - fall back to the plain path
+
+    try:
+        try:
+            owner = os.stat(f"/proc/{pid}").st_uid
+        except OSError as exc:
+            raise ValueError(f"no such process: {pid}") from exc
+        if enforce_owner and owner != caller_uid:
+            raise PermissionError(
+                f"process {pid} is not owned by uid {caller_uid}"
+            )
+        _pidfd_alive = getattr(signal, "pidfd_send_signal", None)
+        if pidfd is not None and _pidfd_alive is not None:
             try:
-                os.setpriority(os.PRIO_PROCESS, int(tid), nice)
-            except (OSError, ValueError):
-                pass
-    except OSError:
-        pass
-    return True
+                _pidfd_alive(pidfd, 0)  # confirm it's the same, live task
+            except OSError as exc:
+                raise ValueError(f"process {pid} went away: {exc}") from exc
+
+        os.setpriority(os.PRIO_PROCESS, pid, nice)
+        try:
+            for tid in os.listdir(f"/proc/{pid}/task"):
+                try:
+                    os.setpriority(os.PRIO_PROCESS, int(tid), nice)
+                except (OSError, ValueError):
+                    pass
+        except OSError:
+            pass
+        return True
+    finally:
+        if pidfd is not None:
+            os.close(pidfd)
 
 
 def set_sysctl(key: str, value: str) -> bool:
@@ -913,6 +969,12 @@ def _handle_call(
             invocation.return_value(GLib.Variant("(b)", (set_epp(args[0]),)))
         elif method_name == "Renice":
             uid = _caller_uid(connection, sender)
+            if uid is None:
+                invocation.return_dbus_error(
+                    f"{IFACE}.NotAuthorized",
+                    "could not determine the calling user's uid - refusing",
+                )
+                return
             invocation.return_value(
                 GLib.Variant("(b)", (renice(int(args[0]), int(args[1]), uid),))
             )
