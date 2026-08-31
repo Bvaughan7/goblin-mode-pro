@@ -275,8 +275,12 @@ class DashboardPage(Adw.PreferencesPage):
         self._nvidia_state = state or {}
         self._nvidia_group.set_visible(bool(self._nvidia_state.get("present")))
         modeset = self._nvidia_state.get("modeset")
+        state = {"Y": _("on"), "N": _("off")}.get(
+            modeset, _("unknown (root-only on this driver)"))
+        # The read-out is reliable; it's *writing* it (a modprobe.d drop-in via
+        # the helper) that has not been verified across drivers and distros.
         self._nvidia_modeset_row.set_subtitle(
-            {"Y": _("on"), "N": _("off")}.get(modeset, _("unknown (root-only on this driver)")))
+            _("{state} — changing it is experimental").format(state=state))
         self._nvidia_modeset_toggle.set_label(
             _("Turn off (needs reboot)") if modeset == "Y" else _("Turn on (needs reboot)"))
         self._nvidia_modeset_toggle.set_sensitive(modeset in ("Y", "N"))

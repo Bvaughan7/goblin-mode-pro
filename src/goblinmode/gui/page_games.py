@@ -271,7 +271,9 @@ class GamesPage(Adw.PreferencesPage):
         pw = Adw.ExpanderRow(
             title=_("TDP / power limit") if amd else _("CPU power limit"),
             subtitle=(
-                _("Set the wattage the APU may sustain — via ryzenadj (experimental)")
+                _("Experimental — sets the wattage the APU may sustain, via "
+                  "ryzenadj. Check it works on your machine with "
+                  "`goblin-mode-pro-cli selftest --apply`")
                 if amd else
                 _("Let the CPU draw more watts to hold its speed under load")
             ) if tdp_ok else _("Not available on this processor"),
@@ -331,9 +333,12 @@ class GamesPage(Adw.PreferencesPage):
                     "/etc/goblin-mode-pro/amd-undervolt.conf on launch — a file "
                     "you write yourself. Goblin Mode Pro never picks these "
                     "values. An aggressive undervolt can cause instability or "
-                    "crashes; if that happens, edit or delete that file."))
-            auv.set_subtitle(_("Uses the offsets in /etc/goblin-mode-pro/amd-undervolt.conf, "
-                              "never ours"))
+                    "crashes; if that happens, edit or delete that file.\n\n"
+                    "Experimental: this path has not been verified on real AMD "
+                    "hardware. Check it works on your machine with "
+                    "`goblin-mode-pro-cli selftest --apply`."))
+            auv.set_subtitle(_("Experimental — uses the offsets in "
+                               "/etc/goblin-mode-pro/amd-undervolt.conf, never ours"))
             auv.set_title_lines(0)
             pw.add_row(auv) if pw.get_sensitive() else exp.add_row(auv)
         exp.add_row(pw)
@@ -349,7 +354,9 @@ class GamesPage(Adw.PreferencesPage):
                     "setting on exit. This is best-effort and unverified across "
                     "hardware — if a fan behaves oddly, disable this and file an "
                     "issue."))
-            fan.set_subtitle(_("Gets ahead of thermal throttling instead of reacting to it"))
+            fan.set_subtitle(_("Experimental — gets ahead of thermal throttling "
+                               "instead of reacting to it. Check it works on your "
+                               "machine with `goblin-mode-pro-cli selftest --apply`"))
             fan.set_title_lines(0)
             exp.add_row(fan)
 

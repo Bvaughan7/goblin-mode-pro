@@ -40,6 +40,7 @@ nav:
   - Diagnostics & benchmarking: diagnostics.md
   - Command line: cli.md
   - Troubleshooting: troubleshooting.md
+  - Verified hardware: verified-hardware.md
   - Glossary: glossary.md
   - Roadmap: https://github.com/Bvaughan7/goblin-mode-pro/blob/main/ROADMAP.md
 

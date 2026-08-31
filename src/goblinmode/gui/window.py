@@ -128,7 +128,21 @@ class MainWindow(Adw.ApplicationWindow):
             website="https://github.com/Bvaughan7/goblin-mode-pro",
             issue_url="https://github.com/Bvaughan7/goblin-mode-pro/issues",
         )
+        # "Troubleshooting -> Debug Information" in the About dialog, which is
+        # the button people are told to press. Same content as
+        # `goblin-mode-pro-cli selftest`, so a pasted blob from either says
+        # what this machine can actually do. Read-only and best-effort.
+        about.set_debug_info(self._debug_info())
+        about.set_debug_info_filename("goblin-mode-pro-selftest.txt")
         about.present(self)
+
+    @staticmethod
+    def _debug_info() -> str:
+        try:
+            from goblinmode import selftest
+            return selftest.render(selftest.SelfTest().run(), apply=False, color=False)
+        except Exception as exc:                    # noqa: BLE001
+            return f"selftest failed to run: {type(exc).__name__}: {exc}"
 
     def _show_shortcuts(self, *_a) -> None:
         groups = [

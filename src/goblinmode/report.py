@@ -107,6 +107,19 @@ def build_report(
 
     incident = _redact_incident(incident)
 
+    # The read-only selftest: which privileged paths this machine actually has
+    # and which the helper can reach. It is the single most useful thing in a
+    # bug report, because "it doesn't work" is usually a capability the machine
+    # never had. Read-only, so building a report never changes anything, and
+    # best-effort - a report that fails because a probe did would be worse than
+    # one missing this section.
+    capability_selftest: dict | None = None
+    try:
+        from goblinmode import selftest
+        capability_selftest = selftest.to_json(selftest.SelfTest().run(), apply=False)
+    except Exception as exc:                        # noqa: BLE001
+        capability_selftest = {"error": f"{type(exc).__name__}: {exc}"}
+
     return {
         "schema": "gmp.report.v1",
         "generated": datetime.now(timezone.utc).isoformat(),
@@ -119,6 +132,7 @@ def build_report(
         "log_findings": log_findings,
         "incident": incident,
         "active_tweaks": active_tweaks or (incident or {}).get("active_tweaks", {}),
+        "capability_selftest": capability_selftest,
     }
 
 
@@ -167,6 +181,22 @@ def as_markdown(rep: dict) -> str:
             L.append(f"- GPU: {gs.get('vram_used_mb')}/{gs.get('vram_total_mb')} MB VRAM · "
                      f"PCIe Gen{gs.get('pcie_gen')}×{gs.get('pcie_width')} · pstate {gs.get('pstate')} · "
                      f"clock {gs.get('clock_gfx_mhz')}/{gs.get('clock_gfx_max_mhz')} MHz")
+
+    st = rep.get("capability_selftest") or {}
+    if st.get("results"):
+        counts = st.get("summary", {})
+        L.append("\n### Capabilities  ("
+                 + " · ".join(f"{v} {k.lower()}" for k, v in sorted(counts.items()))
+                 + ")")
+        # Only the things that aren't fine: a FAIL is a broken privileged path
+        # and a SKIP is a capability this machine doesn't have - between them
+        # that is almost always the answer to "why didn't it work for me".
+        notable = [r for r in st["results"]
+                   if r.get("status") in ("FAIL", "SKIP")]
+        for r in notable:
+            L.append(f"- **{r['status']}** {r['title']} — {r['detail']}")
+        if not notable:
+            L.append("- every privileged path this machine has is reachable")
 
     tw = rep.get("active_tweaks") or {}
     if tw:

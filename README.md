@@ -66,9 +66,9 @@ while a game is running and reverts them afterwards. In plain terms:
 | **Proton/Wine switches** | Off unless you set them by hand | Flips the common ones (NVAPI, Fsync, async shaders) per game | The settings most Windows games need on Proton, without editing launch options |
 | **GPU driver tuning** | Off unless you set them by hand | Per-game presets — NVIDIA (`__GL_THREADED_OPTIMIZATIONS`, unlimited shader cache, forced G-SYNC) and AMD/RADV (`mesa_glthread`, `RADV_PERFTEST=gpl,nggc,rt`). Only the toggles for *your* GPU are shown | The driver knobs the community reaches for, without hand-editing launch options |
 | **Undervolt re-apply** *(Intel, opt-in)* | Suspend / `thermald` can silently reset your undervolt mid-session | Re-runs `intel-undervolt apply` when the game starts — **never picks the values**, only re-applies the ones you set in `/etc/intel-undervolt.conf` | Your undervolt actually stays on |
-| **Curve Optimizer re-apply** *(AMD, `ryzenadj`, opt-in)* | Same problem as above, on AMD | Re-applies the offsets from `/etc/goblin-mode-pro/amd-undervolt.conf` — **never picks the values**, same rule as the Intel path. Behind an "I understand the risk" confirm | Your undervolt actually stays on |
+| **Curve Optimizer re-apply** *(AMD, `ryzenadj`, opt-in, experimental)* | Same problem as above, on AMD | Re-applies the offsets from `/etc/goblin-mode-pro/amd-undervolt.conf` — **never picks the values**, same rule as the Intel path. Behind an "I understand the risk" confirm. **Experimental** — unverified on real AMD hardware | Your undervolt actually stays on |
 | **Refresh-rate cap** *(internal panel)* | Fixed at your panel's max | Optionally caps it per game (Deck 40/50/60, Ally up to 120…) | Trade smoothness for battery life on a per-game basis |
-| **Fan spin-up** *(opt-in, where the EC allows it)* | Reacts to heat after the fact | Forces fans to a high duty cycle on launch, reverts on exit | Gets ahead of thermal throttling instead of catching up to it |
+| **Fan spin-up** *(opt-in, where the EC allows it, experimental)* | Reacts to heat after the fact | Forces fans to a high duty cycle on launch, reverts on exit. **Experimental** — most laptops let the EC own the fan curve, so this does nothing there | Gets ahead of thermal throttling instead of catching up to it |
 | **MangoHud overlay** | Not shown | Shows FPS / temps on screen if you want it | See what's actually happening |
 | **gamescope** *(optional)* | Not used | Runs the game inside gamescope, or launch a whole standalone gamescope session (`goblin-mode-pro-cli gamescope-session`, or the app-menu entry) | Rock-solid FPS cap, FSR/NIS upscaling, and alt-tab that doesn't break the game |
 
@@ -152,7 +152,7 @@ apply — it never just fails silently.
 | **Any systemd Linux** — Arch, CachyOS, Debian, Ubuntu, Fedora, Nobara, openSUSE, Pop!_OS… | Everything below that your hardware supports. The installer detects your package manager. |
 | **Intel CPU** | All CPU features, including the power-limit boost. |
 | **AMD CPU** | Everything. Governor, energy hint and priority work exactly as on Intel; laptop TDP control and an *(opt-in)* Curve Optimizer undervolt re-apply both work if you install `ryzenadj` (the installer then loosens the helper sandbox just enough for it). Core pinning uses your CCD layout. |
-| **NVIDIA GPU** | Everything, including the deep "why did my FPS drop" GPU snapshot and the read-only `nvidia-drm.modeset` / GSP-firmware info. |
+| **NVIDIA GPU** | Everything, including the deep "why did my FPS drop" GPU snapshot and the read-only `nvidia-drm.modeset` / GSP-firmware info. *Changing* modeset is **experimental** — the read-out is reliable, writing the modprobe.d drop-in is not yet verified across drivers. |
 | **AMD or Intel GPU** | Everything **except** that deep snapshot and the NVIDIA modeset info — you still get GPU temperature and load. |
 | **Steam Deck / ROG Ally / Legion Go** | Auto-detected — new game profiles start with a handheld layout: TDP slider enabled with a starter preset for your model (and a lower one on battery, switched automatically on plug/unplug), fullscreen gamescope, a lower FPS-dip floor. |
 | **KDE Plasma** | Everything, including tearing / VRR, per-output VRR, and the internal-panel refresh-rate cap. |
@@ -225,6 +225,21 @@ Package names:
 | Debian / Ubuntu | `apt install python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 python3-psutil wl-clipboard mangohud gamemode gamescope` |
 | Fedora / Nobara | `dnf install python3-gobject python3-psutil gtk4 libadwaita wl-clipboard mangohud gamemode gamescope` |
 | openSUSE | `zypper install python3-gobject python3-psutil gtk4-tools libadwaita wl-clipboard mangohud gamemode gamescope` |
+
+### Does it actually work on my machine?
+
+Run `goblin-mode-pro-cli selftest`. It probes every privileged path — the
+helper, the polkit actions, governor/EPP, power limits, fans and the kernel
+tunables — and tells you which ones this machine has and which the helper can
+reach. It changes nothing. `--apply` additionally round-trips each one (apply,
+read back, revert, read back), which is the only way to actually prove a write
+path; `--json` gives a blob worth pasting into an issue.
+
+Features marked **experimental** above are ones that work in principle but
+haven't been confirmed on real hardware yet — usually because they need a
+machine nobody's run it on. [docs/verified-hardware.md](docs/verified-hardware.md)
+records what has actually been tested where. Sending a `selftest --json` from
+your machine is the single most useful contribution you can make.
 
 `mangohud`, `gamemode` and `gamescope` are optional but recommended — the overlay,
 the frame-rate watchdog and the gamescope integration need them.
