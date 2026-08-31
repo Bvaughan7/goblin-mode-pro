@@ -4,7 +4,7 @@ All notable changes to Goblin Mode Pro. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); this project uses
 [SemVer](https://semver.org/).
 
-## [Unreleased]
+## [1.2.3] — 2026-08-31
 
 ### Changed
 - GUI: the 13 confirmation / detail dialogs moved from the deprecated
