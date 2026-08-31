@@ -71,10 +71,12 @@ All notable changes to Goblin Mode Pro. Format loosely follows
   and checked at startup — the GUI now prints a clear message naming the
   version it found instead of dying with an `AttributeError` inside a
   widget constructor. The daemon and CLI have no GTK dependency at all.
-- Fan spin-up, AMD Curve Optimizer re-apply and *writing* `nvidia-drm.modeset`
-  are now marked **experimental** in the GUI *and* the README — they work
-  in principle but have never been confirmed on real hardware. Each says
-  what would confirm it.
+- **Fan spin-up is confirmed working on real hardware** (Dell G7 7590 —
+  `hwmon4/pwm1` 0 → 128 at the 40 % floor, then handed back to the EC), so
+  it is no longer marked experimental. AMD Curve Optimizer re-apply and
+  *writing* `nvidia-drm.modeset` still are, in the GUI *and* the README —
+  they work in principle but nobody has run them on the hardware. Each
+  says what would confirm it. See `docs/verified-hardware.md`.
 - Internals: the daemon's D-Bus surface moved to `daemon_api.py`, the
   per-game profile editor to `gui/widgets/profile_editor.py`, and the
   privileged helper was reorganised so its entire surface — every method,

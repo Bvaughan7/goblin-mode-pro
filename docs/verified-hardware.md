@@ -28,7 +28,7 @@ is just as useful as one saying it does.
 ### Dell G7 7590 — i7-10750H / RTX 2060 — CachyOS (kernel 7.2.2)
 
 Intel Comet Lake laptop, `intel_pstate` active, KDE Plasma 6 on Wayland.
-Tested 2026-08-31 with `selftest --apply`.
+Verified 2026-08-31 with `selftest --apply`: **15 PASS, 0 FAIL, 1 SKIP.**
 
 | Capability | Result | Notes |
 |---|---|---|
@@ -38,21 +38,21 @@ Tested 2026-08-31 with `selftest --apply`.
 | `manage-performance` | PASS | silent on the active session, as designed |
 | `manage-kernel-tunables` | PASS | prompts, then cached for the session |
 | `manage-hardware-thermal` | PASS | prompts |
-| Helper capabilities | **FAIL → fixed** | held `CAP_SYS_NICE` only; `CAP_SYS_RESOURCE` was missing. See the note below |
+| Helper capabilities | PASS | `CAP_SYS_NICE`, `CAP_SYS_RESOURCE` |
 | CPU governor | PASS | `powersave` ⇄ `performance` |
-| Energy performance preference | PASS | `balance_power` ⇄ `balance_performance` |
-| Intel RAPL power limits | PASS | with a caveat, below |
+| Energy performance preference | PASS | round-tripped and restored |
+| Intel RAPL power limits | PASS | clamped to the firmware max — see below |
 | AMD TDP (`ryzenadj`) | SKIP | Intel machine |
-| Fan control | SKIP | 2 PWM channels exist (`hwmon4/pwm1`, `pwm2`) but the round-trip was not completed |
+| **Fan spin-up** | **PASS** | `hwmon4/pwm1` 0 → 128 at the 40 % floor, then handed back to the EC |
 | `vm.max_map_count` | PASS | |
 | `vm.swappiness` | PASS | |
 | `vm.compaction_proactiveness` | PASS | |
 | `kernel.split_lock_mitigate` | PASS | |
-| `user.max_user_namespaces` | **FAIL → fixed** | `EACCES` — the capability bug below |
+| **`user.max_user_namespaces`** | **PASS** | was `EACCES` before the capability fix below |
 | `kernel.unprivileged_userns_clone` | PASS | |
 | `/etc/modprobe.d` writable | — | present and granted; not round-tripped |
 
-#### Two findings from this machine
+#### Three findings from this machine
 
 **`user.max_user_namespaces` had never worked, on any machine.** The helper's
 unit grants `/proc/sys/user` under `ReadWritePaths=`, and a test asserts that it
@@ -62,17 +62,22 @@ namespace (`set_permissions()` in `kernel/ucount.c` masks the write bit out of
 the effective mode without it). Being root is not sufficient. The failure
 surfaces as `EACCES`, which reads like a file-permission problem rather than a
 sandbox one, and a process's capability set only exists at runtime, so no test
-could see it. `CAP_SYS_RESOURCE` has been added to the bounding set, and
-`selftest` now reports the helper's live capabilities so the next missing one is
-visible without `--apply`.
+could see it. Fixed by adding `CAP_SYS_RESOURCE`, and **verified above**.
+
+**`./install.sh` had never upgraded a running install.** It used `systemctl
+enable --now`, which starts a stopped service and does nothing at all to a
+running one — so re-running the installer left both the helper and the daemon
+executing the previous release's code against the previous unit file. The
+capability fix above sat installed-but-not-running across three reinstalls
+because of it. Now `enable` then `restart`.
 
 **PL1 on this machine sits at 107 W against a 45 W firmware maximum.** The
 helper clamps every power-limit write to `constraint_0_max_power_uw`, so using
 the power-limit feature *here* lowers PL1 rather than raising it. That is the
-helper working as designed — but it is worth knowing before turning it on, so
-`selftest` now reports the clamp as a finding rather than leaving you to notice
-it. (This laptop is thermally saturated at stock; raising limits on it is not
-the right move regardless.)
+helper working as designed — but worth knowing before turning it on, so
+`selftest` reports the clamp as a finding rather than leaving you to notice it.
+(This laptop is thermally saturated at stock; raising limits on it is not the
+right move regardless.)
 
 ### Your machine here
 

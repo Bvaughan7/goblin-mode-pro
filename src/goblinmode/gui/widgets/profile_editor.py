@@ -262,12 +262,13 @@ class ProfileEditor:
                 warning=_(
                     "Forces every controllable fan to a manual, high-speed duty "
                     "cycle when this game launches, and restores the previous "
-                    "setting on exit. This is best-effort and unverified across "
-                    "hardware — if a fan behaves oddly, disable this and file an "
-                    "issue."))
-            fan.set_subtitle(_("Experimental — gets ahead of thermal throttling "
-                               "instead of reacting to it. Check it works on your "
-                               "machine with `goblin-mode-pro-cli selftest --apply`"))
+                    "setting on exit. Fan behaviour varies a lot between "
+                    "machines — if a fan behaves oddly, disable this and file "
+                    "an issue."))
+            fan.set_subtitle(_("Gets ahead of thermal throttling instead of "
+                               "reacting to it. Most laptops let the EC own the "
+                               "fan curve — `goblin-mode-pro-cli selftest "
+                               "--apply` tells you whether yours does"))
             fan.set_title_lines(0)
             exp.add_row(fan)
 
