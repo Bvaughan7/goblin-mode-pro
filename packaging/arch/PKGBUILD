@@ -19,6 +19,7 @@ optdepends=(
   'gamescope: the per-game gamescope integration'
   'wl-clipboard: clipboard export on Wayland'
   'ryzenadj: AMD laptop TDP control'
+  'scx-scheds: per-game sched_ext CPU scheduler (scx_lavd, scx_bpfland, ...)'
   'python-cairo: saving a benchmark report card as an image'
 )
 source=("$pkgname-$pkgver.tar.gz::https://github.com/Bvaughan7/goblin-mode-pro/archive/refs/tags/v$pkgver.tar.gz")

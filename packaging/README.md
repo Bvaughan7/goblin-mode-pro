@@ -19,6 +19,56 @@ cd packaging/arch && makepkg -si      # tagged release
 cd packaging/aur  && makepkg -si      # rolling
 ```
 
+### Publishing `goblin-mode-pro-git` to the AUR
+
+The AUR is a separate git host; the package's PKGBUILD lives in its own repo
+there, and `packaging/aur/` in this repo is the source of truth we copy from.
+
+**One-time setup.** Create an account at <https://aur.archlinux.org/register>,
+then add an SSH public key under *My Account → SSH Public Key*:
+
+```sh
+ssh-keygen -t ed25519 -C "aur" -f ~/.ssh/aur
+cat ~/.ssh/aur.pub                      # paste this into the AUR account page
+cat >> ~/.ssh/config <<'EOF'
+Host aur.archlinux.org
+  User aur
+  IdentityFile ~/.ssh/aur
+  IdentitiesOnly yes
+EOF
+ssh aur@aur.archlinux.org               # should greet you by username
+```
+
+**Publishing, and every update after it.** `.SRCINFO` is what the AUR actually
+reads — a push whose `.SRCINFO` disagrees with its `PKGBUILD` is rejected, so
+always regenerate it rather than editing it by hand:
+
+```sh
+git clone ssh://aur@aur.archlinux.org/goblin-mode-pro-git.git /tmp/aur-gmp
+cp packaging/aur/PKGBUILD packaging/aur/goblin-mode-pro.install /tmp/aur-gmp/
+cd /tmp/aur-gmp
+makepkg --printsrcinfo > .SRCINFO       # never hand-edit this
+makepkg -sf --noconfirm                 # prove it builds before pushing
+git add PKGBUILD .SRCINFO goblin-mode-pro.install
+git commit -m "goblin-mode-pro-git 1.3.0"
+git push
+```
+
+Then copy `.SRCINFO` back into `packaging/aur/` here so the two don't drift —
+`tests/test_packaging_versions.py` checks the base version agrees.
+
+Notes worth keeping in mind:
+
+- The repo name and `pkgname` must match (`goblin-mode-pro-git`), and the first
+  push has to contain both `PKGBUILD` and `.SRCINFO` or the AUR rejects it.
+- `pkgver()` resolves the real version at build time from `__about__.py`, so the
+  `pkgver=` line in the PKGBUILD is only a placeholder. Don't bump it by hand
+  expecting it to matter — but do keep it current, since it is what the AUR web
+  page shows until someone builds the package.
+- Only `-git` belongs on the AUR from this repo. A versioned
+  `goblin-mode-pro` package would need release tarballs with stable checksums;
+  `packaging/arch/` builds that locally from a tag and is not published.
+
 A pre-built `goblin-mode-pro-<version>-any.pkg.tar.zst` is also attached to each
 [GitHub release](https://github.com/Bvaughan7/goblin-mode-pro/releases) —
 `sudo pacman -U ./goblin-mode-pro-*.pkg.tar.zst`.
