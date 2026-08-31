@@ -109,7 +109,11 @@ def _default_mangohud() -> dict[str, bool]:
 
 
 def _default_runner_vars() -> dict[str, bool]:
-    return {"nvapi": True, "fsync": True, "no_esync": False, "dxvk_async": True}
+    # dxvk_async off by default: upstream DXVK dropped the async patch years
+    # ago, so DXVK_ASYNC=1 is a no-op on stock DXVK and only does anything on
+    # the dxvk-async / gplasync forks (Proton-GE moved to
+    # DXVK_GPLASYNCCACHE). Leaving it on just sets a dead env var.
+    return {"nvapi": True, "fsync": True, "no_esync": False, "dxvk_async": False}
 
 
 GAMESCOPE_UPSCALERS = ("off", "fsr", "nis", "integer")
@@ -135,6 +139,10 @@ class GameProfile:
     auto_created: bool = False   # added by the game auto-detector, not the user
     renice_enabled: bool = True
     nice_value: int = -5
+    # Wrap the game with `gamemoderun` in the launch wrapper (when gamemode is
+    # installed). Default on. Turn off to resolve the GameMode <-> ananicy-cpp
+    # niceness conflict without uninstalling gamemode.
+    use_gamemode: bool = True
     core_pin: str = "off"        # off | performance | cache0  (see CORE_PIN_MODES)
     tearing_enabled: bool = True
     # Cap the internal panel's refresh rate for this game (Hz); 0 = leave it
@@ -300,6 +308,19 @@ def new_profile(exe: str, display_name: str = "", *, auto_created: bool = False,
         exe=exe, display_name=display_name or exe, auto_created=auto_created,
         match_mode="exact" if exe.lower().endswith(".exe") else "substring",
     )
+
+    # ananicy-cpp (CachyOS default) is itself a niceness manager; a third
+    # writer on top of it + GameMode is the exact conflict the CachyOS wiki
+    # warns about. Start new profiles with renice off when it's running - the
+    # user can still turn it on.
+    try:
+        from goblinmode.capabilities import ananicy_active
+
+        if ananicy_active():
+            p.renice_enabled = False
+    except Exception:  # noqa: BLE001 - never let a probe block profile creation
+        pass
+
     if handheld:
         from goblinmode.capabilities import HANDHELD_TDP_PRESETS, HANDHELD_TDP_PRESETS_BATTERY
 

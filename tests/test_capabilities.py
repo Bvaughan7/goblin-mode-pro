@@ -119,5 +119,25 @@ class DetectShape(unittest.TestCase):
             self.assertEqual(caps["tdp_control"], "rapl")
 
 
+class AnanicyDetection(unittest.TestCase):
+    def test_reports_active_when_a_unit_is_running(self):
+        def fake_run(cmd, **kw):
+            unit = cmd[-1]
+            rc = 0 if unit == "ananicy-cpp" else 3
+            return unittest.mock.Mock(returncode=rc)
+
+        with unittest.mock.patch("subprocess.run", side_effect=fake_run):
+            self.assertTrue(capabilities.ananicy_active())
+
+    def test_reports_inactive_when_no_unit_runs(self):
+        with unittest.mock.patch("subprocess.run",
+                                 return_value=unittest.mock.Mock(returncode=3)):
+            self.assertFalse(capabilities.ananicy_active())
+
+    def test_missing_systemctl_is_not_fatal(self):
+        with unittest.mock.patch("subprocess.run", side_effect=FileNotFoundError):
+            self.assertFalse(capabilities.ananicy_active())
+
+
 if __name__ == "__main__":
     unittest.main()

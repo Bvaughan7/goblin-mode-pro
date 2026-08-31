@@ -231,6 +231,21 @@ def _c_gamemode() -> CheckResult:
         return CheckResult(OK, "installed")
 
 
+def _c_ananicy() -> CheckResult:
+    from goblinmode.capabilities import ananicy_active
+
+    if not ananicy_active():
+        return CheckResult(OK, "not running")
+    return CheckResult(
+        WARN, "running",
+        "ananicy-cpp manages process niceness/ionice - and so does Goblin's "
+        "renice and the gamemoderun the launch wrapper adds. Stacking all "
+        "three fights over the same knob (the CachyOS wiki warns against it). "
+        "New game profiles start with renice off while it's active; you can "
+        "also turn off 'Wrap with GameMode' per game.",
+    )
+
+
 def _c_mangohud() -> CheckResult:
     return (
         CheckResult(OK, "installed") if shutil.which("mangohud")
@@ -336,6 +351,10 @@ CHECKS: list[Check] = [
           _c_fsync, fix_hint="Update to a kernel >= 5.16 (CachyOS ships current)."),
     Check("gamemode", "feralinteractive gamemode", "per-game tuning launchers expect",
           _c_gamemode, fix_hint="Install the 'gamemode' package."),
+    Check("ananicy", "ananicy-cpp niceness conflict",
+          "three tools fighting over process priority", _c_ananicy, severity=WARN,
+          fix_hint="Leave renice off for games (automatic for new profiles), "
+          "stop ananicy-cpp, or turn off 'Wrap with GameMode' per game."),
     Check("mangohud", "MangoHud", "overlay + frame-rate watchdog",
           _c_mangohud, fix_hint="Install the 'mangohud' package."),
     Check("vulkan_icd", "Vulkan driver (ICD)", "no ICD = no game",

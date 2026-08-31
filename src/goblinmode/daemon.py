@@ -101,6 +101,9 @@ class Daemon:
             log.warning("stale applied-state from a previous run - reverting it")
             revert_from_state(self.helper)
 
+        from goblinmode import housekeeping
+        housekeeping.prune_all()
+
         try:
             runner.write_wrapper()
         except OSError as exc:
@@ -260,6 +263,9 @@ class Daemon:
         return out
 
     def _finish_session(self, exe: str, game: str) -> bool:
+        from goblinmode import housekeeping
+        housekeeping.prune_all()  # a game just wrote a log + a MangoHud CSV
+
         is_bench = bool(self._benchmark and self._benchmark.get("exe") == exe)
         try:
             result = self.sessions.end(exe, benchmark=is_bench)
@@ -554,6 +560,7 @@ class Daemon:
         return {
             "controllers": capabilities.controllers(),
             "gamemode": capabilities.gamemode_status(),
+            "ananicy": capabilities.ananicy_active(),
         }
 
     def get_proton_info(self) -> dict[str, Any]:
@@ -886,7 +893,8 @@ def main(argv: list[str] | None = None) -> int:
     # The launch wrapper calls these with the game command as trailing args;
     # handle them before argparse so REMAINDER-style parsing stays simple.
     for flag, fn in (("--print-env-for", runner.print_env_for),
-                     ("--print-gamescope", runner.print_gamescope)):
+                     ("--print-gamescope", runner.print_gamescope),
+                     ("--print-gamemode", runner.print_gamemode)):
         if raw and raw[0] == flag:
             rest = raw[1:]
             if rest and rest[0] == "--":

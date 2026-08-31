@@ -37,8 +37,8 @@ HELP = {
     "watchdog": _("Logs your FPS via MangoHud and, if it falls off a cliff and "
                 "stays there, captures what the GPU was doing so you can see why."),
     "runner_vars": _("Switches for Proton/Wine that many Windows games need on "
-                   "Linux — NVAPI (DLSS/Reflex), Fsync (threading), async shader "
-                   "compile (fewer first-run hitches)."),
+                   "Linux — NVAPI (DLSS/Reflex) and Fsync (threading). The async "
+                   "shader toggle only does anything on async-patched DXVK forks."),
 }
 
 

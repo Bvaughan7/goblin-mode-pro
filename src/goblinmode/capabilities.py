@@ -379,6 +379,24 @@ def controllers() -> list[str]:
     return out
 
 
+def ananicy_active() -> bool:
+    """True if ananicy / ananicy-cpp is running. It's a niceness/ionice/sched
+    manager (CachyOS ships ananicy-cpp enabled by default), so it collides
+    with both Goblin's renice and the ``gamemoderun`` the wrapper adds - the
+    CachyOS wiki explicitly warns against stacking these. Checked live rather
+    than cached: the service can be toggled while the daemon runs."""
+    import subprocess
+
+    for unit in ("ananicy-cpp", "ananicy"):
+        try:
+            if subprocess.run(["systemctl", "is-active", "--quiet", unit],
+                              timeout=3).returncode == 0:
+                return True
+        except (OSError, subprocess.SubprocessError):
+            pass
+    return False
+
+
 def gamemode_status() -> dict:
     """What feralinteractive gamemode reports it is doing right now."""
     if not shutil.which("gamemoded"):

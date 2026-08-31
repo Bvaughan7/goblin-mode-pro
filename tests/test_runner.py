@@ -82,6 +82,20 @@ class GamescopeArgs(unittest.TestCase):
     def assertFalseStartsWith(self, text, prefix):
         self.assertFalse(text.startswith(prefix), f"{text!r} starts with {prefix!r}")
 
+    def test_print_gamemode_reflects_the_per_game_toggle(self):
+        from goblinmode.config import Settings
+
+        s = Settings(profiles=[
+            GameProfile(exe="On.exe", use_gamemode=True),
+            GameProfile(exe="Off.exe", use_gamemode=False),
+        ])
+        self.assertEqual(runner.print_gamemode(["/x/On.exe"], s), "1")
+        self.assertEqual(runner.print_gamemode(["/x/Off.exe"], s), "0")
+        self.assertEqual(runner.print_gamemode(["/x/Unknown.exe"], s), "1")
+
+    def test_wrapper_consults_print_gamemode(self):
+        self.assertIn("--print-gamemode", runner._WRAPPER_TEMPLATE)
+
     def test_wrapper_env_name_guard_anchors_the_whole_token(self):
         # the old guard was `case "$gmp_k" in [A-Za-z_]*)` which also matched
         # "A B" and "A;x" - the fix anchors both ends of the identifier.

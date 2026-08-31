@@ -219,6 +219,11 @@ the frame-rate watchdog and the gamescope integration need them.
   EAC/BattlEye games. The System Check catches this and offers a fix.
 - **The esync FD-limit fix needs a re-login** — raising `DefaultLimitNOFILE`
   won't take effect until you log out and back in.
+- **`ananicy-cpp` and GameMode both manage process niceness** — CachyOS ships
+  `ananicy-cpp` on by default, and stacking it with GameMode + Goblin's own
+  renice makes three tools fight over the same knob. The System Check warns
+  when it sees this; new profiles start with renice off while `ananicy-cpp` is
+  active, and you can turn off **Wrap with GameMode** per game.
 - **KDE:** if the app icon looks stale after install, run
   `kbuildsycoca6 --noincremental` and restart Plasma (or log out/in).
 

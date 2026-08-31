@@ -57,7 +57,8 @@ gmp_tag="$(basename -- "${{1:-game}}" | tr -cd 'A-Za-z0-9._-')"
 gmp_log="$gmp_logdir/${{gmp_tag:-game}}-$(date +%Y%m%d-%H%M%S).log"
 
 if command -v gamemoderun >/dev/null 2>&1; then
-    set -- gamemoderun "$@"
+    gmp_gm="$(goblin-mode-pro-daemon --print-gamemode -- "$@" 2>/dev/null || echo 1)"
+    [ "$gmp_gm" = "0" ] || set -- gamemoderun "$@"
 fi
 
 # gamescope wrapper (tokens come from a fixed allowlist, safe to word-split)
@@ -170,6 +171,15 @@ def print_gamescope(argv: list[str], settings: Settings) -> str:
     if profile is None:
         return ""
     return " ".join(gamescope_args(profile))
+
+
+def print_gamemode(argv: list[str], settings: Settings) -> str:
+    """'1' to wrap the game with gamemoderun (the default), '0' to skip it.
+    An unmatched game keeps the historical default of '1'."""
+    profile = resolve_profile_for_argv(argv, settings)
+    if profile is None:
+        return "1"
+    return "1" if getattr(profile, "use_gamemode", True) else "0"
 
 
 #: what a standalone gamescope session launches with no game specified -

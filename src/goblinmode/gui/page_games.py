@@ -41,7 +41,8 @@ _RUNNER_LABELS = {
     "nvapi": _("NVAPI (PROTON_ENABLE_NVAPI + DXVK_ENABLE_NVAPI)"),
     "fsync": _("Force Fsync (WINEFSYNC=1)"),
     "no_esync": _("Disable Esync (PROTON_NO_ESYNC=1)"),
-    "dxvk_async": _("Async shader compile (DXVK_ASYNC=1)"),
+    "dxvk_async": _("Async shader compile (DXVK_ASYNC=1) — only affects "
+                   "async-patched DXVK forks, not stock DXVK / current Proton-GE"),
 }
 
 
@@ -217,6 +218,14 @@ class GamesPage(Adw.PreferencesPage):
         nice.set_value(p.get("nice_value", -5))
         nice.connect("notify::value", lambda r, _p: self._patch(exe, nice_value=int(r.get_value())))
         exp.add_row(nice)
+
+        if self._caps.get("gamemode"):
+            gm = self._switch_row(
+                _("Wrap with GameMode"), p.get("use_gamemode", True),
+                lambda v: self._patch(exe, use_gamemode=v))
+            gm.set_subtitle(_("Turn off if ananicy-cpp is running — both manage "
+                              "process niceness"))
+            exp.add_row(gm)
 
         layout = self._caps.get("core_layout") or {}
         pin_opts = [("off", _("Off — use every core"))]
@@ -693,7 +702,7 @@ class GamesPage(Adw.PreferencesPage):
 
     # -- profile sharing (export / import) ---------------------
     _SHARE_KEYS = (
-        "match_mode", "renice_enabled", "nice_value", "core_pin",
+        "match_mode", "renice_enabled", "nice_value", "use_gamemode", "core_pin",
         "gpu_tuning", "steam_app_id", "notes", "tearing_enabled",
         "adaptive_sync_enabled", "governor_boost", "focus_mode",
         "power_limit_enabled", "pl1_w", "pl2_w", "per_game_mangohud", "mangohud",
