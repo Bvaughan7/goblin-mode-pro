@@ -286,8 +286,7 @@ class DashboardPage(Adw.PreferencesPage):
     def _on_toggle_modeset(self, _btn) -> None:
         target = self._nvidia_state.get("modeset") != "Y"  # flip
         win = self.get_root()
-        d = Adw.MessageDialog(
-            transient_for=win,
+        d = Adw.AlertDialog(
             heading=_("Change nvidia-drm modeset?"),
             body=_(
                 "This writes /etc/modprobe.d/goblin-mode-pro-nvidia.conf and takes "
@@ -299,7 +298,7 @@ class DashboardPage(Adw.PreferencesPage):
         d.add_response("write", _("Write the config"))
         d.set_response_appearance("write", Adw.ResponseAppearance.SUGGESTED)
         d.connect("response", lambda _d, r: r == "write" and self._do_toggle_modeset(target))
-        d.present()
+        d.present(win)
 
     def _do_toggle_modeset(self, enabled: bool) -> None:
         try:
@@ -341,10 +340,10 @@ class DashboardPage(Adw.PreferencesPage):
             group.add(row)
             box.append(group)
 
-        d = Adw.MessageDialog(transient_for=win, heading=_("What's costing you performance"))
+        d = Adw.AlertDialog(heading=_("What's costing you performance"))
         d.set_extra_child(box)
         d.add_response("ok", _("Close"))
-        d.present()
+        d.present(win)
 
     def update_health(self, health: dict[str, Any]) -> None:
         score = (health or {}).get("score")

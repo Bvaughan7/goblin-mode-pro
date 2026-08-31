@@ -387,11 +387,10 @@ class DiagnosticsPage(Adw.PreferencesPage):
                 lbl.add_css_class("error")
             box.append(lbl)
 
-        d = Adw.MessageDialog(transient_for=self._window,
-                              heading=_("Session comparison"))
+        d = Adw.AlertDialog(heading=_("Session comparison"))
         d.set_extra_child(box)
         d.add_response("ok", _("Close"))
-        d.present()
+        d.present(self._window)
 
     # -- proton / shader caches -------------------------------
     def load_proton_info(self, info: dict) -> None:
@@ -424,8 +423,8 @@ class DiagnosticsPage(Adw.PreferencesPage):
             self._proton_rows.append(row)
 
     def _clear_cache(self, path: str) -> None:
-        d = Adw.MessageDialog(
-            transient_for=self._window, heading=_("Clear this shader cache?"),
+        d = Adw.AlertDialog(
+            heading=_("Clear this shader cache?"),
             body=_("Games will rebuild it on next launch — the first run may stutter "
             "while shaders recompile."))
         d.add_response("cancel", _("Cancel"))
@@ -433,7 +432,7 @@ class DiagnosticsPage(Adw.PreferencesPage):
         d.set_response_appearance("clear", Adw.ResponseAppearance.DESTRUCTIVE)
         d.connect("response", lambda _dd, resp: resp == "clear" and
                   self.bridge.clear_shader_cache_async(path, self._cache_cleared))
-        d.present()
+        d.present(self._window)
 
     def _cache_cleared(self, res, _err) -> None:
         r = res or {}
@@ -472,8 +471,7 @@ class DiagnosticsPage(Adw.PreferencesPage):
         self._toast(_("Incident payload copied to clipboard"))
 
     def _on_report(self, _row) -> None:
-        dialog = Adw.MessageDialog(
-            transient_for=self._window,
+        dialog = Adw.AlertDialog(
             heading=_("Build a bug report"),
             body=_("Describe the problem in a sentence (optional). GMP gathers system "
             "info, the pre-flight results, the last incident and the Proton log "
@@ -486,7 +484,7 @@ class DiagnosticsPage(Adw.PreferencesPage):
         dialog.add_response("build", _("Build report"))
         dialog.set_response_appearance("build", Adw.ResponseAppearance.SUGGESTED)
         dialog.connect("response", self._on_report_response, entry)
-        dialog.present()
+        dialog.present(self._window)
 
     def _on_report_response(self, _d, response: str, entry) -> None:
         if response != "build":
@@ -525,11 +523,10 @@ class DiagnosticsPage(Adw.PreferencesPage):
         sc = Gtk.ScrolledWindow(min_content_height=200, max_content_height=440)
         sc.set_child(box)
 
-        d = Adw.MessageDialog(transient_for=self._window,
-                              heading=f"{len(findings)} issue(s) in the Proton log")
+        d = Adw.AlertDialog(heading=f"{len(findings)} issue(s) in the Proton log")
         d.set_extra_child(sc)
         d.add_response("ok", _("Close"))
-        d.present()
+        d.present(self._window)
 
     def _toast(self, text: str) -> None:
         if hasattr(self._window, "toast"):

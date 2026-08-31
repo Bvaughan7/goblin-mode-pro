@@ -512,8 +512,7 @@ class GamesPage(Adw.PreferencesPage):
                 on_change(False)
                 return
             win = self.get_root()
-            d = Adw.MessageDialog(
-                transient_for=win,
+            d = Adw.AlertDialog(
                 heading=_("Are you sure?"),
                 body=warning,
             )
@@ -530,7 +529,7 @@ class GamesPage(Adw.PreferencesPage):
                     self._building = False
 
             d.connect("response", _respond)
-            d.present()
+            d.present(win)
 
         sw.connect("notify::active", _toggled)
         row.add_suffix(sw)
@@ -614,8 +613,7 @@ class GamesPage(Adw.PreferencesPage):
 
     # -- telemetry-free "works for me" report ----------------------
     def _on_share_works_for_me(self, exe: str) -> None:
-        d = Adw.MessageDialog(
-            transient_for=self.get_root(),
+        d = Adw.AlertDialog(
             heading=_("Share what worked"),
             body=_(
                 "Opens a pre-filled GitHub issue with your system info and this "
@@ -629,7 +627,7 @@ class GamesPage(Adw.PreferencesPage):
         d.add_response("share", _("Open the issue form"))
         d.set_response_appearance("share", Adw.ResponseAppearance.SUGGESTED)
         d.connect("response", self._works_for_me_response, exe, entry)
-        d.present()
+        d.present(self.get_root())
 
     def _works_for_me_response(self, _d, response, exe: str, entry: Gtk.Entry) -> None:
         if response != "share":
@@ -658,8 +656,7 @@ class GamesPage(Adw.PreferencesPage):
         self._patch(exe, enabled=exp.get_enable_expansion())
 
     def _on_remove(self, _btn: Gtk.Button, exe: str) -> None:
-        dialog = Adw.MessageDialog(
-            transient_for=self.get_root(),
+        dialog = Adw.AlertDialog(
             heading=_("Remove game profile?"),
             body=f"“{exe}” will no longer be optimised.",
         )
@@ -667,7 +664,7 @@ class GamesPage(Adw.PreferencesPage):
         dialog.add_response("remove", _("Remove"))
         dialog.set_response_appearance("remove", Adw.ResponseAppearance.DESTRUCTIVE)
         dialog.connect("response", self._on_remove_response, exe)
-        dialog.present()
+        dialog.present(self.get_root())
 
     def _on_remove_response(self, _dialog, response: str, exe: str) -> None:
         if response == "remove":
@@ -797,8 +794,7 @@ class GamesPage(Adw.PreferencesPage):
             self._import_toast(f"Couldn't reach the community profiles ({err})"
                                if err else _("No community profiles listed"))
             return False
-        dialog = Adw.MessageDialog(
-            transient_for=self.get_root(),
+        dialog = Adw.AlertDialog(
             heading=_("Community profiles"),
             body=_("Downloaded from the project repo. Applying one overwrites that "
             "game's tweaks (it never touches your other games)."),
@@ -825,7 +821,7 @@ class GamesPage(Adw.PreferencesPage):
         dialog.add_response("close", _("Close"))
         dialog.set_default_response("close")
         dialog.set_close_response("close")
-        dialog.present()
+        dialog.present(self.get_root())
         return False
 
     def _fetch_community(self, entry: dict) -> None:
@@ -849,8 +845,7 @@ class GamesPage(Adw.PreferencesPage):
         note = prof.pop("note", "")
         exe = prof.get("exe", "?")
         existing = exe in self._profiles
-        d = Adw.MessageDialog(
-            transient_for=self.get_root(),
+        d = Adw.AlertDialog(
             heading=f"Apply community settings for {prof.get('display_name') or exe}?",
             body=(note + "\n\n" if note else "")
             + (f"This replaces your current tweaks for {exe}."
@@ -860,7 +855,7 @@ class GamesPage(Adw.PreferencesPage):
         d.add_response("apply", _("Apply"))
         d.set_response_appearance("apply", Adw.ResponseAppearance.SUGGESTED)
         d.connect("response", lambda _dd, resp: resp == "apply" and self._apply_community(prof))
-        d.present()
+        d.present(self.get_root())
         return False
 
     def _apply_community(self, prof: dict) -> None:

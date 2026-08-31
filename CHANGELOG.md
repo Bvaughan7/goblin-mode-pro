@@ -7,6 +7,10 @@ All notable changes to Goblin Mode Pro. Format loosely follows
 ## [Unreleased]
 
 ### Changed
+- GUI: the 13 confirmation / detail dialogs moved from the deprecated
+  `Adw.MessageDialog` to `Adw.AlertDialog` (libadwaita ≥ 1.5). Same look
+  and behaviour; no more deprecation warnings, and the dialogs are proper
+  child dialogs of the window rather than separate top-levels.
 - An FPS dip that isn't a fault now says *why* instead of "no single
   cause stood out": a **GPU-bound scene** (card pegged at ≥ 92 % — the
   spot is heavier than the settings can sustain) or a **CPU-bound scene**
