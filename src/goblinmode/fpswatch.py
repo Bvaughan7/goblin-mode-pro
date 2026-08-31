@@ -8,7 +8,13 @@ not explain.
 
 Time comes from the CSV's own ``elapsed`` column (a virtual clock), so detection
 works the same whether rows arrive one-per-poll or in a burst after the file
-appears.
+appears. MangoHud doesn't say what unit ``elapsed`` is in, so the unit is
+inferred once per log from the median row spacing and the frame rate (see
+:func:`_infer_divisor`) and then applied unconditionally - never re-guessed per
+row, where any delta that isn't the steady cadence reads as the wrong unit.
+History is a 6000-row deque, which at the 200 ms cadence :mod:`goblinmode.mangohud`
+asks for is ~20 minutes of virtual time - longer than the longest window read
+off it (``_MAX_DIP_S``, then ``_BASELINE_S``).
 
 Detection is a two-state machine (healthy / dipping) driven off the virtual
 clock, not off how often ``poll`` runs:
@@ -32,6 +38,7 @@ clock, not off how often ``poll`` runs:
 from __future__ import annotations
 
 import logging
+import math
 from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
@@ -64,15 +71,71 @@ class FpsEvent:
     duration_s: float = 0.0
 
 
-def _to_seconds(delta: float) -> float:
-    """Auto-scale a MangoHud `elapsed` delta (ns / us / ms / s) to seconds."""
-    if delta > 1e7:
-        return delta / 1e9
-    if delta > 1e4:
-        return delta / 1e6
-    if delta > 20:
-        return delta / 1e3
-    return delta
+#: divisors that turn a MangoHud ``elapsed`` value into seconds, by unit
+_UNIT_DIVISORS = (1.0, 1e3, 1e6, 1e9)          # s, ms, us, ns
+#: a row can't sit closer to the previous one than one frame, less this much
+#: slack for jitter - used to rule out units that imply sub-frame row spacing
+_SUB_FRAME_SLACK = 0.5
+#: deltas to see before committing to a unit (median, so a gap can't sway it)
+_UNIT_SAMPLE_N = 8
+#: ...but settle for this many at the end of a poll, so a slow log still runs
+_UNIT_MIN_DELTAS = 3
+#: and give up waiting entirely after this many buffered rows
+_UNIT_MAX_PENDING = 64
+#: unit named in the column label, if MangoHud ever starts naming one
+_UNIT_BY_SUFFIX = {"ns": 1e9, "us": 1e6, "\u00b5s": 1e6, "ms": 1e3, "sec": 1.0, "s": 1.0}
+
+
+def _divisor_from_label(label: str) -> float | None:
+    """Read the unit off an ``elapsed`` column label, if it carries one.
+
+    MangoHud writes a bare ``elapsed`` today, so this normally returns None and
+    the unit is inferred from the data instead.
+    """
+    tail = label.strip().lower().strip(")]").replace("(", "_").replace("[", "_")
+    for sep in ("_", "-", " ", "/"):
+        tail = tail.replace(sep, "_")
+    token = tail.rsplit("_", 1)[-1]
+    return _UNIT_BY_SUFFIX.get(token)
+
+
+def _median(values: list[float]) -> float:
+    ordered = sorted(values)
+    return ordered[len(ordered) // 2]
+
+
+def _infer_divisor(samples: list[tuple[float, float]]) -> float:
+    """Pick the unit for this log's ``elapsed`` column, once, from its data.
+
+    The unit is decided **once per log** off the median delta, never per row: a
+    per-row magnitude test misreads any delta that isn't the steady cadence. A
+    30 s stall in a ms-unit log looks like a us-unit cadence and would
+    under-advance the clock 1000x; a 1 ms frame in a ns-unit log looks like a
+    us-unit stall and would over-advance it by the same factor. Both corrupt
+    every window measured off the virtual clock - including the dip-duration
+    bars that decide whether a stall is reported at all.
+
+    The median delta alone can still be ambiguous, because the units are a
+    factor of 1000 apart and so are plausible row cadences: 1e6 is a 1 ms
+    cadence in ns and a 1 s cadence in us, and nothing about the number says
+    which. The *frame rate* breaks the tie. MangoHud emits a row either every
+    ``log_interval`` or every frame, so the row cadence can never be much
+    shorter than one frame - a unit implying sub-frame spacing is impossible,
+    and of what's left the truth is the reading closest to the frame time.
+
+    `samples` is (raw delta, fps) per row; rows with no delta are ignored.
+    """
+    usable = [(d, f) for d, f in samples if d > 0 and f > 0]
+    if not usable:
+        return 1e9                       # MangoHud's own unit, as a last resort
+    median = _median([d for d, _ in usable])
+    frame_s = 1.0 / _median([f for _, f in usable])
+    floor = frame_s * _SUB_FRAME_SLACK
+    plausible = [d for d in _UNIT_DIVISORS if median / d >= floor]
+    return min(
+        plausible or list(_UNIT_DIVISORS),
+        key=lambda d: abs(math.log((median / d) / frame_s)),
+    )
 
 
 class FpsWatcher:
@@ -84,8 +147,15 @@ class FpsWatcher:
         self._fps_col: int | None = None
         self._elapsed_col: int | None = None
         self._last_elapsed: float | None = None
+        #: seconds-per-unit for this log, decided once (see _infer_divisor)
+        self._unit_div: float | None = None
+        self._unit_deltas: list[tuple[float, float]] = []
+        self._pending: list[tuple[float, float]] = []   # (raw delta, fps)
         self._vclock = 0.0
-        self._hist: deque[tuple[float, float]] = deque(maxlen=6000)  # (vclock, fps)
+        #: (vclock, fps). 6000 rows at the 200 ms cadence mangohud.py asks for
+        #: is ~20 min of virtual time - comfortably longer than the longest
+        #: window read off it (_MAX_DIP_S, then _BASELINE_S).
+        self._hist: deque[tuple[float, float]] = deque(maxlen=6000)
         self._state = "healthy"           # "healthy" | "dipping"
         self._dip_started = 0.0
         self._frozen_baseline = 0.0       # pre-dip median, held for the episode
@@ -114,6 +184,9 @@ class FpsWatcher:
             self._pos = 0
             self._fps_col = self._elapsed_col = None
             self._last_elapsed = None
+            self._unit_div = None
+            self._unit_deltas.clear()
+            self._pending.clear()
             self._vclock = 0.0
             self._hist.clear()
             self._state = "healthy"
@@ -127,7 +200,13 @@ class FpsWatcher:
             low = [c.strip().lower() for c in cells]
             if "fps" in low:
                 self._fps_col = low.index("fps")
-                self._elapsed_col = low.index("elapsed") if "elapsed" in low else None
+                self._elapsed_col = next(
+                    (i for i, c in enumerate(low) if c.split("_")[0].split("(")[0]
+                     .strip() == "elapsed"),
+                    None,
+                )
+                if self._elapsed_col is not None:
+                    self._unit_div = _divisor_from_label(low[self._elapsed_col])
             return
         if len(cells) <= self._fps_col:
             return
@@ -144,14 +223,40 @@ class FpsWatcher:
                 et = float(cells[self._elapsed_col])
             except ValueError:
                 et = None
-        if et is not None:
-            if self._last_elapsed is not None and et > self._last_elapsed:
-                self._vclock += _to_seconds(et - self._last_elapsed)
-            self._last_elapsed = et
-        else:
+        if et is None:
             self._vclock += 0.2  # nominal cadence when there's no elapsed column
+            self._hist.append((self._vclock, fps))
+            return
 
+        delta = 0.0
+        if self._last_elapsed is not None and et > self._last_elapsed:
+            delta = et - self._last_elapsed
+        self._last_elapsed = et
+
+        if self._unit_div is None:
+            # Hold the row back until the unit is known - the divisor has to be
+            # applied to every delta including this log's first ones.
+            self._pending.append((delta, fps))
+            if delta > 0:
+                self._unit_deltas.append((delta, fps))
+            if (len(self._unit_deltas) >= _UNIT_SAMPLE_N
+                    or len(self._pending) >= _UNIT_MAX_PENDING):
+                self._settle_unit()
+            return
+
+        self._vclock += delta / self._unit_div
         self._hist.append((self._vclock, fps))
+
+    def _settle_unit(self) -> None:
+        """Commit to a unit and replay the rows held back while deciding."""
+        if self._unit_div is None:
+            self._unit_div = _infer_divisor(self._unit_deltas)
+            log.debug("fps watchdog: elapsed unit = 1/%g s", self._unit_div)
+        for delta, fps in self._pending:
+            self._vclock += delta / self._unit_div
+            self._hist.append((self._vclock, fps))
+        self._pending.clear()
+        self._unit_deltas.clear()
 
     #: never read more than this per poll - keeps a poll cheap even if the daemon
     #: fell behind and MangoHud wrote megabytes in the meantime (MangoHud logs
@@ -181,6 +286,8 @@ class FpsWatcher:
             raw = raw.strip()
             if raw:
                 self._ingest(raw)
+        if self._unit_div is None and len(self._unit_deltas) >= _UNIT_MIN_DELTAS:
+            self._settle_unit()
         return self._evaluate()
 
     # -- windows / stats ------------------------------------------
