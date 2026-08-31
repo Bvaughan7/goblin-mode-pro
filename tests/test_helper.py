@@ -97,44 +97,20 @@ class FanFloor(unittest.TestCase):
             self.assertFalse(gh.spin_up_fans(ok))
 
 
-class PowerLoweringGuard(unittest.TestCase):
-    def test_power_request_below_baseline_is_flagged(self):
-        with patch.object(gh, "_load_state",
-                          return_value={"pl1_uw": 25_000_000, "pl2_uw": 45_000_000}):
-            self.assertTrue(gh._power_request_lowers(4_000_000, 0))
-            self.assertTrue(gh._power_request_lowers(0, 10_000_000))
-            self.assertFalse(gh._power_request_lowers(25_000_000, 45_000_000))
-            self.assertFalse(gh._power_request_lowers(40_000_000, 60_000_000))
-            self.assertFalse(gh._power_request_lowers(0, 0))  # "leave alone"
+class PowerLimitFloor(unittest.TestCase):
+    def test_a_request_below_the_floor_is_refused(self):
+        with patch.object(gh, "_snapshot"):
+            with self.assertRaises(ValueError):
+                gh.set_power_limits(4_000_000, 0)          # 4 W PL1
+            with self.assertRaises(ValueError):
+                gh.set_power_limits(0, 5_000_000)          # 5 W PL2
 
-    def test_lowering_power_needs_the_kernel_action(self):
-        seen: list[str] = []
-
-        def auth(_sender, action):
-            seen.append(action)
-            return action == gh.POLKIT_PERF  # session-active perf yes, admin no
-
-        inv = FakeInvocation()
-        with patch.object(gh, "_check_authorized", side_effect=auth), \
-             patch.object(gh, "_load_state",
-                          return_value={"pl1_uw": 25_000_000, "pl2_uw": 45_000_000}), \
-             patch.object(gh, "set_power_limits") as set_pl:
-            gh._handle_call(None, "s", gh.OBJECT_PATH, gh.IFACE, "SetPowerLimits",
-                            _FakeParams((4_000_000, 0)), inv)
-        set_pl.assert_not_called()
-        self.assertEqual(inv.error[0], f"{gh.IFACE}.NotAuthorized")
-        self.assertIn(gh.POLKIT_KERNEL, seen)
-
-    def test_raising_power_stays_promptless(self):
-        with patch.object(gh, "_check_authorized", return_value=True), \
-             patch.object(gh, "_load_state",
-                          return_value={"pl1_uw": 25_000_000, "pl2_uw": 45_000_000}), \
-             patch.object(gh, "set_power_limits", return_value=True) as set_pl:
-            inv = FakeInvocation()
-            gh._handle_call(None, "s", gh.OBJECT_PATH, gh.IFACE, "SetPowerLimits",
-                            _FakeParams((50_000_000, 60_000_000)), inv)
-        set_pl.assert_called_once_with(50_000_000, 60_000_000)
-        self.assertEqual(inv.value, (True,))
+    def test_zero_means_leave_alone_and_is_not_a_floor_violation(self):
+        with patch.object(gh, "_snapshot"), \
+             patch.object(gh, "_rapl_constraint",
+                          side_effect=lambda i, leaf: Path("/nonexistent")):
+            # both 0 -> nothing written, no ValueError, ok stays True
+            self.assertTrue(gh.set_power_limits(0, 0))
 
 
 class MutatingMethodsAreGated(unittest.TestCase):

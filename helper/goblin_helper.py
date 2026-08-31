@@ -98,11 +98,6 @@ _HWMON_BASE = Path("/sys/class/hwmon")
 #: hardware-damage vector, not a feature. Anything below this is refused.
 MIN_FAN_PERCENT = 40
 
-#: A power-limit / TDP request more than this fraction below the firmware
-#: baseline counts as "lowering" and needs the stricter (prompting) polkit
-#: action - see _handle_call. 5% slack so rounding never triggers a prompt.
-_POWER_LOWER_SLACK = 0.95
-
 # sysctl keys the pre-flight check is allowed to set at runtime, each with an
 # accepted numeric range. Nothing outside this table can be touched.
 SYSCTL_ALLOW: dict[str, tuple[int, int]] = {
@@ -616,44 +611,17 @@ def get_power_limits() -> tuple[int, int]:
     return pl1, pl2
 
 
-def _power_baseline_uw() -> tuple[int, int]:
-    """The firmware PL1/PL2 to compare a request against - the snapshot if we
-    have one (i.e. what the machine looked like before *we* touched it), else
-    the current values."""
-    data = _load_state() or {}
-    if "pl1_uw" in data and "pl2_uw" in data:
-        try:
-            return int(data["pl1_uw"]), int(data["pl2_uw"])
-        except (TypeError, ValueError):
-            pass
-    try:
-        return get_power_limits()
-    except OSError:
-        return 0, 0
-
-
-def _power_request_lowers(pl1_uw: int, pl2_uw: int) -> bool:
-    """True if the request would drop a limit meaningfully below the baseline.
-    SpinUpFans-style DoS guard: SetPowerLimits is a "raise the cap" feature -
-    lowering PL1 to a few watts is a silent local denial of service."""
-    b1, b2 = _power_baseline_uw()
-    for req, base in ((int(pl1_uw), b1), (int(pl2_uw), b2)):
-        if req > 0 and base > 0 and req < base * _POWER_LOWER_SLACK:
-            return True
-    return False
-
-
-def _tdp_request_lowers(watts: int) -> bool:
-    if not RYZENADJ:
-        return False
-    data = _load_state() or {}
-    base_mw = data.get("ryzenadj_stapm_mw") or _ryzenadj_stapm_mw()
-    return bool(base_mw and int(watts) * 1000 < base_mw * _POWER_LOWER_SLACK)
-
-
 #: absolute upper bound for a RAPL power-limit write (µW), used when the firmware
 #: maximum can't be read - no real CPU accepts anywhere near this
 _RAPL_CEILING_UW = 1_000_000_000
+
+#: Absolute floor for a promptless RAPL PL1/PL2 write (µW). SetPowerLimits is a
+#: "raise the cap" feature; driving PL1 down to a few watts is a silent local
+#: DoS (the machine crawls but nothing errors). 8 W is well below any real
+#: gaming or handheld-battery preset and still leaves the box obviously-broken-
+#: not-bricked if something hits the floor. A genuinely lower limit has to be
+#: set the old-fashioned way (root shell / firmware), not over this bus.
+_RAPL_FLOOR_UW = 8_000_000
 
 def set_power_limits(pl1_uw: int, pl2_uw: int) -> bool:
     _snapshot()
@@ -661,6 +629,11 @@ def set_power_limits(pl1_uw: int, pl2_uw: int) -> bool:
     for idx, value in ((0, int(pl1_uw)), (1, int(pl2_uw))):
         if value <= 0:
             continue
+        if value < _RAPL_FLOOR_UW:
+            raise ValueError(
+                f"RAPL constraint {idx} request {value} µW is below the "
+                f"{_RAPL_FLOOR_UW} µW floor - this method only raises the limit"
+            )
         value = min(value, _RAPL_CEILING_UW)
         try:
             cap = int(_read(_rapl_constraint(idx, "max_power_uw")))
@@ -982,29 +955,13 @@ def _handle_call(
             pl1, pl2 = get_power_limits()
             invocation.return_value(GLib.Variant("(tt)", (pl1, pl2)))
         elif method_name == "SetPowerLimits":
-            pl1, pl2 = int(args[0]), int(args[1])
-            if _power_request_lowers(pl1, pl2) and not _check_authorized(sender, POLKIT_KERNEL):
-                invocation.return_dbus_error(
-                    f"{IFACE}.NotAuthorized",
-                    "lowering a power limit below the firmware baseline needs "
-                    "admin authorization",
-                )
-                return
             invocation.return_value(
-                GLib.Variant("(b)", (set_power_limits(pl1, pl2),))
+                GLib.Variant("(b)", (set_power_limits(int(args[0]), int(args[1])),))
             )
         elif method_name == "ResetPowerLimits":
             invocation.return_value(GLib.Variant("(b)", (reset_power_limits(),)))
         elif method_name == "SetTDP":
-            watts = int(args[0])
-            if _tdp_request_lowers(watts) and not _check_authorized(sender, POLKIT_KERNEL):
-                invocation.return_dbus_error(
-                    f"{IFACE}.NotAuthorized",
-                    "lowering the TDP below the firmware baseline needs admin "
-                    "authorization",
-                )
-                return
-            invocation.return_value(GLib.Variant("(b)", (set_tdp(watts),)))
+            invocation.return_value(GLib.Variant("(b)", (set_tdp(int(args[0])),)))
         elif method_name == "ResetTDP":
             invocation.return_value(GLib.Variant("(b)", (reset_tdp(),)))
         elif method_name == "HasTDPControl":

@@ -40,12 +40,11 @@ steps if you have them.
   reduce it — and `ResetFans` (hand control back to the EC) is always allowed
   without a prompt. A helper that is killed while a fan is under manual control
   restores EC control on its next start before serving any request.
-- *Lowering* a RAPL power limit or the AMD TDP below the firmware baseline also
-  requires admin authentication (`manage-kernel-tunables`); *raising* it — the
-  actual gaming use — stays silent. This closes a local denial-of-service where
-  a session process pins the CPU to a few watts. On a handheld the daemon's
-  battery-vs-AC TDP preset will prompt once per session when it first steps the
-  limit down.
+- `SetPowerLimits` refuses a RAPL PL1/PL2 write below an 8 W floor, and the AMD
+  TDP is clamped to 4–120 W. `SetPowerLimits` is a "raise the cap" feature;
+  driving PL1 down to a couple of watts would be a silent local
+  denial-of-service. Every real gaming or handheld-battery preset is well above
+  the floor, so it never gets in the way.
 
 ### What an unprivileged process in the active session can do without a prompt
 
