@@ -4,6 +4,16 @@ All notable changes to Goblin Mode Pro. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); this project uses
 [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+- GUI: the main window is now an `Adw.ApplicationWindow` with a proper
+  header bar, a view switcher (that collapses to a bottom bar on a narrow
+  window) and a primary menu — replacing the `Adw.PreferencesWindow`
+  shell, which had no room for a menu. New: an **About** dialog, a
+  **Keyboard Shortcuts** window, and accelerators (`Ctrl+W` close,
+  `Alt+1..4` to jump between pages, `Ctrl+?` for the shortcuts).
+
 ## [1.2.3] — 2026-08-31
 
 ### Changed

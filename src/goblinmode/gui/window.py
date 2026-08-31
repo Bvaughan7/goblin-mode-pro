@@ -1,5 +1,6 @@
-"""Main window - an ``Adw.PreferencesWindow`` with Dashboard / Games /
-Diagnostics pages, kept live by the daemon's D-Bus signals.
+"""Main window - an ``Adw.ApplicationWindow`` with a view switcher over the
+Dashboard / Games / System Check / Diagnostics pages, kept live by the daemon's
+D-Bus signals.
 """
 
 from __future__ import annotations
@@ -11,22 +12,26 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, GLib  # noqa: E402
+from gi.repository import Adw, Gio, GLib, Gtk  # noqa: E402
 
+from goblinmode import APP_ID, __version__
 from goblinmode.gui.page_dashboard import DashboardPage
 from goblinmode.gui.page_diagnostics import DiagnosticsPage
 from goblinmode.gui.page_games import GamesPage
 from goblinmode.gui.page_preflight import PreflightPage
+from goblinmode.i18n import _
 from goblinmode.ipc.daemon_bridge import BridgeClient
 
 log = logging.getLogger(__name__)
 
+_PAGES = ("dashboard", "games", "system", "diagnostics")
 
-class MainWindow(Adw.PreferencesWindow):
+
+class MainWindow(Adw.ApplicationWindow):
     def __init__(self, app: Adw.Application, bridge: BridgeClient) -> None:
         super().__init__(application=app, title="Goblin Mode Pro")
-        self.set_default_size(820, 640)
-        self.set_search_enabled(False)
+        self.set_default_size(860, 660)
+        self.set_size_request(360, 480)
         self.bridge = bridge
 
         self.dashboard = DashboardPage(bridge)
@@ -34,15 +39,127 @@ class MainWindow(Adw.PreferencesWindow):
         self.preflight = PreflightPage(bridge, self)
         self.diagnostics = DiagnosticsPage(bridge, self)
 
-        for page in (self.dashboard, self.games, self.preflight, self.diagnostics):
-            self.add(page)
+        self._stack = Adw.ViewStack()
+        for page, name in zip(
+            (self.dashboard, self.games, self.preflight, self.diagnostics), _PAGES
+        ):
+            self._stack.add_titled_with_icon(
+                page, name, page.get_title(),
+                page.get_icon_name() or "application-x-executable-symbolic",
+            )
         self.preflight.refresh()
+
+        self._switcher = Adw.ViewSwitcher(
+            stack=self._stack, policy=Adw.ViewSwitcherPolicy.WIDE
+        )
+        header = Adw.HeaderBar(title_widget=self._switcher)
+        header.pack_end(self._primary_menu())
+
+        switcher_bar = Adw.ViewSwitcherBar(stack=self._stack)
+
+        toolbar = Adw.ToolbarView()
+        toolbar.add_top_bar(header)
+        toolbar.add_bottom_bar(switcher_bar)
+        toolbar.set_content(self._stack)
+
+        self._toasts = Adw.ToastOverlay()
+        self._toasts.set_child(toolbar)
+        self.set_content(self._toasts)
+
+        # narrow window: hide the header switcher, reveal the bottom bar
+        bp = Adw.Breakpoint.new(Adw.BreakpointCondition.parse("max-width: 560sp"))
+        bp.add_setter(self._switcher, "visible", False)
+        bp.add_setter(switcher_bar, "reveal", True)
+        self.add_breakpoint(bp)
+
+        self._install_actions(app)
 
         self._metrics: list | None = None
         self._incidents: list | None = None
         bridge.on_signal(self._on_signal)
         self._refresh_all()
         GLib.timeout_add_seconds(5, self._periodic_refresh)
+
+    # -- chrome -----------------------------------------------------
+    def _primary_menu(self) -> Gtk.MenuButton:
+        menu = Gio.Menu()
+        menu.append(_("Keyboard Shortcuts"), "win.shortcuts")
+        menu.append(_("About Goblin Mode Pro"), "win.about")
+        return Gtk.MenuButton(
+            icon_name="open-menu-symbolic", menu_model=menu, primary=True,
+            tooltip_text=_("Main menu"),
+        )
+
+    def _install_actions(self, app: Adw.Application) -> None:
+        for name, cb in (("about", self._show_about),
+                         ("shortcuts", self._show_shortcuts)):
+            act = Gio.SimpleAction.new(name, None)
+            act.connect("activate", cb)
+            self.add_action(act)
+
+        page_act = Gio.SimpleAction.new("page", GLib.VariantType.new("s"))
+        page_act.connect("activate", self._on_page_action)
+        self.add_action(page_act)
+
+        if app is not None:
+            app.set_accels_for_action("win.shortcuts", ["<Control>question"])
+            app.set_accels_for_action("window.close", ["<Control>w"])
+            for i, name in enumerate(_PAGES, start=1):
+                app.set_accels_for_action(f"win.page::{name}", [f"<Alt>{i}"])
+
+    def _on_page_action(self, _act, param: GLib.Variant) -> None:
+        self._stack.set_visible_child_name(param.get_string())
+
+    def _show_about(self, *_a) -> None:
+        about = Adw.AboutWindow(
+            transient_for=self,
+            application_name="Goblin Mode Pro",
+            application_icon=APP_ID,
+            version=__version__,
+            developer_name="Bryan Vaughan",
+            license_type=Gtk.License.MIT_X11,
+            comments=_("One-switch performance helper for Linux gaming: it tunes "
+                       "the CPU, compositor and Proton for a game, reverts on "
+                       "exit, and turns thermal / frame-rate / Proton-log "
+                       "problems into a plain-language report."),
+            website="https://github.com/Bvaughan7/goblin-mode-pro",
+            issue_url="https://github.com/Bvaughan7/goblin-mode-pro/issues",
+        )
+        about.present()
+
+    def _show_shortcuts(self, *_a) -> None:
+        groups = [
+            (_("General"), [
+                ("<Control>question", _("Keyboard shortcuts")),
+                ("<Control>w", _("Close window")),
+            ]),
+            (_("Navigation"), [
+                (f"<Alt>{i}", title)
+                for i, title in enumerate(
+                    (p.get_title() for p in (
+                        self.dashboard, self.games, self.preflight, self.diagnostics
+                    )), start=1)
+            ]),
+        ]
+        win = Gtk.ShortcutsWindow(transient_for=self, modal=True)
+        section = Gtk.ShortcutsSection(section_name="main", visible=True)
+        for title, shortcuts in groups:
+            group = Gtk.ShortcutsGroup(title=title)
+            for accel, label in shortcuts:
+                group.add_shortcut(
+                    Gtk.ShortcutsShortcut(accelerator=accel, title=label)
+                )
+            section.add_group(group)
+        win.add_section(section)
+        win.present()
+
+    def toast(self, text: str) -> None:
+        self._toasts.add_toast(Adw.Toast(title=text, timeout=3))
+
+    def set_visible_page(self, page: Gtk.Widget) -> None:
+        """Jump the view switcher to a page widget (kept for the Dashboard's
+        'open the check' shortcut and docs/make-screenshots.py)."""
+        self._stack.set_visible_child(page)
 
     # -- data flow ----------------------------------------------------
     def _on_signal(self, name: str, payload: Any) -> None:
@@ -121,6 +238,3 @@ class MainWindow(Adw.PreferencesWindow):
         if status:
             self.dashboard.update_status(status)
             self.games.update_status(status)
-
-    def toast(self, text: str) -> None:
-        self.add_toast(Adw.Toast(title=text, timeout=3))
