@@ -251,6 +251,67 @@ class _FakeBridge:
         }, None)
 
 
+def _check_profile_editor() -> None:
+    """The per-game editor must still *save* what you change, not just build.
+
+    The smoke test above proves the rows construct; this proves the wiring
+    behind them. A refactor that leaves the widgets intact but drops the
+    callback would pass a construction-only test and silently stop persisting
+    every per-game setting in the app.
+    """
+    from goblinmode.gui.widgets.profile_editor import EditorActions, ProfileEditor
+
+    saved: list[dict] = []
+    editor = ProfileEditor(
+        "Wow.exe", _profile("Wow.exe", "World of Warcraft"), _EVERYTHING_CAPS,
+        EditorActions(save=saved.append, keep=lambda e: None,
+                      ignore=lambda e: None, remove=lambda b, e: None,
+                      export=lambda e: None, share=lambda e: None,
+                      enable_toggled=lambda *a: None),
+    )
+    row = editor.build()
+
+    switches = []
+
+    def walk(w):
+        if isinstance(w, Adw.SwitchRow):
+            switches.append(w)
+        child = w.get_first_child()
+        while child is not None:
+            walk(child)
+            child = child.get_next_sibling()
+
+    walk(row)
+    if not switches:
+        raise AssertionError("the profile editor built no Adw.SwitchRow at all")
+
+    sw = switches[0]
+    sw.set_active(not sw.get_active())
+    if not saved:
+        raise AssertionError(
+            f"toggling '{sw.get_title()}' saved nothing - the editor's save "
+            "callback is not wired to its switches")
+    if saved[-1].get("exe") != "Wow.exe":
+        raise AssertionError(f"saved the wrong profile: {saved[-1].get('exe')}")
+
+    # a nested-dict patch (mangohud / runner_vars / gamescope) takes a
+    # different path through _patch_dict, so exercise that too
+    editor._patch_dict("Wow.exe", "runner_vars", "nvapi", False)
+    if saved[-1]["runner_vars"]["nvapi"] is not False:
+        raise AssertionError("nested-dict patch did not reach the save callback")
+
+    # The expander's own enable switch is handled by the *page*, not the
+    # editor, so it takes a different route to the same save - and it is the
+    # one control every profile has.
+    before = len(saved)
+    editor.patch(enabled=False)
+    if len(saved) == before or saved[-1].get("enabled") is not False:
+        raise AssertionError("the page's enable toggle no longer persists")
+
+    print(f"  Profile editor persists edits ({len(switches)} switch rows, "
+          f"{len(saved)} saves, incl. the enable toggle)")
+
+
 def main() -> int:
     Adw.init()
     app = Adw.Application(application_id="com.goblinmode.Pro.GuiSmokeTest",
@@ -281,6 +342,8 @@ def main() -> int:
             win._show_about()
             win._show_shortcuts()
             print("  About and Keyboard Shortcuts dialogs opened")
+
+            _check_profile_editor()
 
             result["ok"] = True
             print("MainWindow constructed and presented OK "
