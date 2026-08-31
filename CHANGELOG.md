@@ -33,7 +33,7 @@ Hardening and correctness pass over the 1.2.0 surface. No new features.
   floor and its own prompting polkit action
   (`com.goblinmode.pro.manage-hardware-thermal`). The helper hands fan
   control back to the EC on startup after a dirty exit.
-- `SetPowerLimits` refuses a write below an 8 W floor (it exists to raise
+- `SetPowerLimits` refuses a write below a 6 W floor (it exists to raise
   the cap; driving PL1 to a few watts is a silent local slow-down).
 - `Renice` now fails **closed** when the caller's uid can't be resolved
   (it was treated as root), and pins the target with a pidfd to close a

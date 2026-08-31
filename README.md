@@ -355,7 +355,7 @@ game logs: `~/.local/share/goblin-mode-pro/logs/`.
 | `com.goblinmode.pro.manage-hardware-thermal` | taking manual control of the fans (preemptive spin-up) | prompts for admin auth |
 
 Lowering a power limit isn't offered over the bus at all — `SetPowerLimits`
-has an 8 W floor, since it exists to *raise* the cap, and driving it to a few
+has a 6 W floor, since it exists to *raise* the cap, and driving it to a few
 watts would be a silent local slow-down. Fan spin-up can only ever *increase*
 duty (40 % floor).
 

@@ -40,19 +40,11 @@ steps if you have them.
   reduce it — and `ResetFans` (hand control back to the EC) is always allowed
   without a prompt. A helper that is killed while a fan is under manual control
   restores EC control on its next start before serving any request.
-- `SetPowerLimits` refuses a RAPL PL1/PL2 write below an 8 W floor, and the AMD
+- `SetPowerLimits` refuses a RAPL PL1/PL2 write below a 6 W floor, and the AMD
   TDP is clamped to 4–120 W. `SetPowerLimits` is a "raise the cap" feature;
   driving PL1 down to a couple of watts would be a silent local
   denial-of-service. Every real gaming or handheld-battery preset is well above
   the floor, so it never gets in the way.
-
-### What an unprivileged process in the active session can do without a prompt
-
-Governor / EPP to `performance`; renice a process **it already owns** up to
-`-10`; **raise** RAPL PL1/PL2 or AMD TDP up to the firmware ceiling; hand fan
-control back to the EC; trigger `RevertAll`; re-apply the user's *existing*
-intel-undervolt / Curve-Optimizer offsets (never choose values); read status.
-Everything persistent, thermally significant, or cooling-reducing prompts.
 - Configuration input is constrained: a profile's `exe` may not contain a path
   separator, `..`, or a control character; per-game file names are produced by a
   separate slug function; user-supplied regular expressions are length-capped and
@@ -66,6 +58,15 @@ Everything persistent, thermally significant, or cooling-reducing prompts.
   is pinned and re-checked after redirects; responses are capped at 64 KB). The
   downloaded JSON is filtered to the known profile fields and re-validated
   through `GameProfile` before it is saved.
+
+### What an unprivileged process in the active session can do without a prompt
+
+Governor / EPP to `performance`; renice a process **it already owns** up to
+`-10`; **raise** RAPL PL1/PL2 or AMD TDP up to the firmware ceiling; hand fan
+control back to the EC; trigger `RevertAll`; re-apply the user's *existing*
+intel-undervolt / Curve-Optimizer offsets (never choose the values); read
+status. Everything persistent, thermally significant, or cooling-reducing
+prompts for admin auth.
 
 ## Threat model
 

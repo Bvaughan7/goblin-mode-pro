@@ -615,13 +615,13 @@ def get_power_limits() -> tuple[int, int]:
 #: maximum can't be read - no real CPU accepts anywhere near this
 _RAPL_CEILING_UW = 1_000_000_000
 
-#: Absolute floor for a promptless RAPL PL1/PL2 write (µW). SetPowerLimits is a
-#: "raise the cap" feature; driving PL1 down to a few watts is a silent local
-#: DoS (the machine crawls but nothing errors). 8 W is well below any real
-#: gaming or handheld-battery preset and still leaves the box obviously-broken-
-#: not-bricked if something hits the floor. A genuinely lower limit has to be
-#: set the old-fashioned way (root shell / firmware), not over this bus.
-_RAPL_FLOOR_UW = 8_000_000
+#: Absolute floor for a RAPL PL1/PL2 write (µW). SetPowerLimits is a "raise the
+#: cap" feature; driving PL1 down to a few watts is a silent local DoS (the
+#: machine crawls but nothing errors). 6 W sits below the lowest real preset
+#: (an Intel handheld's on-battery TDP is ~8 W) while still blocking the
+#: "pin it to 4 W" case. A genuinely lower limit has to be set out-of-band
+#: (root shell / firmware), not over this bus.
+_RAPL_FLOOR_UW = 6_000_000
 
 def set_power_limits(pl1_uw: int, pl2_uw: int) -> bool:
     _snapshot()
