@@ -27,9 +27,10 @@ from goblinmode import capabilities, config, gpu, runner
 from goblinmode.diagnostics import DiagnosticEngine
 from goblinmode.fpswatch import FpsEvent, FpsWatcher
 from goblinmode.sessions import SessionTracker
-from goblinmode.incidents import Incident, IncidentLog, build_llm_payload, copy_to_clipboard
+from goblinmode.incidents import Incident, IncidentLog
+from goblinmode.daemon_api import DaemonApi
 from goblinmode.ipc.daemon_bridge import DaemonBridge
-from goblinmode.ipc.helper_client import HelperClient, HelperUnavailable
+from goblinmode.ipc.helper_client import HelperClient
 from goblinmode.logwatch import LogWatcher
 from goblinmode.observer import GameEvent, Observer
 from goblinmode.payload import (
@@ -61,7 +62,11 @@ class Daemon:
         from goblinmode.clip import ClipBuffer
         self.clip = ClipBuffer()
         self.observer = Observer(self.settings, self._on_game_event)
-        self.bridge = DaemonBridge(self)
+        # The bridge's handler is the API object, not the daemon: it holds
+        # the read-and-report methods and forwards the rest here, so the
+        # whole D-Bus surface is described in one file. See daemon_api.py.
+        self.api = DaemonApi(self)
+        self.bridge = DaemonBridge(self.api)
 
         from goblinmode.tray import Tray, TrayCallbacks
 
@@ -557,46 +562,6 @@ class Daemon:
             "onboarded": ONBOARDED_MARKER.exists(),
         }
 
-    def get_metrics(self) -> list[dict[str, Any]]:
-        return [s.as_dict() for s in self.diag.history]
-
-    def get_incidents(self) -> list[dict[str, Any]]:
-        live = [i.as_dict() for i in self.incidents.all()]
-        if live:
-            return live
-        return self.incidents.load_history()
-
-    def get_sessions(self) -> list[dict[str, Any]]:
-        return self.sessions.history(limit=60)
-
-    def get_session_history(self, exe: str) -> list[dict[str, Any]]:
-        return self.sessions.history(exe or None, limit=60)
-
-    def get_system_info(self) -> dict[str, Any]:
-        """Dynamic environment info for the dashboard / first-run: connected
-        controllers, GameMode status, kernel-flavour nudge."""
-        return {
-            "controllers": capabilities.controllers(),
-            "gamemode": capabilities.gamemode_status(),
-            "ananicy": capabilities.ananicy_active(),
-        }
-
-    def get_proton_info(self) -> dict[str, Any]:
-        from goblinmode import proton
-        return {
-            "builds": proton.installed_builds(),
-            "shader_caches": proton.shader_caches(),
-        }
-
-    def clear_shader_cache(self, path: str) -> dict[str, Any]:
-        from goblinmode import proton
-        ok, msg = proton.clear_cache(path)
-        return {"ok": ok, "message": msg}
-
-    def export_setup(self) -> str:
-        from goblinmode import report
-        return report.build_setup_report(self.settings)
-
     # -- pre-flight / report (roadmap) --------------------------------
     def run_preflight(self) -> list[dict[str, Any]]:
         from goblinmode import preflight
@@ -663,65 +628,6 @@ class Daemon:
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "message": str(exc)}
         return {"ok": bool(ok), "message": "reverted" if ok else "failed"}
-
-    def build_works_for_me(self, exe: str, note: str = "") -> dict[str, Any]:
-        from goblinmode import report
-
-        profile = self.settings.profile_for_exe(exe)
-        prof_dict = _profile_dict(profile) if profile else {"exe": exe, "display_name": exe}
-        rep = report.build_works_for_me(prof_dict, note)
-        return {
-            "markdown": report.works_for_me_markdown(rep),
-            "url": report.works_for_me_issue_url(rep),
-        }
-
-    def get_nvidia_module_state(self) -> dict[str, Any]:
-        from goblinmode import gpu
-
-        return gpu.nvidia_module_state()
-
-    def set_nvidia_modeset(self, enabled: bool) -> bool:
-        try:
-            return bool(self.helper.set_nvidia_modeset(enabled))
-        except HelperUnavailable:
-            return False
-
-    def build_report(self, note: str = "") -> str:
-        from goblinmode import report
-
-        inc = self.incidents.latest()
-        rep = report.build_report(
-            incident=inc.as_dict() if inc else None,
-            game=", ".join(self.observer.active_exes),
-            active_tweaks=self.payload.status().as_dict(),
-            user_note=note,
-        )
-        md = report.as_markdown(rep)
-        from goblinmode.incidents import copy_to_clipboard
-
-        copy_to_clipboard(md)
-        return md
-
-    def analyze_log(self) -> list[dict[str, Any]]:
-        from goblinmode import logrules, runner
-
-        logs = runner.latest_log_files(limit=1)
-        if not logs:
-            return []
-        try:
-            with open(logs[0], "r", errors="replace") as fh:
-                fh.seek(0, 2)
-                fh.seek(max(0, fh.tell() - 200_000))
-                text = fh.read()
-        except OSError:
-            return []
-        appid = ""
-        for exe in self.observer.active_exes:
-            p = self.settings.profile_for_exe(exe)
-            if p and p.steam_app_id:
-                appid = p.steam_app_id
-                break
-        return [f.__dict__ for f in logrules.analyze_text(text, appid=appid)]
 
     def set_profile(self, profile: dict[str, Any]) -> bool:
         if not isinstance(profile, dict) or not profile.get("exe"):
@@ -815,28 +721,6 @@ class Daemon:
         self._broadcast_status()
         return True
 
-    def export_last_incident(self) -> str:
-        incident = self.incidents.latest()
-        if incident is None:
-            history = self.incidents.load_history(limit=1)
-            if not history:
-                return ""
-            incident = Incident(
-                kind=history[0].get("kind", "unknown"),
-                detail=history[0].get("detail", ""),
-                game=history[0].get("game", ""),
-                game_pid=history[0].get("game_pid"),
-                metrics_window=history[0].get("metrics_window", []),
-                logs_tail=history[0].get("logs_tail", []),
-                active_tweaks=history[0].get("active_tweaks", {}),
-            )
-        payload = build_llm_payload(incident, self.settings.llm_model_hint)
-        copy_to_clipboard(payload)
-        return payload
-
-    def write_wrapper(self) -> str:
-        return str(runner.write_wrapper())
-
     # -- helpers ----------------------------------------------------
     def _broadcast_status(self) -> None:
         status = self.get_status()
@@ -854,7 +738,7 @@ class Daemon:
         return self._prom_exporter
 
     def _export_and_notify(self) -> None:
-        payload = self.export_last_incident()
+        payload = self.api.export_last_incident()
         if payload:
             log.info("incident payload copied to clipboard (%d chars)", len(payload))
 
