@@ -6,6 +6,47 @@ All notable changes to Goblin Mode Pro. Format loosely follows
 
 ## [Unreleased]
 
+### Added
+- **`goblin-mode-pro-cli selftest`** — proves the privileged paths on
+  *your* machine instead of assuming them. It probes the helper, the
+  polkit actions and agent, the helper's Linux capabilities, the CPU
+  governor and EPP, power limits, `ryzenadj` (and which access path it
+  would take), fan PWM channels and every kernel tunable, then reports
+  what it found. `--apply` round-trips each one — apply, read back,
+  revert, read back — which is the only way to actually prove a write
+  path; `--json` produces a blob worth attaching to an issue. It needs
+  no daemon and no display, so it works over SSH and in a TTY when the
+  daemon is the thing that's broken. Nothing ever skips silently.
+  The read-only results are also embedded in `report` and behind
+  **About → Troubleshooting → Debug Information**.
+- `docs/verified-hardware.md` — what has actually been tested, on what
+  hardware, and what happened. Please add your machine.
+- `goblin-mode-pro-daemon --revert --dry-run` prints what would be
+  restored from `applied.json` without touching anything.
+
+### Fixed
+- **`user.max_user_namespaces` had never worked, on any machine.** The
+  helper's unit granted `/proc/sys/user` under `ReadWritePaths=`, but
+  also dropped every capability except `CAP_SYS_NICE` — and the kernel
+  gates `/proc/sys/user/*` writes on `CAP_SYS_RESOURCE`, so being root
+  was not enough. The write failed with `EACCES`, which reads like a
+  file-permission problem rather than a sandbox one, and a process's
+  capability set only exists at runtime, so no test could see it. Found
+  by the new `selftest --apply` on its first run. The helper now
+  declares every capability it needs and a test asserts the unit matches.
+- **The frame-rate watchdog misread its own clock.** The unit of
+  MangoHud's `elapsed` column was inferred per row from the magnitude of
+  each delta, which is only correct at the steady row cadence. A 30-second
+  stall in a millisecond log advanced the virtual clock by 0.03 s instead
+  of 30; a 1 ms frame in a nanosecond log — what MangoHud actually writes
+  — advanced it by 1.0 s instead of 0.001. Either way every window
+  measured against that clock was off by 1000x, including the dip-duration
+  thresholds that decide whether a stall gets reported at all. The unit is
+  now decided once per log from the median row spacing and the frame rate.
+- Toggling a game's enable switch and the per-game power-limit rows are
+  covered by the GUI smoke test now, which is how a latent crash in the
+  enable toggle was caught before it shipped.
+
 ### Changed
 - GUI: the main window is now an `Adw.ApplicationWindow` with a proper
   header bar, a view switcher (that collapses to a bottom bar on a narrow
@@ -13,6 +54,24 @@ All notable changes to Goblin Mode Pro. Format loosely follows
   shell, which had no room for a menu. New: an **About** dialog, a
   **Keyboard Shortcuts** window, and accelerators (`Ctrl+W` close,
   `Alt+1..4` to jump between pages, `Ctrl+?` for the shortcuts).
+- GUI: `Adw.AboutWindow` → `Adw.AboutDialog` (deprecated in libadwaita
+  1.6, the same release as `Adw.MessageDialog`), and the keyboard
+  shortcuts window uses `Adw.ShortcutsDialog` where libadwaita is new
+  enough, falling back to the deprecated `Gtk.ShortcutsWindow` elsewhere.
+- **The libadwaita requirement is now stated rather than assumed:**
+  **1.5** minimum, declared in all four packaging targets and the README,
+  and checked at startup — the GUI now prints a clear message naming the
+  version it found instead of dying with an `AttributeError` inside a
+  widget constructor. The daemon and CLI have no GTK dependency at all.
+- Fan spin-up, AMD Curve Optimizer re-apply and *writing* `nvidia-drm.modeset`
+  are now marked **experimental** in the GUI *and* the README — they work
+  in principle but have never been confirmed on real hardware. Each says
+  what would confirm it.
+- Internals: the daemon's D-Bus surface moved to `daemon_api.py`, the
+  per-game profile editor to `gui/widgets/profile_editor.py`, and the
+  privileged helper was reorganised so its entire surface — every method,
+  which ones mutate, and the polkit action each requires — reads before
+  any implementation. No behaviour changes.
 
 ## [1.2.3] — 2026-08-31
 
