@@ -259,16 +259,29 @@ def _c_userns() -> CheckResult:
             "user.max_user_namespaces is 0 - the Steam Linux Runtime container "
             "and EAC/BattlEye games will fail to start.",
         )
+    if max_ns is not None:
+        return CheckResult(OK, str(max_ns))
+    return CheckResult(OK, "n/a", "This kernel doesn't expose user.max_user_namespaces.")
+
+
+def _c_userns_clone() -> CheckResult:
+    """Debian and Ubuntu carry a downstream ``kernel.unprivileged_userns_clone``
+    knob (absent on mainline kernels). When it exists and is 0, the Steam
+    Runtime and some anti-cheat sandboxes can't be created - and it's a
+    separate switch from ``user.max_user_namespaces`` above."""
     clone = _read("/proc/sys/kernel/unprivileged_userns_clone")
+    if clone is None:
+        return CheckResult(
+            INFO, "n/a",
+            "Mainline kernel - this Debian/Ubuntu-specific knob doesn't exist here.",
+        )
     if clone == "0":
         return CheckResult(
             FAIL, "disabled",
             "kernel.unprivileged_userns_clone is 0 - the Steam Linux Runtime "
             "and some anti-cheat games can't create their sandbox.",
         )
-    if max_ns is not None:
-        return CheckResult(OK, str(max_ns))
-    return CheckResult(OK, "enabled" if clone in (None, "1") else str(clone))
+    return CheckResult(OK, clone)
 
 
 def _c_anticheat() -> CheckResult:
@@ -329,7 +342,13 @@ CHECKS: list[Check] = [
           _c_vulkan_icd, fix_hint="Install the vulkan driver for your GPU."),
     Check("userns", "User namespaces", "Steam Runtime container + anti-cheat",
           _c_userns, sysctl=("user.max_user_namespaces", "28633"), severity=FAIL,
-          fix_hint="On Debian/Ubuntu also: sysctl kernel.unprivileged_userns_clone=1"),
+          fix_hint="If this stays 0 after the fix, your kernel disables userns "
+          "entirely (kernel.unprivileged_userns_clone / a build option)."),
+    Check("userns_clone", "Unprivileged userns clone (Debian/Ubuntu)",
+          "Steam Runtime container + anti-cheat",
+          _c_userns_clone, sysctl=("kernel.unprivileged_userns_clone", "1"),
+          severity=FAIL,
+          fix_hint="Debian/Ubuntu only - mainline kernels don't have this knob."),
     Check("anticheat", "Anti-cheat (EAC / BattlEye)", "how anti-cheat games run on Linux",
           _c_anticheat, severity=INFO,
           fix_hint="Nothing to install - set the game to Proton Experimental if it won't launch."),

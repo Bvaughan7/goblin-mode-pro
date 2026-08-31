@@ -99,7 +99,24 @@ SYSCTL_ALLOW: dict[str, tuple[int, int]] = {
     "vm.compaction_proactiveness": (0, 100),
     "kernel.split_lock_mitigate": (0, 1),
     "user.max_user_namespaces": (0, 2147483647),
+    # Debian/Ubuntu downstream knob (absent on mainline kernels). The
+    # pre-flight check only offers it when /proc/sys/kernel/... exists.
+    "kernel.unprivileged_userns_clone": (0, 1),
 }
+
+#: Every /proc/sys and /sys subtree the helper needs write access to, paired
+#: with what needs it. The unit-file test asserts each parent is covered by a
+#: ReadWritePaths= entry in goblin-mode-pro-helper.service - see
+#: tests/test_helper_sandbox.py.
+SYSFS_WRITE_ROOTS: tuple[str, ...] = (
+    "/sys/devices/system/cpu",   # SetGovernor, SetEPP
+    "/sys/class/powercap",       # SetPowerLimits, ResetPowerLimits
+    "/sys/class/hwmon",          # SpinUpFans, ResetFans
+    "/proc/sys/vm",              # vm.* sysctls
+    "/proc/sys/kernel",          # kernel.* sysctls
+    "/proc/sys/user",            # user.max_user_namespaces
+    "/etc/modprobe.d",           # SetNvidiaModeset
+)
 
 logging.basicConfig(
     level=logging.INFO, format="goblin-helper: %(levelname)s %(message)s"

@@ -25,7 +25,25 @@ UMask=0077
 
 ProtectSystem=strict
 ProtectHome=yes
-ReadWritePaths=/sys/devices/system/cpu /sys/class/powercap /sys/devices/virtual/powercap /proc/sys/vm /proc/sys/kernel
+# One ReadWritePaths= entry per line (systemd has no inline comments); the
+# comment above each names the helper method(s) that need it. Keep this list
+# in sync with SYSFS_WRITE_ROOTS + SYSCTL_ALLOW in goblin_helper.py -
+# tests/test_helper_sandbox.py fails the build if they drift.
+# SetGovernor, SetEPP
+ReadWritePaths=/sys/devices/system/cpu
+# SetPowerLimits, ResetPowerLimits (RAPL); second path is the alt sysfs location
+ReadWritePaths=/sys/class/powercap
+ReadWritePaths=/sys/devices/virtual/powercap
+# SpinUpFans, ResetFans
+ReadWritePaths=/sys/class/hwmon
+# vm.max_map_count / vm.swappiness / vm.compaction_proactiveness
+ReadWritePaths=/proc/sys/vm
+# kernel.split_lock_mitigate, kernel.unprivileged_userns_clone
+ReadWritePaths=/proc/sys/kernel
+# user.max_user_namespaces
+ReadWritePaths=/proc/sys/user
+# SetNvidiaModeset (persistent nvidia_drm.modeset modprobe.d config)
+ReadWritePaths=/etc/modprobe.d
 ProtectKernelTunables=no
 ProtectKernelModules=yes
 ProtectKernelLogs=yes
