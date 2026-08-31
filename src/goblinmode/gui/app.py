@@ -23,6 +23,31 @@ from goblinmode.ipc.daemon_bridge import BridgeClient
 
 log = logging.getLogger("goblinmode.gui")
 
+#: Oldest libadwaita this UI runs on. Adw.AlertDialog, Adw.AboutDialog and
+#: Adw.Breakpoint all landed in 1.5 and the window is built out of all three,
+#: so on anything older the GUI dies with an AttributeError deep in a widget
+#: constructor. 1.5 is what Ubuntu 24.04 LTS and Debian 13 ship, so it is the
+#: floor rather than something newer. Keep this in step with the dependency
+#: versions declared in packaging/ and the README requirements table.
+MIN_ADW_VERSION = (1, 5)
+
+
+def _adw_version() -> tuple[int, int, int]:
+    return (Adw.MAJOR_VERSION, Adw.MINOR_VERSION, Adw.MICRO_VERSION)
+
+
+def check_adw_version() -> str | None:
+    """Return an error message if libadwaita is too old, else None."""
+    found = _adw_version()
+    if found[:2] >= MIN_ADW_VERSION:
+        return None
+    return (
+        "Goblin Mode Pro needs libadwaita {}.{} or newer for its dialogs and "
+        "adaptive layout, but found {}.{}.{}. Update libadwaita (your distro "
+        "may call it libadwaita-1-0, libadwaita or gtk4-libadwaita) and try "
+        "again - the daemon and the CLI are unaffected and keep working."
+    ).format(*MIN_ADW_VERSION, *found)
+
 
 class GoblinModeApp(Adw.Application):
     def __init__(self) -> None:
@@ -104,6 +129,12 @@ class _DaemonMissingWindow(Adw.ApplicationWindow):
 
 def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    too_old = check_adw_version()
+    if too_old:
+        # A clear sentence beats an AttributeError traceback out of a widget
+        # constructor, which is what an old libadwaita gave before this check.
+        print(too_old, file=sys.stderr)
+        return 1
     app = GoblinModeApp()
     return app.run(argv if argv is not None else sys.argv)
 

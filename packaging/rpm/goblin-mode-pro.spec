@@ -15,7 +15,9 @@ Requires:       python3 >= 3.11
 Requires:       python3-gobject
 Requires:       python3-psutil
 Requires:       gtk4
-Requires:       libadwaita
+# >=1.5: AlertDialog / AboutDialog / Breakpoint - see
+# MIN_ADW_VERSION in src/goblinmode/gui/app.py
+Requires:       libadwaita >= 1.5
 Requires:       polkit
 
 Recommends:     mangohud

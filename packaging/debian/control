@@ -13,7 +13,7 @@ Depends: ${misc:Depends},
          python3 (>= 3.11),
          python3-gi,
          gir1.2-gtk-4.0,
-         gir1.2-adw-1,
+         gir1.2-adw-1 (>= 1.5),
          python3-psutil,
          policykit-1 | polkitd
 Recommends: mangohud, gamemode, gamescope, wl-clipboard, python3-pystray, python3-cairo

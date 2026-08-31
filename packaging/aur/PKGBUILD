@@ -13,7 +13,9 @@ depends=(
   'python-gobject'
   'python-psutil'
   'gtk4'
-  'libadwaita'
+  # >=1.5: AlertDialog / AboutDialog / Breakpoint - see
+  # MIN_ADW_VERSION in src/goblinmode/gui/app.py
+  'libadwaita>=1.5'
   'polkit'
 )
 optdepends=(

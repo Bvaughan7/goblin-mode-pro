@@ -1,9 +1,9 @@
 """Games (Library) page - per-game profiles.
 
 One ``Adw.ExpanderRow`` per game. The row's built-in enable switch toggles the
-profile; simple tweaks are ``Adw.ActionRow`` + ``Gtk.Switch``; the MangoHud
-configurator and runner variables live in nested ``Adw.ExpanderRow``s to keep
-the surface clean (per the brief).
+profile; simple tweaks are ``Adw.SwitchRow``; the MangoHud configurator and
+runner variables live in nested ``Adw.ExpanderRow``s to keep the surface clean
+(per the brief).
 """
 
 from __future__ import annotations
@@ -481,29 +481,26 @@ class GamesPage(Adw.PreferencesPage):
         return exp
 
     # -- small helpers -------------------------------------------
-    def _switch_row(self, title: str, active: bool, on_change, help: str = "") -> Adw.ActionRow:
-        row = Adw.ActionRow(title=title)
+    def _switch_row(self, title: str, active: bool, on_change, help: str = "") -> Adw.SwitchRow:
+        row = Adw.SwitchRow(title=title, active=active)
         if help:
             hb = help_button(help)
             if hb is not None:
                 row.add_suffix(hb)
-        sw = Gtk.Switch(valign=Gtk.Align.CENTER, active=active)
-        sw.connect("notify::active", lambda s, _p: (not self._building) and on_change(s.get_active()))
-        row.add_suffix(sw)
-        row.set_activatable_widget(sw)
+        row.connect("notify::active",
+                    lambda r, _p: (not self._building) and on_change(r.get_active()))
         return row
 
     def _switch_row_confirmed(self, title: str, active: bool, on_change,
-                              warning: str, help: str = "") -> Adw.ActionRow:
+                              warning: str, help: str = "") -> Adw.SwitchRow:
         """Like _switch_row, but turning it *on* first shows an "I understand
         the risk" confirm dialog - cancelling snaps the switch back off
         without calling on_change. Turning it off never needs confirming."""
-        row = Adw.ActionRow(title=title)
+        row = Adw.SwitchRow(title=title, active=active)
         if help:
             hb = help_button(help)
             if hb is not None:
                 row.add_suffix(hb)
-        sw = Gtk.Switch(valign=Gtk.Align.CENTER, active=active)
 
         def _toggled(s, _p):
             if self._building:
@@ -531,9 +528,7 @@ class GamesPage(Adw.PreferencesPage):
             d.connect("response", _respond)
             d.present(win)
 
-        sw.connect("notify::active", _toggled)
-        row.add_suffix(sw)
-        row.set_activatable_widget(sw)
+        row.connect("notify::active", _toggled)
         return row
 
     def _patch(self, exe: str, **changes) -> None:

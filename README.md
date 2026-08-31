@@ -208,7 +208,16 @@ mode").
 
 ### Dependencies (if you're installing them yourself)
 
-You need Python 3, PyGObject, GTK 4, libadwaita, and `psutil`. Package names:
+You need Python 3, PyGObject, GTK 4, libadwaita, and `psutil`.
+
+**Minimum versions:** Python **3.11**, GTK **4.0**, libadwaita **1.5**. The GUI
+is built on `Adw.AlertDialog`, `Adw.AboutDialog` and `Adw.Breakpoint`, all of
+which landed in libadwaita 1.5 — it checks at startup and tells you rather than
+crashing. That floor is what Ubuntu 24.04 LTS and Debian 13 ship, so any
+currently-supported distro is fine. The daemon and the `goblin-mode-pro-cli`
+command have no GTK dependency at all and work on anything older.
+
+Package names:
 
 | Distro | Command |
 |---|---|

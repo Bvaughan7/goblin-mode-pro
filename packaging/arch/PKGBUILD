@@ -8,7 +8,9 @@ pkgdesc="One-switch performance helper for Linux gaming: auto-detects a game, tu
 arch=('any')
 url="https://github.com/Bvaughan7/goblin-mode-pro"
 license=('MIT')
-depends=('python' 'python-gobject' 'python-psutil' 'gtk4' 'libadwaita' 'polkit')
+# libadwaita>=1.5: AlertDialog / AboutDialog / Breakpoint - see
+# MIN_ADW_VERSION in src/goblinmode/gui/app.py
+depends=('python' 'python-gobject' 'python-psutil' 'gtk4' 'libadwaita>=1.5' 'polkit')
 optdepends=(
   'python-pillow: tray icon rendering'
   'python-pystray: system tray icon'

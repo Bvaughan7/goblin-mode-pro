@@ -111,8 +111,11 @@ class MainWindow(Adw.ApplicationWindow):
         self._stack.set_visible_child_name(param.get_string())
 
     def _show_about(self, *_a) -> None:
-        about = Adw.AboutWindow(
-            transient_for=self,
+        # Adw.AboutDialog, not Adw.AboutWindow: the latter is deprecated since
+        # libadwaita 1.6 - the same release that deprecated Adw.MessageDialog.
+        # AboutDialog has been available since 1.5, which is our floor (see
+        # gui/app.py), so this needs no version guard.
+        about = Adw.AboutDialog(
             application_name="Goblin Mode Pro",
             application_icon=APP_ID,
             version=__version__,
@@ -125,7 +128,7 @@ class MainWindow(Adw.ApplicationWindow):
             website="https://github.com/Bvaughan7/goblin-mode-pro",
             issue_url="https://github.com/Bvaughan7/goblin-mode-pro/issues",
         )
-        about.present()
+        about.present(self)
 
     def _show_shortcuts(self, *_a) -> None:
         groups = [
@@ -141,6 +144,29 @@ class MainWindow(Adw.ApplicationWindow):
                     )), start=1)
             ]),
         ]
+        if hasattr(Adw, "ShortcutsDialog"):
+            self._present_shortcuts_dialog(groups)
+        else:
+            self._present_shortcuts_window(groups)
+
+    # Gtk.ShortcutsWindow and its whole widget family were deprecated in GTK
+    # 4.18 in favour of Adw.ShortcutsDialog - but that only landed in
+    # libadwaita 1.8, and our floor is 1.5 (Ubuntu 24.04 LTS, Debian 13), which
+    # the rest of the UI needs anyway for AlertDialog/AboutDialog/Breakpoint.
+    # Raising the floor to 1.8 to avoid one deprecation would cost us both of
+    # those distros, so we keep both paths: the modern one on new systems, the
+    # deprecated one as a fallback. Checked against libadwaita 1.9.3 / GTK
+    # 4.22.4; revisit when 1.8 is the oldest libadwaita we care about.
+    def _present_shortcuts_dialog(self, groups) -> None:
+        dialog = Adw.ShortcutsDialog()
+        for title, shortcuts in groups:
+            section = Adw.ShortcutsSection(title=title)
+            for accel, label in shortcuts:
+                section.add(Adw.ShortcutsItem(title=label, accelerator=accel))
+            dialog.add(section)
+        dialog.present(self)
+
+    def _present_shortcuts_window(self, groups) -> None:
         win = Gtk.ShortcutsWindow(transient_for=self, modal=True)
         section = Gtk.ShortcutsSection(section_name="main", visible=True)
         for title, shortcuts in groups:
