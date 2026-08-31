@@ -4,9 +4,11 @@ All notable changes to Goblin Mode Pro. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); this project uses
 [SemVer](https://semver.org/).
 
-## [Unreleased]
+## [1.2.1] — 2026-08-30
 
-Hardening and correctness pass over the 1.2.0 surface. No new features.
+Hardening and correctness pass over the 1.2.0 surface. No new features —
+bug fixes, root-helper sandbox corrections, a quieter notification path,
+and CI.
 
 ### Fixed — correctness
 - **The `--revert` path was a no-op.** `goblin-mode-pro-daemon --revert`
