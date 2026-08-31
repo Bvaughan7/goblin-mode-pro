@@ -18,6 +18,7 @@ import os
 import subprocess
 import sys
 import unittest
+from tempfile import TemporaryDirectory
 from pathlib import Path
 from unittest.mock import patch
 
@@ -206,6 +207,44 @@ def _call_with_connection(method_name: str, args: tuple):
     gh._handle_call(None, "fake-sender", gh.OBJECT_PATH, gh.IFACE,
                     method_name, _FakeParams(args), inv)
     return inv
+
+
+class NvidiaModesetConf(unittest.TestCase):
+    """The modprobe.d drop-in: fixed content, and readable by the tooling
+    that has to consume it.
+
+    The helper's unit sets UMask=0077, which is correct for the state it keeps
+    in /run and wrong for a config file in /etc - initramfs generators and the
+    user both need to read this one, and every other file in modprobe.d is
+    0644. Verified on real hardware: the write itself works inside the
+    sandbox, and produced a 0600 file until this was fixed.
+    """
+
+    def setUp(self):
+        self._tmp = TemporaryDirectory()
+        self._orig = gh.NVIDIA_MODESET_CONF
+        gh.NVIDIA_MODESET_CONF = Path(self._tmp.name) / "goblin-mode-pro-nvidia.conf"
+
+    def tearDown(self):
+        gh.NVIDIA_MODESET_CONF = self._orig
+        self._tmp.cleanup()
+
+    def test_writes_exactly_one_of_two_fixed_lines(self):
+        gh.set_nvidia_modeset(True)
+        self.assertEqual(gh.NVIDIA_MODESET_CONF.read_text(),
+                         "options nvidia_drm modeset=1\n")
+        gh.set_nvidia_modeset(False)
+        self.assertEqual(gh.NVIDIA_MODESET_CONF.read_text(),
+                         "options nvidia_drm modeset=0\n")
+
+    def test_the_file_is_world_readable(self):
+        gh.set_nvidia_modeset(True)
+        mode = gh.NVIDIA_MODESET_CONF.stat().st_mode & 0o777
+        self.assertEqual(mode, 0o644, f"expected 0644, got {mode:o}")
+
+    def test_an_unwritable_directory_is_a_clean_false(self):
+        gh.NVIDIA_MODESET_CONF = Path("/proc/nonexistent/x.conf")
+        self.assertFalse(gh.set_nvidia_modeset(True))
 
 
 if __name__ == "__main__":

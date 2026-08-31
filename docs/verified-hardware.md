@@ -28,7 +28,8 @@ is just as useful as one saying it does.
 ### Dell G7 7590 — i7-10750H / RTX 2060 — CachyOS (kernel 7.2.2)
 
 Intel Comet Lake laptop, `intel_pstate` active, KDE Plasma 6 on Wayland.
-Verified 2026-08-31 with `selftest --apply`: **15 PASS, 0 FAIL, 1 SKIP.**
+Verified 2026-08-31 with `selftest --apply`: **16 PASS, 0 FAIL, 1 SKIP** —
+the only SKIP is `ryzenadj`, which is correct on an Intel machine.
 
 | Capability | Result | Notes |
 |---|---|---|
@@ -50,7 +51,8 @@ Verified 2026-08-31 with `selftest --apply`: **15 PASS, 0 FAIL, 1 SKIP.**
 | `kernel.split_lock_mitigate` | PASS | |
 | **`user.max_user_namespaces`** | **PASS** | was `EACCES` before the capability fix below |
 | `kernel.unprivileged_userns_clone` | PASS | |
-| `/etc/modprobe.d` writable | — | present and granted; not round-tripped |
+| **`nvidia-drm.modeset` write** | **PASS** | the root helper wrote the modprobe.d drop-in inside its sandbox, 29 bytes = `options nvidia_drm modeset=1` exactly |
+| sched_ext support | PASS | 13 schedulers available; `scx_loader` reachable, polkit prompts as it should |
 
 #### Three findings from this machine
 
@@ -94,11 +96,20 @@ change that:
   each is restored to its own original. The parsing, snapshotting and restore
   logic is under test with a faked `ryzenadj`; whether `ryzenadj` reaches the
   silicon is what an AMD machine running `selftest --apply` would answer.
-- **Writing `nvidia-drm.modeset`** — the *read-out* is verified, and the write
-  is fixed-content (`options nvidia_drm modeset=0|1`, never anything else).
-  Confirming the write needs an answered polkit prompt on a machine with the
-  NVIDIA driver; it is one of the two remaining "asked for but not answered"
-  results.
+**Writing `nvidia-drm.modeset` is now verified** (Dell G7, NVIDIA): the root
+helper wrote `/etc/modprobe.d/goblin-mode-pro-nvidia.conf` from inside its
+sandbox, 29 bytes matching `options nvidia_drm modeset=1` exactly. That found
+one thing: the unit's `UMask=0077` — right for the state it keeps in `/run` —
+made the file `0600`, where every other file in `modprobe.d` is `0644` and
+initramfs tooling and the user both need to read it. It is chmodded explicitly
+now.
+
+Fan spin-up also exposed a flaw in the probe itself rather than the feature: it
+read the PWM once, a second after writing, and on a cool idle machine the
+embedded controller pulls the duty back before then — so the same machine
+alternated PASS and FAIL. It samples for three seconds and takes the peak now,
+and a channel that genuinely never moves is reported as a SKIP naming the EC as
+the reason, not a failure.
 
 ### Your machine here
 

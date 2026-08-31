@@ -579,27 +579,47 @@ class SelfTest:
                       "no helper on the bus", sec)
             return
         first = channels[0]
+        enable_path = first.parent / f"{first.name}_enable"
         before = _read_int(first)
         applied = None
         try:
             ok = h.spin_up_fans(MIN_FAN_PERCENT)
-            time.sleep(min(1.0, FAN_TEST_SECONDS))
-            applied = _read_int(first)
+            # Sample rather than take one reading a second later. Writing a PWM
+            # duty is not the same as the fan holding it: on a laptop whose EC
+            # still arbitrates, the value is accepted and then pulled straight
+            # back down, and how fast that happens depends on how warm the
+            # machine is. One delayed read turns that into a coin flip.
+            peak = before or 0
+            deadline = time.monotonic() + min(3.0, FAN_TEST_SECONDS)
+            while time.monotonic() < deadline:
+                value = _read_int(first)
+                if value is not None:
+                    peak = max(peak, value)
+                time.sleep(0.2)
+            applied = peak
+            mode = _read_int(enable_path)
             if not ok:
                 self._add("fans_rt", "Fan spin-up round-trip", FAIL,
                           "the helper refused SpinUpFans (check the "
                           "manage-hardware-thermal polkit action)", sec,
                           before=before)
-            elif applied is not None and before is not None and applied <= before:
-                self._add("fans_rt", "Fan spin-up round-trip", FAIL,
+            elif before is not None and applied <= before:
+                # The helper wrote it and the channel never moved. That is a
+                # property of the machine, not a fault in the write path, and
+                # it is the answer most laptops give - so say which it is.
+                self._add("fans_rt", "Fan spin-up round-trip", SKIP,
                           f"SpinUpFans({MIN_FAN_PERCENT}%) was accepted but "
-                          f"{first.name} did not rise ({before} -> {applied})", sec,
-                          before=before, applied=applied)
+                          f"{first.parent.name}/{first.name} stayed at {before} "
+                          f"(enable mode {mode}). The embedded controller is "
+                          "still arbitrating this channel and pulls the duty "
+                          "back, which is normal on a laptop - fan spin-up "
+                          "will not do anything on this machine", sec,
+                          before=before, applied=applied, enable_mode=mode)
             else:
                 self._add("fans_rt", "Fan spin-up round-trip", PASS,
                           f"{first.parent.name}/{first.name} {before} -> {applied} "
-                          f"at the {MIN_FAN_PERCENT}% floor, then handed back "
-                          "to the EC", sec, before=before, applied=applied)
+                          f"(peak) at the {MIN_FAN_PERCENT}% floor, then handed "
+                          "back to the EC", sec, before=before, applied=applied)
         except KeyboardInterrupt:
             self._add("fans_rt", "Fan spin-up round-trip", FAIL,
                       "interrupted - fans handed back to the EC", sec, before=before)

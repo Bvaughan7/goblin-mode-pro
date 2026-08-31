@@ -6,6 +6,19 @@ All notable changes to Goblin Mode Pro. Format loosely follows
 
 ## [Unreleased]
 
+### Fixed
+- The `nvidia-drm.modeset` drop-in was written `0600`. The helper's unit
+  sets `UMask=0077`, which is right for the state it keeps in `/run` and
+  wrong for a config file in `/etc` that initramfs tooling and you both
+  need to read — every other file in `modprobe.d` is `0644`. Found by
+  verifying the write on real hardware for the first time.
+- `selftest --apply`'s fan check read the PWM once, a second after
+  writing, so on a cool idle machine — where the embedded controller
+  pulls the duty straight back — the same hardware alternated between
+  PASS and FAIL. It now samples for three seconds and takes the peak, and
+  a channel that never moves is a SKIP that names the EC as the reason
+  rather than a failure.
+
 ## [1.3.0] — 2026-08-31
 
 ### Added

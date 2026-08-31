@@ -655,6 +655,12 @@ def set_nvidia_modeset(enabled: bool) -> bool:
     try:
         NVIDIA_MODESET_CONF.parent.mkdir(parents=True, exist_ok=True)
         _write(NVIDIA_MODESET_CONF, text)
+        # The unit runs with UMask=0077, which is right for everything the
+        # helper writes into /run - but this is a config file in /etc that
+        # initramfs tooling and the user both need to read. Every other file
+        # in modprobe.d is 0644; a root-only one here is surprising and
+        # invisible to anyone trying to work out why modeset is set.
+        NVIDIA_MODESET_CONF.chmod(0o644)
     except OSError as exc:
         log.warning("could not write %s: %s", NVIDIA_MODESET_CONF, exc)
         return False
