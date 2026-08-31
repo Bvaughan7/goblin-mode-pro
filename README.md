@@ -17,7 +17,7 @@ compositor and power limits automatically per game and reverts them cleanly,
 and when your FPS falls off a cliff it captures the GPU state and names the
 cause. It's the missing piece between "I can see the problem" and "it's fixed."
 
-![version](https://img.shields.io/badge/version-1.1.0-2ea043)
+![version](https://img.shields.io/github/v/release/Bvaughan7/goblin-mode-pro?color=2ea043&label=release)
 ![python](https://img.shields.io/badge/python-3.11+-3f7fbf)
 ![license](https://img.shields.io/badge/license-MIT-4E6A24)
 ![CI](https://github.com/Bvaughan7/goblin-mode-pro/actions/workflows/ci.yml/badge.svg)
@@ -74,6 +74,19 @@ while a game is running and reverts them afterwards. In plain terms:
 
 "Global" changes (CPU speed, tearing) are shared — they switch on when the first
 game starts and switch off only when the last one quits.
+
+### How this relates to what you already have
+
+If you're on CachyOS, Nobara or a similar setup, some of the tuning above is
+already handled. Goblin Mode Pro is built to sit *alongside* that stack, not
+replace it — and the half it doesn't overlap with is the point.
+
+| You already have | It covers | Goblin adds |
+|---|---|---|
+| **Feral GameMode** | governor + GPU perf level + `ioprio`/`nice` for the duration of a game | per-game (not global) profiles, compositor tearing/VRR, TDP, core-pinning, undervolt re-apply, focus mode — and it wraps `gamemoderun` itself unless you turn that off |
+| **`ananicy-cpp`** (CachyOS default) | niceness / ionice / sched policy by rules | the System Check warns when it and GameMode and Goblin's `renice` would stack; new profiles start with `renice` off while it's running |
+| **CachyOS `game-performance`** | governor + the distro's `scx` gaming scheduler on launch | everything in the table above; Goblin does **not** switch schedulers |
+| **MangoHud** | shows FPS / frametime / temps | the frame-rate watchdog that snapshots GPU state on a dip and names the cause, benchmark regression tracking across sessions, the Proton log analyzer, the System Check |
 
 ### And while you play, it watches for problems
 
@@ -325,7 +338,7 @@ game logs: `~/.local/share/goblin-mode-pro/logs/`.
 | **Proton tools** | Discovers custom Proton/Wine builds and every shader-cache location with sizes; `Clear` deletes a listed cache's contents only. |
 | **First-run wizard** | Shown once (marker file). System check + safe fixes → launcher wrapper → done. |
 | **CLI** | `goblin-mode-pro-cli` — a headless session-bus client (status / boost / health / benchmark / sessions / preflight / report / setup / games / compare / works-for-me / gamescope-session). |
-| **System Check** | Pre-flight panel: `vm.max_map_count`, esync FD limit, split-lock mitigation, `nvidia-drm.modeset`, THP, `compaction_proactiveness`, swappiness, kernel fsync support, user namespaces (Steam Runtime + anti-cheat), Vulkan ICD, gamemode/MangoHud presence, plus an anti-cheat status note. Safe fixes are one-click; the `sysctl.d` / kernel-param text is shown for permanence. |
+| **System Check** | Pre-flight panel: `vm.max_map_count`, esync FD limit, split-lock mitigation, `nvidia-drm.modeset`, THP, `compaction_proactiveness`, swappiness, kernel fsync support, `user.max_user_namespaces` **and** the Debian/Ubuntu `kernel.unprivileged_userns_clone` (Steam Runtime + anti-cheat), Vulkan ICD, gamemode/MangoHud presence, an `ananicy-cpp` niceness-conflict warning, plus an anti-cheat status note. Safe fixes are one-click; the `sysctl.d` / kernel-param text is shown for permanence. |
 | **Proton log analyzer** | ~16 known failure patterns → plain-language cause + fix, run on the captured Wine/Proton log. |
 | **Frame-rate watchdog** | Per game. Logs FPS via MangoHud; on a sustained extreme dip (default ≤22 fps or <50% of the recent median) snapshots deep GPU state into an `fps_dip` incident with ranked likely causes. Checks whether VRAM was released after exit (leak detection). |
 | **MangoHud Integrator** | Round-trips `MangoHud.conf` (or a per-game `<exe>.conf`), touching only its managed block. |
@@ -337,8 +350,14 @@ game logs: `~/.local/share/goblin-mode-pro/logs/`.
 
 | polkit action | covers | default on the active session |
 |---|---|---|
-| `com.goblinmode.pro.manage-performance` | governor, EPP, renice, RAPL PL1/PL2, ryzenadj TDP, `intel-undervolt apply` | allowed without a prompt |
-| `com.goblinmode.pro.manage-kernel-tunables` | persistent sysctls from the System Check, and their **Undo** | prompts for admin auth |
+| `com.goblinmode.pro.manage-performance` | governor, EPP, renice, **raising** RAPL PL1/PL2 / ryzenadj TDP, re-applying your `intel-undervolt` / Curve-Optimizer offsets, handing fan control back to the EC | allowed without a prompt |
+| `com.goblinmode.pro.manage-kernel-tunables` | persistent sysctls from the System Check (and their **Undo**), the `nvidia-drm.modeset` modprobe write | prompts for admin auth |
+| `com.goblinmode.pro.manage-hardware-thermal` | taking manual control of the fans (preemptive spin-up) | prompts for admin auth |
+
+Lowering a power limit isn't offered over the bus at all — `SetPowerLimits`
+has an 8 W floor, since it exists to *raise* the cap, and driving it to a few
+watts would be a silent local slow-down. Fan spin-up can only ever *increase*
+duty (40 % floor).
 
 `manage-performance` is silent on the active session so a boost applies the
 instant a game launches. To require a prompt there too, set

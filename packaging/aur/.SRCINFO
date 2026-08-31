@@ -1,6 +1,6 @@
 pkgbase = goblin-mode-pro-git
 	pkgdesc = One-switch performance helper for Linux gaming: auto-detects a game, tunes CPU/compositor/Proton, reverts on exit, diagnoses crashes and FPS drops
-	pkgver = 1.0.0.r0.gHEAD
+	pkgver = 1.2.0.r0.g0000000
 	pkgrel = 1
 	url = https://github.com/Bvaughan7/goblin-mode-pro
 	install = goblin-mode-pro.install
@@ -20,6 +20,7 @@ pkgbase = goblin-mode-pro-git
 	optdepends = gamescope: the per-game gamescope integration
 	optdepends = wl-clipboard: clipboard export on Wayland
 	optdepends = ryzenadj: AMD laptop TDP control
+	optdepends = python-cairo: saving a benchmark report card as an image
 	provides = goblin-mode-pro
 	conflicts = goblin-mode-pro
 	source = goblin-mode-pro::git+https://github.com/Bvaughan7/goblin-mode-pro.git
