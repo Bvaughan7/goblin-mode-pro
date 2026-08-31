@@ -29,6 +29,10 @@ override_dh_auto_install:
 	install -Dm0644 data/com.goblinmode.Pro.desktop $(DESTDIR)/usr/share/applications/com.goblinmode.Pro.desktop
 	install -Dm0644 data/com.goblinmode.Pro.GamescopeSession.desktop $(DESTDIR)/usr/share/applications/com.goblinmode.Pro.GamescopeSession.desktop
 	install -Dm0644 data/icons/com.goblinmode.Pro.svg $(DESTDIR)/usr/share/icons/hicolor/scalable/apps/com.goblinmode.Pro.svg
+	for png in data/icons/hicolor/*/apps/*.png; do \
+		sz=$$(basename $$(dirname $$(dirname $$png))); \
+		install -Dm0644 "$$png" "$(DESTDIR)/usr/share/icons/hicolor/$$sz/apps/$$(basename $$png)"; \
+	done
 	install -Dm0644 data/systemd/helper-amd-tdp.conf $(DESTDIR)/usr/share/goblin-mode-pro/helper-amd-tdp.conf
 	install -Dm0644 data/systemd/helper-undervolt.conf $(DESTDIR)/usr/share/goblin-mode-pro/helper-undervolt.conf
 	install -Dm0644 LICENSE $(DESTDIR)/usr/share/doc/goblin-mode-pro/copyright

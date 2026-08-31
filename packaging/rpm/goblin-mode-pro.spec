@@ -70,6 +70,10 @@ install -Dm0644 data/systemd/goblin-mode-pro.service        %{buildroot}%{_useru
 install -Dm0644 data/com.goblinmode.Pro.desktop            %{buildroot}%{_datadir}/applications/com.goblinmode.Pro.desktop
 install -Dm0644 data/com.goblinmode.Pro.GamescopeSession.desktop %{buildroot}%{_datadir}/applications/com.goblinmode.Pro.GamescopeSession.desktop
 install -Dm0644 data/icons/com.goblinmode.Pro.svg          %{buildroot}%{_datadir}/icons/hicolor/scalable/apps/com.goblinmode.Pro.svg
+# PNG icons - Qt/KDE can't render the SVG's CSS + filters
+for png in data/icons/hicolor/*/apps/*.png; do
+  install -Dm0644 "$png" "%{buildroot}%{_datadir}/icons/${png#data/icons/}"
+done
 install -Dm0644 data/systemd/helper-amd-tdp.conf           %{buildroot}%{_datadir}/%{name}/helper-amd-tdp.conf
 install -Dm0644 data/systemd/helper-undervolt.conf         %{buildroot}%{_datadir}/%{name}/helper-undervolt.conf
 
@@ -98,6 +102,8 @@ install -Dm0644 data/systemd/helper-undervolt.conf         %{buildroot}%{_datadi
 %{_datadir}/applications/com.goblinmode.Pro.desktop
 %{_datadir}/applications/com.goblinmode.Pro.GamescopeSession.desktop
 %{_datadir}/icons/hicolor/scalable/apps/com.goblinmode.Pro.svg
+%{_datadir}/icons/hicolor/*/apps/com.goblinmode.Pro.png
+%{_datadir}/icons/hicolor/*/apps/goblin-mode-pro.png
 %{_datadir}/%{name}/
 
 %changelog

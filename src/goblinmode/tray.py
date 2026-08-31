@@ -34,9 +34,10 @@ except Exception as _exc:  # noqa: BLE001 - pystray/Pillow missing or no backend
 _SIZE = 64
 _ICON_PNG = Path(__file__).with_name("assets") / "goblin-tray.png"
 
-#: Installed hicolor icon (data/icons/com.goblinmode.Pro.svg). Matches the app
-#: window / .desktop icon.
-_THEME_ICON = "com.goblinmode.Pro"
+#: Installed hicolor icons, most-preferred first. ``goblin-mode-pro`` is the
+#: bare goblin mark (PNG, sized for a tray); ``com.goblinmode.Pro`` is the
+#: plated app icon (also PNG - Qt/KDE can't render the SVG's CSS + filters).
+_THEME_ICONS = ("goblin-mode-pro", "com.goblinmode.Pro")
 
 #: Set to the theme-icon name once we've confirmed it resolves, else None (then
 #: the tray falls back to pystray's temp-PNG path). See _patch_pystray_tray_icon.
@@ -72,8 +73,11 @@ def _patch_pystray_tray_icon() -> None:
             _TRAY_ICON_NAME = getattr(GtkIcon, "_gmp_icon_name", None)
             return
 
-        if Gtk.IconTheme.get_default().has_icon(_THEME_ICON):
-            _TRAY_ICON_NAME = _THEME_ICON
+        theme = Gtk.IconTheme.get_default()
+        for candidate in _THEME_ICONS:
+            if theme.has_icon(candidate):
+                _TRAY_ICON_NAME = candidate
+                break
 
         name = _TRAY_ICON_NAME
 

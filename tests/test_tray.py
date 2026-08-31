@@ -36,7 +36,7 @@ class PystrayTrayIconPatch(unittest.TestCase):
         f = _Fake()
         f._update_fs_icon()
         # a theme name, not a filesystem path
-        self.assertEqual(f._icon_path, tray._THEME_ICON)
+        self.assertIn(f._icon_path, tray._THEME_ICONS)
         self.assertNotIn("/", f._icon_path)
 
 

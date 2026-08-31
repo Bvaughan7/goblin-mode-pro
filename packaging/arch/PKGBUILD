@@ -56,6 +56,10 @@ package() {
     "$pkgdir/usr/share/applications/com.goblinmode.Pro.GamescopeSession.desktop"
   install -Dm0644 data/icons/com.goblinmode.Pro.svg \
     "$pkgdir/usr/share/icons/hicolor/scalable/apps/com.goblinmode.Pro.svg"
+  # PNG icons (Qt/KDE can't render the SVG's CSS + filters)
+  for _png in data/icons/hicolor/*/apps/*.png; do
+    install -Dm0644 "$_png" "$pkgdir/usr/share/icons/${_png#data/icons/}"
+  done
   install -Dm0644 data/systemd/helper-amd-tdp.conf \
     "$pkgdir/usr/share/$pkgname/helper-amd-tdp.conf"
   install -Dm0644 data/systemd/helper-undervolt.conf \

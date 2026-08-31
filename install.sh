@@ -160,6 +160,15 @@ install_user_bits() {
         "$PREFIX/share/applications/com.goblinmode.Pro.GamescopeSession.desktop"
     sudo install -Dm0644 "$REPO_DIR/data/icons/com.goblinmode.Pro.svg" \
         "$PREFIX/share/icons/hicolor/scalable/apps/com.goblinmode.Pro.svg"
+    # Raster icons too: Qt/KDE's SVG renderer chokes on the icons' CSS <style>
+    # blocks + filters, so the launcher / task bar / tray need PNGs.
+    # com.goblinmode.Pro = the plated app icon; goblin-mode-pro = the bare mark
+    # used for the tray.
+    for png in "$REPO_DIR"/data/icons/hicolor/*/apps/*.png; do
+        [ -e "$png" ] || continue
+        rel="${png#"$REPO_DIR"/data/icons/}"
+        sudo install -Dm0644 "$png" "$PREFIX/share/icons/$rel"
+    done
     sudo install -Dm0644 "$REPO_DIR/data/systemd/goblin-mode-pro.service" \
         "$PREFIX/lib/systemd/user/goblin-mode-pro.service"
     sudo gtk-update-icon-cache -qtf "$PREFIX/share/icons/hicolor" 2>/dev/null || true
