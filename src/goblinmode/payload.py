@@ -82,6 +82,7 @@ class PerformancePayload:
         self._governor_applied = False
         self._power_applied = False
         self._power_backend: str | None = None   # "rapl" | "ryzenadj"
+        self._power_values: tuple[int, int] | None = None  # last-applied (as requested)
         self._fan_spinup_applied = False
         self._tearing_applied = False
         self._vrr_applied = False
@@ -290,17 +291,28 @@ class PerformancePayload:
                 self.helper.set_epp(PERFORMANCE_EPP)
                 self._governor_applied = True
                 log.info("CPU governor -> %s", PERFORMANCE_GOVERNOR)
+            # If a power limit is applied but the ask has since changed (a
+            # different backend, or dropped entirely because the game that
+            # wanted it exited), undo it first - otherwise a raised TDP leaks
+            # until the *last* game exits. The helper exposes ResetPowerLimits
+            # / ResetTDP for exactly this.
+            want = (power[0], tuple(power[1])) if power is not None else None
+            have = (self._power_backend, self._power_values)
+            if self._power_applied and have != want:
+                self._reset_power()
             if power is not None:
                 kind, values = power
                 if kind == "ryzenadj":
                     if values[0] and self.helper.set_tdp(values[0]):
                         self._power_applied = True
                         self._power_backend = "ryzenadj"
+                        self._power_values = tuple(values)
                         log.info("AMD TDP -> %dW (ryzenadj)", values[0])
                 else:
                     self.helper.set_power_limits(values[0], values[1])
                     self._power_applied = True
                     self._power_backend = "rapl"
+                    self._power_values = tuple(values)
                     log.info("RAPL limits -> PL1=%.0fW PL2=%.0fW",
                              values[0] / 1e6, values[1] / 1e6)
             if want_fan_spinup and not self._fan_spinup_applied:
@@ -316,6 +328,21 @@ class PerformancePayload:
                 f"Cannot apply CPU/power tweaks (helper down): {exc}",
             )
 
+    def _reset_power(self) -> None:
+        """Undo just the power limit / TDP (leave the governor - another game
+        may still want it). Clears the power bookkeeping."""
+        try:
+            if self._power_backend == "ryzenadj":
+                self.helper.reset_tdp()
+            else:
+                self.helper.reset_power_limits()
+            log.info("power limit reset (%s)", self._power_backend)
+        except HelperUnavailable as exc:
+            log.warning("helper unavailable resetting power limit: %s", exc)
+        self._power_applied = False
+        self._power_backend = None
+        self._power_values = None
+
     def _restore_helper_tweaks(self) -> None:
         try:
             self.helper.revert_all()
@@ -326,6 +353,7 @@ class PerformancePayload:
         self._governor_applied = False
         self._power_applied = False
         self._power_backend = None
+        self._power_values = None
         self._fan_spinup_applied = False
 
     def _renice(self, profile: GameProfile, pid: int) -> None:
@@ -401,9 +429,15 @@ class PerformancePayload:
                         "active": self.active_games(),
                         "governor_applied": self._governor_applied,
                         "power_applied": self._power_applied,
+                        "power_backend": self._power_backend,
                         "tearing_applied": self._tearing_applied,
                         "adaptive_sync_applied": self._vrr_applied,
+                        "refresh_cap_applied": self._refresh_cap_applied,
+                        "focus_mode": self._focus_applied,
                         "reniced": self._reniced,
+                        # everything the cold --revert path needs to undo the
+                        # compositor without the daemon's in-memory state
+                        "compositor": self.compositor.restore_state(),
                     },
                     indent=2,
                 )
@@ -415,3 +449,92 @@ class PerformancePayload:
         log.warning("%s: %s", kind, detail)
         if self._on_incident:
             self._on_incident(kind, detail)
+
+
+# --------------------------------------------------------------------------
+# Cold, state-driven revert
+# --------------------------------------------------------------------------
+# The daemon holds all its apply/revert bookkeeping in memory. That is fine
+# for the normal path (a game exits -> revert), but useless for the two cases
+# where the process that applied the tweaks is already gone:
+#
+#   * ``goblin-mode-pro-daemon --revert`` - the systemd ``ExecStop`` /
+#     crash-recovery hook;
+#   * a daemon that starts and finds a stale ``applied.json`` from a previous
+#     instance that was killed (SIGKILL, OOM, power loss) without reverting.
+#
+# Both are handled here by reading ``applied.json`` and undoing what it
+# records. The privileged half needs no such record: the helper keeps its own
+# root-owned snapshot in ``/run`` and ``RevertAll`` is idempotent.
+
+def _read_applied_state() -> dict | None:
+    try:
+        return json.loads(APPLIED_STATE_FILE.read_text())
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def _clear_applied_state() -> None:
+    try:
+        APPLIED_STATE_FILE.unlink(missing_ok=True)
+    except OSError as exc:
+        log.warning("could not clear applied state: %s", exc)
+
+
+def applied_state_dirty() -> bool:
+    """True when ``applied.json`` records anything actually applied - i.e. a
+    previous daemon instance exited without reverting. A clean shutdown leaves
+    the file present but with everything cleared, which is *not* dirty."""
+    data = _read_applied_state()
+    if not data:
+        return False
+    if data.get("active") or data.get("reniced"):
+        return True
+    if any(data.get(k) for k in (
+        "governor_applied", "power_applied", "tearing_applied",
+        "adaptive_sync_applied", "refresh_cap_applied", "focus_mode",
+    )):
+        return True
+    comp = data.get("compositor") or {}
+    return any(comp.get(k) for k in (
+        "tearing_active", "vrr_active", "refresh_active", "x11_suspended",
+    ))
+
+
+def revert_from_state(helper: HelperClient | None = None) -> bool:
+    """Undo every tweak recorded in ``applied.json`` (compositor, focus mode)
+    plus, unconditionally, whatever the helper's own snapshot records
+    (governor/EPP/RAPL/TDP/fans). Clears the state file on completion. Safe to
+    call with nothing applied."""
+    helper = helper or HelperClient()
+    ok = True
+
+    try:
+        helper.revert_all()
+        log.info("helper state reverted")
+    except HelperUnavailable as exc:
+        log.warning("helper unavailable during --revert: %s", exc)
+
+    data = _read_applied_state() or {}
+    comp_state = data.get("compositor") or {}
+    if any(comp_state.get(k) for k in
+           ("tearing_active", "vrr_active", "refresh_active", "x11_suspended")):
+        comp = Compositor()
+        comp.load_restore_state(comp_state)
+        for restore in (comp.restore_tearing, comp.restore_adaptive_sync,
+                        comp.restore_refresh_cap):
+            try:
+                restore()
+            except Exception as exc:  # noqa: BLE001 - best effort, keep going
+                log.warning("compositor cold-restore step failed: %s", exc)
+                ok = False
+
+    if data.get("focus_mode"):
+        try:
+            FocusMode().force_restore()
+        except Exception as exc:  # noqa: BLE001
+            log.warning("focus-mode cold-restore failed: %s", exc)
+            ok = False
+
+    _clear_applied_state()
+    return ok

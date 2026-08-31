@@ -377,6 +377,37 @@ class Compositor:
         self._refresh_active = False
         return ok
 
+    # -- cold crash-recovery -------------------------------------
+    def restore_state(self) -> dict:
+        """A JSON-serialisable record of what's currently applied *and* the
+        prior values needed to undo it. Persisted in ``applied.json`` so the
+        ``--revert`` service-stop path (a fresh process, no in-memory state)
+        can still put the compositor back - see ``payload.revert_from_state``."""
+        return {
+            "tearing_active": self._tearing_active,
+            "tearing_saved": self._tearing_saved,
+            "tearing_backend": self._tearing_backend,
+            "x11_suspended": self._x11_suspended,
+            "vrr_active": self._vrr_active,
+            "vrr_saved": dict(self._vrr_saved),
+            "vrr_saved_hyprland": self._vrr_saved_hyprland,
+            "refresh_active": self._refresh_active,
+            "refresh_saved": dict(self._refresh_saved),
+        }
+
+    def load_restore_state(self, data: dict) -> None:
+        """Re-hydrate the save/restore fields from :meth:`restore_state` output
+        so the ordinary ``restore_*`` methods can run in a fresh process."""
+        self._tearing_active = bool(data.get("tearing_active"))
+        self._tearing_saved = data.get("tearing_saved")
+        self._tearing_backend = data.get("tearing_backend")
+        self._x11_suspended = bool(data.get("x11_suspended"))
+        self._vrr_active = bool(data.get("vrr_active"))
+        self._vrr_saved = dict(data.get("vrr_saved") or {})
+        self._vrr_saved_hyprland = data.get("vrr_saved_hyprland")
+        self._refresh_active = bool(data.get("refresh_active"))
+        self._refresh_saved = dict(data.get("refresh_saved") or {})
+
     def _enable_adaptive_sync_hyprland(self) -> bool:
         # misc:vrr is 0=off, 1=on, 2=fullscreen-only - compositor-wide, no
         # per-output equivalent to call here (see module docstring).

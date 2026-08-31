@@ -32,7 +32,11 @@ from goblinmode.ipc.daemon_bridge import DaemonBridge
 from goblinmode.ipc.helper_client import HelperClient, HelperUnavailable
 from goblinmode.logwatch import LogWatcher
 from goblinmode.observer import GameEvent, Observer
-from goblinmode.payload import PerformancePayload
+from goblinmode.payload import (
+    PerformancePayload,
+    applied_state_dirty,
+    revert_from_state,
+)
 from goblinmode.paths import ONBOARDED_MARKER, ensure_user_dirs
 
 log = logging.getLogger("goblinmode.daemon")
@@ -88,6 +92,15 @@ class Daemon:
     # -- lifecycle ------------------------------------------------------
     def run(self) -> int:
         ensure_user_dirs()
+
+        # A previous instance that was killed without reverting (SIGKILL, OOM,
+        # power loss) leaves a dirty applied.json. Undo it before we start
+        # applying our own tweaks - the observer re-detects any still-running
+        # game on the first poll and re-applies cleanly.
+        if applied_state_dirty():
+            log.warning("stale applied-state from a previous run - reverting it")
+            revert_from_state(self.helper)
+
         try:
             runner.write_wrapper()
         except OSError as exc:
@@ -908,7 +921,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.revert:
-        PerformancePayload(HelperClient()).revert_all()
+        revert_from_state(HelperClient())
         return 0
 
     daemon = Daemon()

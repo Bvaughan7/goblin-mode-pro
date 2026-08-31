@@ -53,6 +53,12 @@ class FakeHelper:
     def set_tdp(self, w):
         self._guard(); self.calls.append(("set_tdp", w)); return True
 
+    def reset_power_limits(self):
+        self._guard(); self.calls.append(("reset_power_limits",)); self.pl_uw = (0, 0); return True
+
+    def reset_tdp(self):
+        self._guard(); self.calls.append(("reset_tdp",)); return True
+
     def renice(self, pid, nice):
         self._guard(); self.calls.append(("renice", pid, nice)); return True
 
@@ -97,6 +103,9 @@ class _StubCompositor:
 
     def restore_refresh_cap(self):
         self.refresh_hz = None
+
+    def restore_state(self):
+        return {"tearing_active": self.tearing, "vrr_active": self.vrr}
 
 
 class _StubFocus:
@@ -280,6 +289,73 @@ class PayloadRefcountTest(unittest.TestCase):
     def test_fan_spinup_off_by_default(self):
         self.pay.apply(_profile("A.exe"), pid=1)
         self.assertNotIn(("spin_up_fans", 100), self.helper.calls)
+
+    def test_power_limit_reset_when_wanting_game_exits_but_governor_stays(self):
+        # Bug C: a game with a raised TDP exits while another keeps the
+        # governor boosted -> the TDP must be reset, not left leaking until
+        # the last game exits.
+        a = _profile("A.exe"); a.power_limit_enabled = True; a.pl1_w = 25; a.pl2_w = 30
+        b = _profile("B.exe")  # governor only
+
+        self.pay.apply(a, pid=1)
+        self.pay.apply(b, pid=2)
+        self.assertEqual(self.helper.pl_uw, (25_000_000, 30_000_000))
+
+        self.pay.revert(a)
+        self.assertIn(("reset_power_limits",), self.helper.calls)
+        self.assertNotIn(("revert_all",), self.helper.calls)
+        self.assertEqual(self.helper.governor, "performance")
+        self.assertFalse(self.pay._power_applied)
+
+    def test_cold_revert_from_state_reverts_all_and_clears_file(self):
+        import json
+
+        from goblinmode import payload as pm
+
+        pm.APPLIED_STATE_FILE.write_text(json.dumps({
+            "active": ["Wow.exe"],
+            "governor_applied": True,
+            "power_applied": True,
+            "power_backend": "rapl",
+            "focus_mode": True,
+            "compositor": {"tearing_active": True, "tearing_saved": "false",
+                           "vrr_active": True, "vrr_saved": {"eDP-1": "never"}},
+        }))
+
+        calls: list[tuple] = []
+
+        class FakeComp:
+            def load_restore_state(self, d): calls.append(("load",))
+            def restore_tearing(self): calls.append(("tearing",))
+            def restore_adaptive_sync(self): calls.append(("vrr",))
+            def restore_refresh_cap(self): calls.append(("refresh",))
+
+        class FakeFocus:
+            def force_restore(self): calls.append(("focus",))
+
+        orig_c, orig_f = pm.Compositor, pm.FocusMode
+        pm.Compositor, pm.FocusMode = FakeComp, FakeFocus
+        try:
+            helper = FakeHelper()
+            ok = pm.revert_from_state(helper)
+        finally:
+            pm.Compositor, pm.FocusMode = orig_c, orig_f
+
+        self.assertTrue(ok)
+        self.assertIn(("revert_all",), helper.calls)
+        self.assertIn(("tearing",), calls)
+        self.assertIn(("vrr",), calls)
+        self.assertIn(("focus",), calls)
+        self.assertFalse(pm.APPLIED_STATE_FILE.exists())
+
+    def test_applied_state_dirty_only_when_something_was_applied(self):
+        from goblinmode import payload as pm
+
+        self.assertFalse(pm.applied_state_dirty())  # no file
+        self.pay.apply(_profile("A.exe"), pid=1)
+        self.assertTrue(pm.applied_state_dirty())
+        self.pay.revert_all()
+        self.assertFalse(pm.applied_state_dirty())  # clean shutdown
 
     def test_battery_preset_falls_back_to_ac_value_when_unset(self):
         from unittest.mock import patch

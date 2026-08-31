@@ -61,6 +61,21 @@ class FocusMode:
         self._active = False
         log.info("focus mode off")
 
+    def force_restore(self) -> None:
+        """Cold crash-recovery: undo every focus-mode side effect without
+        relying on the in-memory flags (gone after a daemon crash). The
+        screensaver inhibit is released automatically when the process that
+        held it dies, so only the indexer and DND need explicit undoing.
+        Idempotent - safe to call when focus mode was never on."""
+        for tool in ("balooctl6", "balooctl"):
+            if shutil.which(tool):
+                _run([tool, "resume"])
+                break
+        if shutil.which("tracker3"):
+            _run(["tracker3", "daemon", "--resume"])
+        self._set_kde_dnd(False)
+        self._active = False
+
     # -- indexer ---------------------------------------------------
     def _suspend_indexer(self) -> None:
         for tool in ("balooctl6", "balooctl"):
