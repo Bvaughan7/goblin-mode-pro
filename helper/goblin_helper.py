@@ -115,6 +115,21 @@ SYSCTL_ALLOW: dict[str, tuple[int, int]] = {
 #: with what needs it. The unit-file test asserts each parent is covered by a
 #: ReadWritePaths= entry in goblin-mode-pro-helper.service - see
 #: tests/test_helper_sandbox.py.
+#: Every Linux capability the helper needs, paired with what needs it. Being
+#: root is not sufficient on its own: the unit drops all capabilities except
+#: these, and a missing one fails at the syscall - as EACCES, which looks
+#: nothing like a sandbox error and is why this went unnoticed. The unit-file
+#: test asserts CapabilityBoundingSet= matches this table exactly - see
+#: tests/test_helper_sandbox.py.
+HELPER_CAPABILITIES: dict[str, str] = {
+    # setpriority() on a process owned by another user
+    "CAP_SYS_NICE": "Renice",
+    # /proc/sys/user/* writes are gated on CAP_SYS_RESOURCE in the owning user
+    # namespace (set_permissions() in kernel/ucount.c drops the write bit from
+    # the effective mode without it), so root alone gets EACCES.
+    "CAP_SYS_RESOURCE": "SetSysctl(user.max_user_namespaces)",
+}
+
 SYSFS_WRITE_ROOTS: tuple[str, ...] = (
     "/sys/devices/system/cpu",   # SetGovernor, SetEPP
     "/sys/class/powercap",       # SetPowerLimits, ResetPowerLimits

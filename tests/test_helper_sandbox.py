@@ -25,6 +25,19 @@ import goblin_helper as gh  # noqa: E402
 _UNIT = _REPO / "data" / "systemd" / "goblin-mode-pro-helper.service"
 
 
+def _unit_value(key: str) -> str | None:
+    """Last assignment of `key` in the unit (systemd semantics), unquoted."""
+    found = None
+    for raw in _UNIT.read_text().splitlines():
+        line = raw.strip()
+        if line.startswith("#") or "=" not in line:
+            continue
+        name, _, value = line.partition("=")
+        if name.strip() == key:
+            found = value.strip()
+    return found
+
+
 def _read_write_paths() -> list[str]:
     paths: list[str] = []
     for raw in _UNIT.read_text().splitlines():
@@ -76,6 +89,49 @@ class HelperSandboxCoverage(unittest.TestCase):
 
     def test_fan_pwm_base_is_writable(self):
         self.assertTrue(_covered(str(gh._HWMON_BASE), self.rw))
+
+
+class CapabilityCoverage(unittest.TestCase):
+    """Every capability the helper needs is in CapabilityBoundingSet=.
+
+    The sibling of the ReadWritePaths test above, and it exists for the same
+    reason - except this one cost a shipped feature. `user.max_user_namespaces`
+    is one of the pre-flight fixes, and writing it had never once worked on any
+    machine: the unit granted /proc/sys/user under ReadWritePaths=, but the
+    kernel gates /proc/sys/user/* writes on CAP_SYS_RESOURCE, which the
+    bounding set dropped. The failure is EACCES, which reads like a permission
+    bug rather than a sandbox one, and no test could see it because the
+    capability set only exists at runtime. Found by `selftest --apply`.
+    """
+
+    def test_bounding_set_matches_the_declared_requirements(self):
+        declared = _unit_value("CapabilityBoundingSet")
+        self.assertIsNotNone(declared, "the unit sets no CapabilityBoundingSet=")
+        self.assertEqual(
+            set(declared.split()), set(gh.HELPER_CAPABILITIES),
+            "CapabilityBoundingSet= in the unit and HELPER_CAPABILITIES in "
+            "goblin_helper.py have drifted apart - every capability the helper "
+            "needs must be in both, with a comment saying what needs it",
+        )
+
+    def test_every_capability_says_what_needs_it(self):
+        for cap, why in gh.HELPER_CAPABILITIES.items():
+            self.assertTrue(why.strip(), f"{cap} has no stated reason")
+            self.assertTrue(cap.startswith("CAP_"), f"{cap} is not a capability name")
+
+    def test_no_ambient_capabilities(self):
+        """Ambient caps would be inherited by anything the helper spawns."""
+        self.assertEqual((_unit_value("AmbientCapabilities") or "").strip(), "")
+
+    def test_sysctl_allow_paths_are_covered_by_a_capability_or_plain_root(self):
+        """Any /proc/sys/user key needs CAP_SYS_RESOURCE; flag a new one."""
+        userns_keys = [k for k in gh.SYSCTL_ALLOW if k.startswith("user.")]
+        if userns_keys:
+            self.assertIn(
+                "CAP_SYS_RESOURCE", gh.HELPER_CAPABILITIES,
+                f"{userns_keys} live under /proc/sys/user, whose writes the "
+                "kernel gates on CAP_SYS_RESOURCE",
+            )
 
 
 if __name__ == "__main__":

@@ -13,9 +13,19 @@ TimeoutStopSec=10
 
 # --- sandbox -------------------------------------------------------------
 # The only privileged thing it does is write a fixed set of kernel tunables
-# and call setpriority(); CAP_SYS_NICE is all it needs.
+# and call setpriority(). Two capabilities, and the reason for each - see
+# HELPER_CAPABILITIES in helper/goblin_helper.py, which tests/test_helper_
+# sandbox.py checks this line against:
+#   CAP_SYS_NICE     - setpriority() on another user's process (Renice)
+#   CAP_SYS_RESOURCE - writing /proc/sys/user/*. The kernel gates those on
+#                      CAP_SYS_RESOURCE in the owning userns (set_permissions()
+#                      in kernel/ucount.c masks the file mode to read-only
+#                      without it), so being root is not enough: the write
+#                      fails with EACCES, not EROFS, which is why the
+#                      ReadWritePaths= grant below did not cover it. Needed by
+#                      the user.max_user_namespaces pre-flight fix.
 User=root
-CapabilityBoundingSet=CAP_SYS_NICE
+CapabilityBoundingSet=CAP_SYS_NICE CAP_SYS_RESOURCE
 AmbientCapabilities=
 NoNewPrivileges=yes
 

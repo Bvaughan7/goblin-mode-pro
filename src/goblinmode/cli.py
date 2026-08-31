@@ -14,6 +14,7 @@ in a plain terminal or over SSH with no display.
     goblin-mode-pro-cli gamescope-session [--game NAME] [-- COMMAND...]
     goblin-mode-pro-cli compare GAME
     goblin-mode-pro-cli works-for-me GAME [--note TEXT]
+    goblin-mode-pro-cli selftest [--apply] [--json]
 """
 
 from __future__ import annotations
@@ -199,12 +200,34 @@ def cmd_works_for_me(b: BridgeClient, args) -> int:
     return 0
 
 
+def cmd_selftest(_b, args) -> int:
+    """Probe every privileged path on this machine and report what worked.
+
+    Needs no daemon - it talks to the helper directly, so it still works when
+    the daemon is the thing that's broken.
+    """
+    from goblinmode import selftest
+
+    results, code = selftest.run(apply=args.apply)
+    if args.json:
+        _p(json.dumps(selftest.to_json(results, args.apply), indent=2))
+    else:
+        _p(selftest.render(results, args.apply, color=sys.stdout.isatty()))
+    return code
+
+
+#: commands that talk to the helper or the local system directly and must work
+#: with no daemon running - `selftest` exists precisely for when things are
+#: broken, so requiring the daemon would defeat it.
+_NO_DAEMON = {"selftest"}
+
 _COMMANDS = {
     "status": cmd_status, "boost": cmd_boost, "unboost": cmd_unboost,
     "health": cmd_health, "sessions": cmd_sessions, "benchmark": cmd_benchmark,
     "preflight": cmd_preflight, "report": cmd_report, "games": cmd_games,
     "setup": cmd_setup, "gamescope-session": cmd_gamescope_session,
     "compare": cmd_compare, "works-for-me": cmd_works_for_me,
+    "selftest": cmd_selftest,
 }
 
 
@@ -234,8 +257,16 @@ def main(argv: list[str] | None = None) -> int:
         if name == "works-for-me":
             sp.add_argument("game", help="exe name, as shown by 'games'")
             sp.add_argument("--note", default="", help="a short note, e.g. what you changed")
+        if name == "selftest":
+            sp.add_argument("--apply", action="store_true",
+                             help="round-trip each capability (apply, read back, "
+                                  "revert) instead of only probing - the only "
+                                  "mode that proves a write path")
+            sp.add_argument("--json", action="store_true",
+                             help="machine-readable output, for pasting into an issue")
     args = ap.parse_args(argv)
-    return _COMMANDS[args.cmd](_connect(), args)
+    bridge = None if args.cmd in _NO_DAEMON else _connect()
+    return _COMMANDS[args.cmd](bridge, args)
 
 
 if __name__ == "__main__":
