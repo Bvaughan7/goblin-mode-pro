@@ -32,6 +32,23 @@ jobs:
           bash -n packaging/aur/PKGBUILD
           bash -n packaging/aur/goblin-mode-pro.install
 
+      - name: shellcheck
+        run: |
+          sudo apt-get install -y shellcheck
+          # install scripts: definite-bug level only (they're not verified
+          # against every shellcheck style rule yet)
+          shellcheck --severity=error install.sh
+          shellcheck --severity=error -s bash packaging/aur/goblin-mode-pro.install
+          # the generated wrapper runs in front of every game launch - lint it
+          # properly (warning level), it was never checked before
+          python3 -c "import sys; sys.path.insert(0,'src'); \
+            from goblinmode.runner import _WRAPPER_TEMPLATE; \
+            open('/tmp/goblin-run','w').write(_WRAPPER_TEMPLATE)"
+          shellcheck --severity=warning /tmp/goblin-run
+
+      - name: ruff (pyflakes)
+        run: pipx run ruff check src helper tests
+
       - name: Validate the community profile JSON
         run: |
           python3 - <<'PY'

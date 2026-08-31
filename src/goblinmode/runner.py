@@ -64,6 +64,7 @@ fi
 # gamescope wrapper (tokens come from a fixed allowlist, safe to word-split)
 gmp_gs="$(goblin-mode-pro-daemon --print-gamescope -- "$@" 2>/dev/null || true)"
 if [ -n "$gmp_gs" ] && command -v gamescope >/dev/null 2>&1; then
+    # shellcheck disable=SC2086  # $gmp_gs is a fixed-allowlist arg line, word-split on purpose
     set -- gamescope $gmp_gs -- "$@"
 fi
 

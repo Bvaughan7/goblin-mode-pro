@@ -184,7 +184,7 @@ def as_llm_prompt(rep: dict) -> str:
 def build_setup_report(settings) -> str:
     """A full, shareable snapshot of the machine + every profile - for "help me"
     threads or reproducing a setup elsewhere. No incident, no log."""
-    from goblinmode import capabilities, config as _config, proton
+    from goblinmode import capabilities, proton
 
     s = _system_info()
     s.update(_desktop())

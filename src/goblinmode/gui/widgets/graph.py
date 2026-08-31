@@ -58,11 +58,6 @@ class CorrelationGraph(Gtk.DrawingArea):
 
     # -- drawing --------------------------------------------------
     def _draw(self, _area, cr, width: int, height: int) -> None:
-        style = self.get_style_context()
-        ok, fg = style.lookup_color("theme_fg_color")
-        if not ok:
-            fg = None
-
         pad_l, pad_r, pad_t, pad_b = 38, 38, 12, 22
         plot_w = max(1, width - pad_l - pad_r)
         plot_h = max(1, height - pad_t - pad_b)
