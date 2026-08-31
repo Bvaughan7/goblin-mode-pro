@@ -35,6 +35,35 @@ _SIZE = 64
 _ICON_PNG = Path(__file__).with_name("assets") / "goblin-tray.png"
 
 
+def _patch_pystray_icon_extension() -> None:
+    """pystray's GtkIcon writes its tray pixmap to ``tempfile.mktemp()`` - a
+    path with **no file extension** - and hands that bare path to
+    libappindicator as the icon name. KDE Plasma's SNI host then loads it with
+    ``QIcon(path)``, which is suffix-sensitive, gets nothing, and draws a blank
+    square. Adding a ``.png`` suffix makes the path load as a plain image on
+    every SNI host. Patches the class once; a no-op if pystray isn't the SNI
+    backend or its internals have changed.
+    """
+    try:
+        import tempfile
+
+        from pystray._util.gtk import GtkIcon
+
+        if getattr(GtkIcon, "_gmp_png_suffix", False):
+            return
+
+        def _update_fs_icon(self) -> None:
+            self._icon_path = tempfile.mktemp(suffix=".png")
+            with open(self._icon_path, "wb") as fh:
+                self.icon.save(fh, "PNG")
+
+        GtkIcon._update_fs_icon = _update_fs_icon
+        GtkIcon._gmp_png_suffix = True
+        log.debug("patched pystray tray-icon temp path to carry a .png suffix")
+    except Exception as exc:  # noqa: BLE001 - best effort; falls back to stock pystray
+        log.debug("could not patch pystray icon extension: %s", exc)
+
+
 def _icon_image(boosting: bool) -> "Image.Image":
     """The tray icon: the bundled goblin-mark PNG (matches the app icon), with
     an ember ring + a warm tint while boosting. Falls back to the hand-drawn
@@ -129,6 +158,7 @@ class Tray:
         self._onboarded = True
         self._icon = None
         if _TRAY_AVAILABLE:
+            _patch_pystray_icon_extension()
             self._icon = pystray.Icon(
                 "goblin-mode-pro",
                 icon=_icon_image(False),
