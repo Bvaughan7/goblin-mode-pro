@@ -38,3 +38,25 @@ drop-in that gives the helper the access `ryzenadj` needs.
 ## Still stuck
 `goblin-mode-pro-cli setup` (or Diagnostics → Export my full setup) →
 [open an issue](https://github.com/Bvaughan7/goblin-mode-pro/issues/new/choose).
+
+## What would `--revert` actually undo?
+
+`goblin-mode-pro-daemon --revert` restores everything a previous run applied,
+reading `applied.json` for the unprivileged half (compositor, focus mode,
+priorities) and the helper's own root-owned snapshot for the privileged half.
+To see what it *would* do without doing it:
+
+```console
+$ goblin-mode-pro-daemon --revert --dry-run
+--revert would restore the following (from ~/.local/state/goblin-mode-pro/applied.json):
+  - active games: Wow.exe
+  - restore the CPU governor / EPP
+  - turn tearing back off
+  - leave focus mode (indexer, DND, screen blanking)
+  - always: helper RevertAll (governor/EPP/RAPL/TDP/fans from the helper's own
+    /run snapshot - idempotent)
+```
+
+It reads the state file and changes nothing, so it is safe to run at any time
+and is worth pasting into a bug report about tweaks that didn't get reverted.
+A file that is present but *clean* means the last daemon shut down properly.

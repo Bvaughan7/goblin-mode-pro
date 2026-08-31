@@ -10,6 +10,7 @@ focus / MangoHud side effects, then asserts the *refcounting* contract:
 
 from __future__ import annotations
 
+import json
 import logging
 import unittest
 from pathlib import Path
@@ -367,6 +368,61 @@ class PayloadRefcountTest(unittest.TestCase):
         with patch("goblinmode.capabilities.on_ac_power", return_value=False):
             self.pay.apply(a, pid=1)
             self.assertEqual(self.helper.pl_uw, (25_000_000, 30_000_000))
+
+
+class DescribeAppliedState(unittest.TestCase):
+    """`--revert --dry-run` must describe the state file without touching it.
+
+    The state-driven revert is the fix for the P0 where --revert was a no-op;
+    this is what makes it inspectable in a bug report, so it has to stay honest
+    about all three cases: no file, a clean file, and a dirty one.
+    """
+
+    def setUp(self):
+        self._tmp = TemporaryDirectory()
+        self.state = Path(self._tmp.name) / "applied.json"
+        self._orig = payload_mod.APPLIED_STATE_FILE
+        payload_mod.APPLIED_STATE_FILE = self.state
+
+    def tearDown(self):
+        payload_mod.APPLIED_STATE_FILE = self._orig
+        self._tmp.cleanup()
+
+    def _lines(self):
+        return payload_mod.describe_applied_state()
+
+    def test_no_state_file_says_so(self):
+        text = " ".join(self._lines())
+        self.assertIn("nothing recorded", text)
+
+    def test_a_clean_state_file_is_not_reported_as_work(self):
+        self.state.write_text(json.dumps({"active": [], "reniced": {}}))
+        self.assertFalse(payload_mod.applied_state_dirty())
+        self.assertIn("nothing to undo", " ".join(self._lines()))
+
+    def test_a_dirty_state_file_names_every_tweak(self):
+        self.state.write_text(json.dumps({
+            "active": ["Wow.exe"], "reniced": {"4242": -5},
+            "governor_applied": True, "power_applied": True,
+            "tearing_applied": True, "refresh_cap_applied": True,
+            "focus_mode": True, "power_backend": "rapl",
+            "compositor": {"tearing_active": True, "refresh_active": True},
+        }))
+        text = " ".join(self._lines())
+        for expected in ("Wow.exe", "4242", "governor", "power limits",
+                         "tearing", "refresh", "focus mode", "rapl"):
+            self.assertIn(expected, text)
+
+    def test_the_helper_revert_is_always_mentioned(self):
+        """It runs unconditionally, so a dry run that omitted it would lie."""
+        self.assertIn("RevertAll", " ".join(self._lines()))
+
+    def test_describing_never_writes(self):
+        self.state.write_text(json.dumps({"active": ["Wow.exe"]}))
+        before = self.state.read_text()
+        payload_mod.describe_applied_state()
+        self.assertTrue(self.state.exists(), "dry run deleted the state file")
+        self.assertEqual(self.state.read_text(), before)
 
 
 if __name__ == "__main__":

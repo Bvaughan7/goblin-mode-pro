@@ -501,6 +501,55 @@ def applied_state_dirty() -> bool:
     ))
 
 
+def describe_applied_state() -> list[str]:
+    """What ``--revert`` would undo, as plain lines. Reads nothing but the
+    state file, changes nothing - so it is safe to run at any time, and it is
+    what makes the state-driven revert inspectable in a bug report.
+
+    Deliberately describes ``applied.json`` only. The helper's own root-owned
+    snapshot in /run drives an unconditional, idempotent RevertAll that this
+    process cannot read, so it is reported as the fixed step it is rather than
+    guessed at.
+    """
+    lines: list[str] = []
+    data = _read_applied_state()
+    if data is None:
+        lines.append(f"no applied state at {APPLIED_STATE_FILE} - nothing recorded")
+    elif not applied_state_dirty():
+        lines.append(f"{APPLIED_STATE_FILE} is present but clean "
+                     "(the last daemon shut down properly) - nothing to undo")
+    else:
+        if data.get("active"):
+            lines.append(f"active games: {', '.join(data['active'])}")
+        if data.get("reniced"):
+            lines.append("restore priority for pid(s): "
+                         + ", ".join(str(k) for k in data["reniced"]))
+        for key, text in (
+            ("governor_applied", "restore the CPU governor / EPP"),
+            ("power_applied", "reset the CPU power limits"),
+            ("tearing_applied", "turn tearing back off"),
+            ("adaptive_sync_applied", "restore adaptive sync / VRR"),
+            ("refresh_cap_applied", "restore the panel refresh rate"),
+            ("focus_mode", "leave focus mode (indexer, DND, screen blanking)"),
+        ):
+            if data.get(key):
+                lines.append(text)
+        comp = data.get("compositor") or {}
+        for key, text in (
+            ("tearing_active", "compositor: tearing"),
+            ("vrr_active", "compositor: VRR"),
+            ("refresh_active", "compositor: refresh cap"),
+            ("x11_suspended", "compositor: X11 compositing suspended"),
+        ):
+            if comp.get(key):
+                lines.append(f"{text} -> restore recorded value")
+        if data.get("power_backend"):
+            lines.append(f"power backend in use: {data['power_backend']}")
+    lines.append("always: helper RevertAll (governor/EPP/RAPL/TDP/fans from "
+                 "the helper's own /run snapshot - idempotent)")
+    return lines
+
+
 def revert_from_state(helper: HelperClient | None = None) -> bool:
     """Undo every tweak recorded in ``applied.json`` (compositor, focus mode)
     plus, unconditionally, whatever the helper's own snapshot records

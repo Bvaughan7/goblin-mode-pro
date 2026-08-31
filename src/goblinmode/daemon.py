@@ -36,9 +36,10 @@ from goblinmode.observer import GameEvent, Observer
 from goblinmode.payload import (
     PerformancePayload,
     applied_state_dirty,
+    describe_applied_state,
     revert_from_state,
 )
-from goblinmode.paths import ONBOARDED_MARKER, ensure_user_dirs
+from goblinmode.paths import APPLIED_STATE_FILE, ONBOARDED_MARKER, ensure_user_dirs
 
 log = logging.getLogger("goblinmode.daemon")
 
@@ -815,6 +816,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--revert", action="store_true", help="revert any applied tweaks and exit"
     )
+    parser.add_argument(
+        "--dry-run", action="store_true",
+        help="with --revert: print what would be restored from applied.json "
+             "and exit without touching anything",
+    )
     parser.add_argument("-v", "--verbose", action="store_true")
     args = parser.parse_args(raw)
 
@@ -831,8 +837,15 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.revert:
+        if args.dry_run:
+            print(f"--revert would restore the following (from {APPLIED_STATE_FILE}):")
+            for line in describe_applied_state():
+                print(f"  - {line}")
+            return 0
         revert_from_state(HelperClient())
         return 0
+    if args.dry_run:
+        parser.error("--dry-run only means something with --revert")
 
     daemon = Daemon()
     try:
