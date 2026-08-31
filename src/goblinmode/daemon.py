@@ -497,12 +497,18 @@ class Daemon:
         if kind in ("gpu_fault", "fps_dip", "thermal_throttle") and self.clip.running():
             threading.Thread(target=self._save_clip, args=(kind,),
                              name="gmp-clip-save", daemon=True).start()
-        # a driver fault or a hard throttle is worth a desktop notification
+        # a driver fault or a hard throttle is worth a desktop notification.
+        # Only an actual driver fault gets "critical" urgency: KDE renders those
+        # as resident popups that ignore the expire timeout and bypass the
+        # user's per-app notification mute. Routine thermal throttling on a
+        # gaming laptop does not warrant that (it also made a stuck popup
+        # impossible to dismiss short of restarting plasmashell).
         if kind in ("gpu_fault", "thermal_throttle", "vram_not_freed"):
             nice = {"gpu_fault": "GPU / driver fault",
                     "thermal_throttle": "Thermal throttling",
                     "vram_not_freed": "VRAM not released after exit"}[kind]
-            self._notify(nice, detail[:160], urgency=2, tag="incident")
+            self._notify(nice, detail[:160],
+                         urgency=2 if kind == "gpu_fault" else 1, tag="incident")
 
     def _save_clip(self, kind: str) -> None:
         path = self.clip.save()

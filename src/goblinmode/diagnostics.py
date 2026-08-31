@@ -180,6 +180,8 @@ class DiagnosticEngine:
         self._last_energy: tuple[float, int] | None = None  # (t, energy_uj)
         self._last_throttle = _throttle_count()
         self._incident_seen: dict[str, float] = {}  # kind -> last emitted (monotonic)
+        self._issue_last_seen: dict[str, float] = {}  # kind -> last observed (monotonic)
+        self._throttle_hits: deque[tuple[float, bool]] = deque(maxlen=128)
         self._last_disk: tuple[float, int] | None = None  # (t, read_bytes)
         psutil.cpu_percent(percpu=True)  # prime the counter
 
@@ -265,6 +267,20 @@ class DiagnosticEngine:
     }
     # Don't re-raise the same kind of incident more than once per this window.
     REMIND_SECONDS = 180
+    #: Some conditions are chronic on a thermally-marginal laptop. Remind far
+    #: less often for those so a warm three-hour raid isn't a stream of popups.
+    _REMIND_BY_KIND = {"thermal_throttle": 900}
+    #: An episode is only "over" after this long with no recurrence. Without the
+    #: grace window a single throttle-free sample resets the episode and the very
+    #: next counter tick reads as a brand-new onset -> notification spam.
+    EPISODE_GRACE_SECONDS = 90
+    #: CPU package thermal throttling only counts as an issue once the throttle
+    #: counter has ticked in at least this many samples across the trailing
+    #: window. Comet Lake / Tiger Lake laptops nick the counter under any turbo
+    #: load; an isolated tick costs no measurable frame rate and isn't worth a
+    #: popup (this is exactly the "throttling but performance was fine" case).
+    _THROTTLE_WINDOW_SECONDS = 20.0
+    _THROTTLE_MIN_HITS = 5
 
     def _parse_gpu_reasons(self, raw: str) -> int:
         raw = (raw or "").strip()
@@ -275,9 +291,18 @@ class DiagnosticEngine:
 
     def _current_issues(self, s: Sample) -> dict[str, str]:
         issues: dict[str, str] = {}
-        if s.cpu_throttled:
+
+        self._throttle_hits.append((s.t, s.cpu_throttled))
+        cutoff = s.t - self._THROTTLE_WINDOW_SECONDS
+        while self._throttle_hits and self._throttle_hits[0][0] < cutoff:
+            self._throttle_hits.popleft()
+        hits = sum(1 for _, hit in self._throttle_hits if hit)
+        if hits >= self._THROTTLE_MIN_HITS:
             hot = f" ({s.cpu_temp:.0f}°C)" if s.cpu_temp else ""
-            issues["thermal_throttle"] = f"CPU package thermal throttling{hot}"
+            issues["thermal_throttle"] = (
+                f"CPU package thermal throttling{hot} — {hits} throttle events "
+                f"in the last {int(self._THROTTLE_WINDOW_SECONDS)}s"
+            )
         if (
             s.pkg_power_w is not None
             and s.pl1_w is not None
@@ -297,19 +322,26 @@ class DiagnosticEngine:
     def assess(self, s: Sample) -> tuple[str, str] | None:
         """Return (kind, detail) once per *episode* of a throttle condition.
 
-        Fires on onset, then at most every ``REMIND_SECONDS`` while it persists;
-        a kind that clears is forgotten so its next occurrence is a fresh onset.
+        Fires on onset, then at most every ``REMIND_SECONDS`` (per-kind, see
+        ``_REMIND_BY_KIND``) while it persists. An episode ends only after
+        ``EPISODE_GRACE_SECONDS`` with no recurrence, so a momentary gap in a
+        chronic condition doesn't read as a fresh onset and re-notify.
         """
         issues = self._current_issues(s)
-        now = time.monotonic()
+        now = s.t
+
+        for kind in issues:
+            self._issue_last_seen[kind] = now
 
         for kind in list(self._incident_seen):
-            if kind not in issues:
+            if now - self._issue_last_seen.get(kind, 0.0) >= self.EPISODE_GRACE_SECONDS:
                 del self._incident_seen[kind]
+                self._issue_last_seen.pop(kind, None)
 
         for kind, detail in issues.items():
             last = self._incident_seen.get(kind)
-            if last is None or (now - last) >= self.REMIND_SECONDS:
+            remind = self._REMIND_BY_KIND.get(kind, self.REMIND_SECONDS)
+            if last is None or (now - last) >= remind:
                 self._incident_seen[kind] = now
                 return (kind, detail)
         return None

@@ -43,6 +43,18 @@ Hardening and correctness pass over the 1.2.0 surface. No new features.
   just the first character.
 
 ### Fixed — operational
+- **Thermal-throttle notification spam.** On a thermally-marginal laptop
+  the CPU package throttle counter ticks under any turbo load, and the
+  "one incident per episode" guard was reset by a single throttle-free
+  sample — so the next tick read as a fresh onset and popped a new
+  notification every few seconds. Throttling now has to recur across the
+  trailing 20 s window before it's an incident at all, an episode only
+  ends after 90 s clear, and the reminder cadence for a persisting
+  throttle is 15 min (was 3 min). The popup is also normal urgency now,
+  not critical — critical notifications on KDE are resident (ignore the
+  expire timeout, bypass the per-app mute), which is how one got stuck
+  on screen and forced a `plasmashell` restart. Only an actual GPU /
+  driver fault stays critical.
 - Log directories (`logs/`, `mangohud/`) are now pruned (40 files / 500 MB
   each, oldest first) on daemon start and after every session — they grew
   without limit before.
