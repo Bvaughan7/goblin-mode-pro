@@ -202,6 +202,8 @@ def as_markdown(rep: dict) -> str:
     if tw:
         on = [k for k in ("governor", "epp_boosted", "tearing", "adaptive_sync",
                           "power_limited", "focus_mode") if tw.get(k)]
+        if tw.get("scx_scheduler"):
+            on.append(f"scx_{tw['scx_scheduler']}")
         reniced = ", ".join((tw.get("reniced") or {}).keys()) or "none"
         L.append(f"\n### Active tweaks\n- {', '.join(on) or 'none'}  ·  reniced: {reniced}")
     return "\n".join(L) + "\n"

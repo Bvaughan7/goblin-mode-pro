@@ -61,6 +61,7 @@ while a game is running and reverts them afterwards. In plain terms:
 | **Screen tearing** | Adds a small delay so the picture is always "clean" | Allows tearing while you game | Lower input lag — your mouse feels more connected |
 | **Adaptive sync / VRR** | Often left off | Turns it on for monitors that support it | The monitor matches the game's frame rate, killing a whole class of stutter |
 | **CPU power limit / TDP** | Caps the watts the CPU may draw | Optionally raises the cap — a slider with 15/25/35/45 W presets. Intel via RAPL; AMD laptops via `ryzenadj` (experimental) | If your cooling can keep up, the CPU holds its top speed for longer |
+| **CPU scheduler** *(`sched_ext`, opt-in)* | The kernel's default scheduler, tuned for everything at once | Optionally swaps in a `sched_ext` scheduler built for games (`scx_lavd`, `scx_bpfland`, …) for the duration of a game, and puts back exactly what you had | The scheduler stops treating your game like a background batch job |
 | **Core pinning** *(hybrid / chiplet CPUs)* | Threads run on any core | Optionally pins the game to the fast cores (Intel P-cores) or one CCD (Ryzen) | Keeps the game off the slow cores and the cross-CCD latency hop |
 | **Focus mode** | Indexer, notifications and screen-blanking all keep running | Pauses the file indexer, turns on Do Not Disturb, stops the screen sleeping | Removes the background hitches and the "screen dimmed mid-cutscene" problem |
 | **Proton/Wine switches** | Off unless you set them by hand | Flips the common ones (NVAPI, Fsync, async shaders) per game | The settings most Windows games need on Proton, without editing launch options |
@@ -84,8 +85,9 @@ replace it — and the half it doesn't overlap with is the point.
 | You already have | It covers | Goblin adds |
 |---|---|---|
 | **Feral GameMode** | governor + GPU perf level + `ioprio`/`nice` for the duration of a game | per-game (not global) profiles, compositor tearing/VRR, TDP, core-pinning, undervolt re-apply, focus mode — and it wraps `gamemoderun` itself unless you turn that off |
+| **CachyOS `scx_loader` / `scxctl`** | loads a `sched_ext` scheduler system-wide, until you change it | the same schedulers, but *per game* and reverted on exit — it records what you had running and puts that back, so your own choice survives |
 | **`ananicy-cpp`** (CachyOS default) | niceness / ionice / sched policy by rules | the System Check warns when it and GameMode and Goblin's `renice` would stack; new profiles start with `renice` off while it's running |
-| **CachyOS `game-performance`** | governor + the distro's `scx` gaming scheduler on launch | everything in the table above; Goblin does **not** switch schedulers |
+| **CachyOS `game-performance`** | governor + the distro's `scx` gaming scheduler on launch | everything in the table above, and it now switches schedulers too — per game rather than per session, and it restores whatever was running before |
 | **MangoHud** | shows FPS / frametime / temps | the frame-rate watchdog that snapshots GPU state on a dip and names the cause, benchmark regression tracking across sessions, the Proton log analyzer, the System Check |
 
 ### And while you play, it watches for problems

@@ -63,6 +63,8 @@ _EVERYTHING_CAPS = {
     "undervolt": "intel-undervolt",
     "amd_undervolt": "ryzenadj",
     "fan_control": True,
+    "sched_ext": {"kernel": True, "loader": True, "available": True,
+                  "schedulers": ["bpfland", "flash", "lavd", "rusty"]},
     "session_recorder": "gpu-screen-recorder",
     "vkbasalt": True,
 }
@@ -90,6 +92,7 @@ def _profile(exe: str, name: str, **over) -> dict:
         "gamescope": {"width": 2560, "height": 1440, "refresh": 144,
                       "fullscreen": True, "hdr": False, "upscaler": "fsr"},
         "gpu_tuning": {"threaded_optimizations": True, "shader_cache": True},
+        "scx_scheduler": "lavd", "scx_mode": "gaming",
         "steam_app_id": "12345", "notes": "smoke test profile",
     }
     p.update(over)

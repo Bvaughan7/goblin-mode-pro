@@ -305,6 +305,20 @@ def _has_writable_pwm(base: Path = Path("/sys/class/hwmon")) -> bool:
     return False
 
 
+def _sched_ext() -> dict:
+    """What sched_ext support this machine has, without touching D-Bus."""
+    from goblinmode import scx
+
+    kernel = scx.kernel_supports_sched_ext()
+    loader = scx.loader_installed()
+    return {
+        "kernel": kernel,
+        "loader": loader,
+        "available": kernel and loader,
+        "schedulers": scx.scheduler_binaries() if kernel and loader else [],
+    }
+
+
 def _session_recorder() -> str | None:
     for tool in ("gpu-screen-recorder", "wf-recorder", "obs", "spectacle"):
         if shutil.which(tool):
@@ -347,6 +361,11 @@ def detect() -> dict:
         "amd_undervolt": "ryzenadj" if (
             _cpu_vendor() == "amd" and shutil.which("ryzenadj")) else None,
         "fan_control": _has_writable_pwm(),
+        # sched_ext: kernel support + scx_loader installed. Deliberately does
+        # not ask the loader anything - that would D-Bus-activate a root
+        # service from a capability probe. goblinmode.scx.state() does the
+        # live query when something actually needs it.
+        "sched_ext": _sched_ext(),
         "session_recorder": _session_recorder(),
         "vkbasalt": shutil.which("vkBasalt") is not None or Path(
             "/usr/share/vulkan/implicit_layer.d/vkBasalt.json").exists(),

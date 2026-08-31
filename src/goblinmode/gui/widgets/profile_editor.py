@@ -155,6 +155,46 @@ class ProfileEditor:
                         lambda r, _p: self._patch(exe, core_pin=keys[r.get_selected()]))
             exp.add_row(pin)
 
+        scx_caps = self._caps.get("sched_ext") or {}
+        if scx_caps.get("available") and scx_caps.get("schedulers"):
+            # Short name -> label. The one-liners matter: "scx_lavd" tells a
+            # player nothing, and picking a kernel scheduler off a bare list is
+            # exactly the kind of choice this app exists to make legible.
+            blurbs = {
+                "lavd": _("latency-first, built for games"),
+                "bpfland": _("prioritises interactive tasks"),
+                "flash": _("low-latency, deadline based"),
+                "rusty": _("general purpose, multi-domain"),
+                "rustland": _("general purpose, userspace"),
+                "cosmos": _("hybrid, tuned for mixed loads"),
+                "p2dq": _("balanced throughput and latency"),
+                "tickless": _("fewer timer interrupts"),
+                "flow": _("throughput oriented"),
+                "cake": _("desktop responsiveness"),
+                "beerland": _("simple round-robin"),
+                "forge": _("experimental"),
+                "pandemonium": _("experimental"),
+                "chaos": _("stress-testing, not for daily use"),
+                "layered": _("configurable layers, needs setup"),
+            }
+            scx_opts = [("", _("Off — leave the kernel scheduler alone"))]
+            scx_opts += [(n, f"scx_{n} — {blurbs[n]}" if n in blurbs else f"scx_{n}")
+                         for n in scx_caps["schedulers"]]
+            scx = Adw.ComboRow(title=_("CPU scheduler (sched_ext)"))
+            scx.set_subtitle(_("Swaps the kernel's whole CPU scheduler while this "
+                               "game runs and puts it back on exit. System-wide "
+                               "while it's active, and the first switch each "
+                               "session asks for your password"))
+            scx.set_model(Gtk.StringList.new([label for _k, label in scx_opts]))
+            scx_keys = [k for k, _l in scx_opts]
+            cur_scx = p.get("scx_scheduler", "")
+            scx.set_selected(scx_keys.index(cur_scx) if cur_scx in scx_keys else 0)
+            scx.connect("notify::selected",
+                        lambda r, _p: self._patch(
+                            exe, scx_scheduler=scx_keys[r.get_selected()]))
+            scx.set_title_lines(0)
+            exp.add_row(scx)
+
         exp.add_row(self._switch_row(
             _("CPU governor boost"), p.get("governor_boost", True),
             lambda v: self._patch(exe, governor_boost=v), help="governor",

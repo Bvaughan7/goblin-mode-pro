@@ -22,6 +22,7 @@ from goblinmode.config import GameProfile
 from goblinmode.focus import FocusMode
 from goblinmode.ipc.helper_client import HelperClient, HelperUnavailable
 from goblinmode.paths import APPLIED_STATE_FILE, ensure_user_dirs
+from goblinmode.scx import ScxManager
 
 log = logging.getLogger(__name__)
 
@@ -46,6 +47,8 @@ class TweakStatus:
     reniced: dict[str, int] | None = None
     pinned: dict[str, str] | None = None      # exe -> mode
     mangohud_files: list[str] | None = None
+    #: sched_ext scheduler we switched to for a game, short name, or None
+    scx_scheduler: str | None = None
     helper_available: bool = True
     limited_mode: bool = False
 
@@ -88,6 +91,9 @@ class PerformancePayload:
         self._vrr_applied = False
         self._refresh_cap_applied = False
         self._focus_applied = False
+        self.scx = ScxManager()
+        self._scx_applied: str | None = None       # scheduler we switched to
+        self._scx_previous: str | None = None      # what was running before us
 
     # -- public API -------------------------------------------------------
     def apply(self, profile: GameProfile, pid: int | None) -> None:
@@ -257,6 +263,8 @@ class PerformancePayload:
             self.compositor.restore_refresh_cap()
             self._refresh_cap_applied = False
 
+        self._recompute_scx()
+
         want_focus = any(p.focus_mode for p in self._active.values())
         if want_focus and not self._focus_applied:
             self.focus.enter()
@@ -265,7 +273,46 @@ class PerformancePayload:
             self.focus.exit()
             self._focus_applied = False
 
+    def _restore_scx(self) -> None:
+        if self._scx_applied is None:
+            return
+        self.scx.restore(self._scx_previous)
+        self._scx_applied = None
+        self._scx_previous = None
+
+    def _recompute_scx(self) -> None:
+        """Switch the kernel scheduler for games that ask for one.
+
+        Refcounted like tearing or the governor: the first active profile that
+        names a scheduler wins, and the scheduler is put back only when no
+        active profile wants one. If two games disagree the first one sorted
+        wins deterministically rather than the pair flapping.
+        """
+        wanted = sorted(
+            (p.scx_scheduler, getattr(p, "scx_mode", "gaming"))
+            for p in self._active.values() if p.scx_scheduler
+        )
+        if not wanted:
+            self._restore_scx()
+            return
+        scheduler, mode = wanted[0]
+        if self._scx_applied == scheduler:
+            return
+        if self._scx_applied is None:
+            # Remember what was running before we touched anything, so the
+            # revert restores the machine's state rather than a guess.
+            self._scx_previous = self.scx.current()
+        if self.scx.switch(scheduler, mode):
+            self._scx_applied = scheduler
+        else:
+            self._incident(
+                "scx_switch_failed",
+                f"could not switch the CPU scheduler to scx_{scheduler} - "
+                "the game is running on the kernel's own scheduler",
+            )
+
     def _restore_global(self) -> None:
+        self._restore_scx()
         if self._helper_tweaks_applied:
             self._restore_helper_tweaks()
         if self._tearing_applied:
@@ -412,6 +459,7 @@ class PerformancePayload:
             reniced=dict(self._reniced),
             pinned={exe: mode for exe, (_p, mode, _o) in self._pinned.items()},
             mangohud_files=sorted(self._mangohud_files),
+            scx_scheduler=self._scx_applied,
             helper_available=helper_ok,
             limited_mode=not helper_ok,
         )
@@ -434,6 +482,8 @@ class PerformancePayload:
                         "adaptive_sync_applied": self._vrr_applied,
                         "refresh_cap_applied": self._refresh_cap_applied,
                         "focus_mode": self._focus_applied,
+                        "scx_applied": self._scx_applied,
+                        "scx_previous": self._scx_previous,
                         "reniced": self._reniced,
                         # everything the cold --revert path needs to undo the
                         # compositor without the daemon's in-memory state
@@ -493,6 +543,7 @@ def applied_state_dirty() -> bool:
     if any(data.get(k) for k in (
         "governor_applied", "power_applied", "tearing_applied",
         "adaptive_sync_applied", "refresh_cap_applied", "focus_mode",
+        "scx_applied",
     )):
         return True
     comp = data.get("compositor") or {}
@@ -534,6 +585,12 @@ def describe_applied_state() -> list[str]:
         ):
             if data.get(key):
                 lines.append(text)
+        if data.get("scx_applied"):
+            prev = data.get("scx_previous")
+            lines.append(
+                f"CPU scheduler: stop scx_{data['scx_applied']} and "
+                + (f"switch back to scx_{prev}" if prev
+                   else "return to the kernel's own scheduler"))
         comp = data.get("compositor") or {}
         for key, text in (
             ("tearing_active", "compositor: tearing"),
@@ -583,6 +640,17 @@ def revert_from_state(helper: HelperClient | None = None) -> bool:
             FocusMode().force_restore()
         except Exception as exc:  # noqa: BLE001
             log.warning("focus-mode cold-restore failed: %s", exc)
+            ok = False
+
+    if data.get("scx_applied"):
+        # A game that died with a sched_ext scheduler loaded leaves the whole
+        # machine on it, so this matters more than the rest of the cold
+        # restore: it is system-wide and survives the daemon.
+        try:
+            if not ScxManager().restore(data.get("scx_previous")):
+                ok = False
+        except Exception as exc:  # noqa: BLE001
+            log.warning("sched_ext cold-restore failed: %s", exc)
             ok = False
 
     _clear_applied_state()

@@ -651,6 +651,48 @@ class SelfTest:
                 revert_fn=lambda k=key: h.revert_sysctl(k),
                 expected=value)
 
+    def probe_sched_ext(self) -> None:
+        """sched_ext support, and whether scx_loader will take our calls.
+
+        Not routed through the helper: scx_loader's bus policy lets any user
+        call it and delegates to polkit, so this is the one privileged-ish
+        capability Goblin drives directly. Read-only here - `--apply` does not
+        switch the system scheduler, because doing that behind someone's back
+        to prove a point is not a reasonable thing for a test to do.
+        """
+        sec = "CPU scheduler"
+        from goblinmode import scx
+
+        st = scx.ScxManager().state()
+        if not st["kernel"]:
+            self._add("sched_ext", "sched_ext support", SKIP,
+                      "this kernel has no /sys/kernel/sched_ext - it was built "
+                      "without CONFIG_SCHED_CLASS_EXT, so no sched_ext "
+                      "scheduler can run here", sec)
+            return
+        if not st["loader"]:
+            self._add("sched_ext", "sched_ext support", SKIP,
+                      "the kernel supports sched_ext but scx_loader is not "
+                      "installed (Arch/CachyOS: scx-scheds) - install it to "
+                      "use per-game schedulers", sec, kernel_state=st.get("kernel_state"))
+            return
+        self._add("sched_ext", "sched_ext support", PASS,
+                  f"kernel state {st.get('kernel_state')}, "
+                  f"{len(st['supported'])} scheduler(s) available: "
+                  f"{', '.join(st['supported'])}", sec,
+                  schedulers=st["supported"], kernel_state=st.get("kernel_state"))
+        self._add("scx_running", "Running scheduler", INFO,
+                  f"scx_{st['running']} (mode {st['mode']})" if st["running"]
+                  else "none - the kernel's own scheduler is in charge", sec,
+                  running=st["running"], mode=st["mode"])
+        verdict, why = _pkcheck("org.scx.loader.manage-schedulers")
+        self._add("scx_polkit", "scx_loader authorization",
+                  {"yes": PASS, "prompt": INFO, "missing": FAIL,
+                   "unknown": SKIP}.get(verdict, FAIL),
+                  why + (" - switching a scheduler is system-wide, so this "
+                         "prompting is correct" if verdict == "prompt" else ""),
+                  sec, verdict=verdict)
+
     def probe_modprobe_d(self) -> None:
         sec = "Kernel tunables"
         d = Path("/etc/modprobe.d")
@@ -676,6 +718,7 @@ class SelfTest:
         ("probe_ryzenadj", "AMD TDP"),
         ("probe_fans", "Fan control"),
         ("probe_sysctls", "Kernel tunables"),
+        ("probe_sched_ext", "sched_ext"),
         ("probe_modprobe_d", "/etc/modprobe.d"),
     )
 

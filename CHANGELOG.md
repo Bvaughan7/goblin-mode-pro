@@ -7,6 +7,21 @@ All notable changes to Goblin Mode Pro. Format loosely follows
 ## [Unreleased]
 
 ### Added
+- **Per-game `sched_ext` CPU scheduler.** A profile can now name a
+  `sched_ext` scheduler (`scx_lavd`, `scx_bpfland`, …) to run while that
+  game is up. Goblin records whatever scheduler was already running,
+  switches for the duration, and puts **your** one back on exit — so it
+  composes with an existing `scx_loader` setup instead of overriding it.
+  Refcounted like the other global tweaks, and recorded in `applied.json`
+  so a crashed session is undone by `--revert` rather than leaving the
+  whole machine on a scheduler you didn't pick.
+
+  It adds **no privileged code**: `scx_loader` is a root D-Bus service
+  whose bus policy already allows any user to call it, delegating
+  authorization to polkit, so the unprivileged daemon talks to it
+  directly and Goblin's own helper does not grow a single method. The
+  first switch of a session asks for a password (`auth_admin_keep`);
+  later ones don't.
 - **`goblin-mode-pro-cli selftest`** — proves the privileged paths on
   *your* machine instead of assuming them. It probes the helper, the
   polkit actions and agent, the helper's Linux capabilities, the CPU

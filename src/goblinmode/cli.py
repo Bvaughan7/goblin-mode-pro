@@ -54,6 +54,8 @@ def cmd_status(b: BridgeClient, args) -> int:
     t = s.get("tweaks") or {}
     on = [k for k in ("governor", "epp_boosted", "tearing", "adaptive_sync",
                       "power_limited", "focus_mode") if t.get(k)]
+    if t.get("scx_scheduler"):
+        on.append(f"scx_{t['scx_scheduler']}")
     _p(f"active tweaks : {', '.join(on) or 'none'}")
     _p(f"helper       : {'connected' if s.get('helper_available') else 'limited mode'}")
     caps = s.get("capabilities") or {}

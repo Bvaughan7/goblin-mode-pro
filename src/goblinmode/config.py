@@ -123,6 +123,18 @@ GAMESCOPE_UPSCALERS = ("off", "fsr", "nis", "integer")
 #: on a hybrid CPU; "cache0" = the first L3 domain (one CCD on Ryzen).
 CORE_PIN_MODES = ("off", "performance", "cache0")
 
+#: A sched_ext scheduler's short name must look like one. The value ends up in
+#: a D-Bus call to a *root* service and a profile can arrive from an imported
+#: file or a community fetch, so it is validated at this boundary rather than
+#: trusted - but by *shape*, not against a fixed list: new scx schedulers ship
+#: regularly and an allowlist here would silently reject them the day they
+#: appear. Whether the name is a scheduler this machine actually has is
+#: settled at switch time, against scx_loader's own SupportedSchedulers, and a
+#: name that isn't raises a visible incident instead of failing quietly.
+SCX_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9_]{0,31}$")
+#: scx_loader's tuning modes - see goblinmode.scx.SCHED_MODES
+SCX_MODES = ("auto", "gaming", "lowlatency", "powersave", "server")
+
 
 def _default_gamescope() -> dict:
     return {"w": 0, "h": 0, "refresh": 0, "upscale": "off", "hdr": False,
@@ -144,7 +156,14 @@ class GameProfile:
     # installed). Default on. Turn off to resolve the GameMode <-> ananicy-cpp
     # niceness conflict without uninstalling gamemode.
     use_gamemode: bool = True
-    core_pin: str = "off"        # off | performance | cache0  (see CORE_PIN_MODES)
+    core_pin: str = "off"
+    #: sched_ext scheduler to run while this game is up, short name
+    #: ("lavd", "bpfland", ...). Empty = leave the kernel's scheduler alone,
+    #: which is the default: swapping the system scheduler is a bigger lever
+    #: than anything else here and should be opted into per game.
+    scx_scheduler: str = ""
+    #: which of scx_loader's tuning modes to ask for (see scx.SCHED_MODES)
+    scx_mode: str = "gaming"        # off | performance | cache0  (see CORE_PIN_MODES)
     tearing_enabled: bool = True
     # Cap the internal panel's refresh rate for this game (Hz); 0 = leave it
     # alone. Mainly for handhelds (Deck 40/50/60, Ally up to 120...) where a
@@ -217,6 +236,18 @@ class GameProfile:
             self.match_mode = "exact"
         if self.core_pin not in CORE_PIN_MODES:
             self.core_pin = "off"
+        if self.scx_scheduler:
+            # accept either "lavd" or "scx_lavd"; store the short form
+            name = self.scx_scheduler.strip().removeprefix("scx_")
+            if SCX_NAME_RE.match(name):
+                self.scx_scheduler = name
+            else:
+                logging.getLogger(__name__).warning(
+                    "invalid sched_ext scheduler name %r - ignoring it",
+                    self.scx_scheduler)
+                self.scx_scheduler = ""
+        if self.scx_mode not in SCX_MODES:
+            self.scx_mode = "gaming"
         self.nice_value = max(-10, min(19, int(self.nice_value)))
         self.pl1_w = max(0, min(500, int(self.pl1_w)))
         self.pl2_w = max(0, min(500, int(self.pl2_w)))
