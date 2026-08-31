@@ -44,7 +44,6 @@ def _call(method_name: str, args: tuple = (), authorized: bool = True):
     """Drive _handle_call the way the D-Bus layer would, with polkit and the
     underlying mutating function both stubbed so this only tests dispatch."""
     invocation = FakeInvocation()
-    fmt = gh.INTROSPECTION_XML  # not parsed here; args are passed pre-built
     params = _FakeParams(args)
     with patch.object(gh, "_check_authorized", return_value=authorized):
         gh._handle_call(None, "fake-sender", gh.OBJECT_PATH, gh.IFACE,

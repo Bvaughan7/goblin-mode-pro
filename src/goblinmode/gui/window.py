@@ -11,7 +11,7 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, GLib, Gtk  # noqa: E402
+from gi.repository import Adw, GLib  # noqa: E402
 
 from goblinmode.gui.page_dashboard import DashboardPage
 from goblinmode.gui.page_diagnostics import DiagnosticsPage
