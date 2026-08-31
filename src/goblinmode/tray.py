@@ -155,8 +155,8 @@ class Tray:
             return
         try:
             self._icon.stop()
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception as exc:  # noqa: BLE001
+            log.debug("tray icon stop failed: %s", exc)
 
     def notify(self, title: str, message: str = "") -> None:
         if self._icon is None:

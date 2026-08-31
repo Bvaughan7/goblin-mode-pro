@@ -14,6 +14,7 @@ GUI with a Fix button automatically.
 
 from __future__ import annotations
 
+import logging
 import os
 import platform
 import re
@@ -21,6 +22,8 @@ import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
+
+log = logging.getLogger(__name__)
 
 OK, WARN, FAIL, INFO, UNKNOWN = "ok", "warn", "fail", "info", "unknown"
 
@@ -320,8 +323,8 @@ def _c_swap() -> CheckResult:
         sm = psutil.swap_memory()
         if sm.total > 0:
             return CheckResult(OK, f"{sm.total // (1024**3)} GB")
-    except Exception:  # noqa: BLE001
-        pass
+    except Exception as exc:  # noqa: BLE001 - psutil optional / import error
+        log.debug("swap check: %s", exc)
     return CheckResult(
         INFO, "none",
         "No swap or zram - a memory-hungry game that spikes can be OOM-killed.",

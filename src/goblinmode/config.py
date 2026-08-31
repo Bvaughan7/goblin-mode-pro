@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import logging
 import os
 import re
 import tempfile
@@ -318,8 +319,8 @@ def new_profile(exe: str, display_name: str = "", *, auto_created: bool = False,
 
         if ananicy_active():
             p.renice_enabled = False
-    except Exception:  # noqa: BLE001 - never let a probe block profile creation
-        pass
+    except Exception as exc:  # noqa: BLE001 - never let a probe block profile creation
+        logging.getLogger(__name__).debug("ananicy probe failed: %s", exc)
 
     if handheld:
         from goblinmode.capabilities import HANDHELD_TDP_PRESETS, HANDHELD_TDP_PRESETS_BATTERY

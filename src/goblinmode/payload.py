@@ -181,8 +181,8 @@ class PerformancePayload:
             from goblinmode import capabilities
 
             on_battery = capabilities.on_ac_power() is False
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception as exc:  # noqa: BLE001 - no battery sensor / probe error
+            log.debug("power-source probe failed, assuming AC: %s", exc)
 
         def _pl1(p):
             return p.battery_pl1_w if on_battery and p.battery_pl1_w else p.pl1_w
