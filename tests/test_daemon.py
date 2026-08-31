@@ -23,8 +23,8 @@ from unittest.mock import patch
 
 from tests._support import _SRC  # noqa: F401
 
-from goblinmode import config  # noqa: E402
-from goblinmode.daemon import Daemon  # noqa: E402
+from goblinmode import config
+from goblinmode.daemon import Daemon
 
 logging.getLogger("goblinmode.daemon").setLevel(logging.CRITICAL)
 

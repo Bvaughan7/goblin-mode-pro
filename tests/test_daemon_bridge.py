@@ -24,12 +24,12 @@ from tests._support import _SRC  # noqa: F401
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
-import gi  # noqa: E402
+import gi
 
 gi.require_version("Gio", "2.0")
-from gi.repository import GLib  # noqa: E402
+from gi.repository import GLib
 
-from goblinmode.ipc import daemon_bridge as db  # noqa: E402
+from goblinmode.ipc import daemon_bridge as db
 
 logging.getLogger("goblinmode.ipc.daemon_bridge").setLevel(logging.CRITICAL)
 
