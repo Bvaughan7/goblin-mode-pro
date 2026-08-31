@@ -6,6 +6,8 @@ All notable changes to Goblin Mode Pro. Format loosely follows
 
 ## [Unreleased]
 
+## [1.3.0] — 2026-08-31
+
 ### Added
 - **Per-game `sched_ext` CPU scheduler.** A profile can now name a
   `sched_ext` scheduler (`scx_lavd`, `scx_bpfland`, …) to run while that

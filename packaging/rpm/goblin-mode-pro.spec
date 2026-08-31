@@ -1,5 +1,5 @@
 Name:           goblin-mode-pro
-Version:        1.2.3
+Version:        1.3.0
 Release:        1%{?dist}
 Summary:        One-switch performance helper for Linux gaming
 

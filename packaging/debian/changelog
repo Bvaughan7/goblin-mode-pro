@@ -1,3 +1,11 @@
+goblin-mode-pro (1.3.0-1) unstable; urgency=medium
+
+  * Per-game sched_ext CPU scheduler, goblin-mode-pro-cli selftest, and
+    fixes for the installer, the AMD TDP restore and the frame-rate
+    watchdog's clock. See CHANGELOG.md for the full list.
+
+ -- Bryan Vaughan <bryanvaughan07@gmail.com>  Mon, 31 Aug 2026 15:00:00 +0000
+
 goblin-mode-pro (1.2.3-1) unstable; urgency=medium
 
   * See CHANGELOG.md for the full list.
