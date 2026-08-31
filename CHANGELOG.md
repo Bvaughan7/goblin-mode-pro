@@ -6,6 +6,8 @@ All notable changes to Goblin Mode Pro. Format loosely follows
 
 ## [Unreleased]
 
+## [1.3.1] — 2026-08-31
+
 ### Fixed
 - The `nvidia-drm.modeset` drop-in was written `0600`. The helper's unit
   sets `UMask=0077`, which is right for the state it keeps in `/run` and
