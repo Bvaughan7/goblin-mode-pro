@@ -444,31 +444,57 @@ class Daemon:
                 fps_trace=self.fpswatch.recent_trace(),
             )
             return
-        state = self.gpu_monitor.deep()  # cached (<=5 s old while a game runs)
-
+        # Snapshot what lives on the loop, then take a *fresh* nvidia-smi and
+        # classify on a worker thread. Reading the (up to 5 s stale) cached
+        # snapshot here is exactly why real dips used to be filed "no obvious
+        # cause" - by the time we looked, the GPU was busy again.
         recent = self.diag.recent(6)
         cpu_load = max((s.cpu_load for s in recent), default=None)
         disk_read = max((s.disk_read_mbps or 0 for s in recent), default=None)
-        gpu_busy = (state.get("util_gpu") or 0) >= 25 or (cpu_load or 0) >= 60
+        trace = self.fpswatch.recent_trace()
 
-        benign = gpu.classify_dip(state, cpu_load, disk_read)
-        causes = gpu.assess(state, fps=ev.fps, under_load=gpu_busy)
-        state["likely_causes"] = causes
-        state["cpu_load_at_dip"] = round(cpu_load, 1) if cpu_load is not None else None
-        state["disk_read_mbps_at_dip"] = disk_read
+        def work() -> None:
+            try:
+                state = self.gpu_monitor.deep(force=True)
+            except Exception:  # noqa: BLE001
+                log.exception("fps-dip gpu snapshot failed")
+                state = {}
+            try:
+                gpu_busy = (state.get("util_gpu") or 0) >= 25 or (cpu_load or 0) >= 60
+                benign = gpu.classify_dip(state, cpu_load, disk_read)
+                causes = gpu.assess(state, fps=ev.fps, under_load=gpu_busy)
+            except Exception:  # noqa: BLE001
+                log.exception("fps-dip classification failed")
+                benign, causes = None, []
+            state["likely_causes"] = causes
+            state["cpu_load_at_dip"] = round(cpu_load, 1) if cpu_load is not None else None
+            state["disk_read_mbps_at_dip"] = disk_read
 
-        if benign and not causes:
-            detail = f"Frame rate dipped to {ev.fps:.0f} FPS (baseline ~{ev.baseline:.0f}). {benign}"
-            state["assessment"] = "benign - not a hardware bottleneck"
-        else:
-            self._fps_dip_seen = True  # only real dips trigger the post-mortem
-            detail = (
-                f"Frame rate collapsed to {ev.fps:.0f} FPS (baseline ~{ev.baseline:.0f}). "
-                + (causes[0] if causes else (benign or "no obvious cause - see the GPU snapshot"))
-            )
-        self._raise_incident(
-            "fps_dip", detail, gpu_state=state, fps_trace=self.fpswatch.recent_trace()
-        )
+            base = f"(baseline ~{ev.baseline:.0f})"
+            if benign and not causes:
+                detail = f"Frame rate dipped to {ev.fps:.0f} FPS {base}. {benign}"
+                state["assessment"] = "benign - not a hardware bottleneck"
+                real = False
+            elif causes:
+                detail = f"Frame rate collapsed to {ev.fps:.0f} FPS {base}. {causes[0]}"
+                real = True
+            else:
+                detail = (
+                    f"Frame rate dropped to {ev.fps:.0f} FPS {base}. No single cause "
+                    f"stood out - the GPU snapshot is attached. A short drop like this "
+                    f"is usually a zone load, shader compilation or a background task."
+                )
+                real = True
+
+            def report() -> bool:
+                if real:
+                    self._fps_dip_seen = True  # only real dips trigger the post-mortem
+                self._raise_incident("fps_dip", detail, gpu_state=state, fps_trace=trace)
+                return GLib.SOURCE_REMOVE
+
+            GLib.idle_add(report)
+
+        threading.Thread(target=work, name="gmp-fps-dip", daemon=True).start()
 
     def _raise_incident(
         self,

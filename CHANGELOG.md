@@ -7,6 +7,14 @@ All notable changes to Goblin Mode Pro. Format loosely follows
 ## [Unreleased]
 
 ### Fixed
+- **FPS dips were classified against a stale GPU snapshot.** The dip
+  handler read the cached `nvidia-smi` state (up to 5 s old) on the main
+  loop, so by the time it looked the GPU was usually busy again and the
+  dip was filed as "no obvious cause". It now takes a fresh snapshot on a
+  worker thread — the same way the post-game VRAM check already does — so
+  the "withheld vs starved" classifier actually has contemporaneous data.
+  The unclassified-dip wording is also less alarming and names the usual
+  culprit (zone load / shader compilation / background task).
 - **The frame-rate watchdog cried wolf.** It flagged a dip the instant the
   2.5 s mean crossed the threshold, and — because its 30 s baseline median
   decayed as a dip persisted — it then reported a phantom "recovery" while
