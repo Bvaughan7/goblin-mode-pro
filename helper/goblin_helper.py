@@ -802,20 +802,59 @@ def _ryzenadj(*args: str) -> str:
     return out.stdout
 
 
-def _ryzenadj_stapm_mw() -> int | None:
-    """Current STAPM (sustained) limit in mW, parsed from `ryzenadj --info`."""
+#: The three power limits ryzenadj exposes, as (row label in `--info`, the
+#: `--<flag>` that writes it). All three are snapshotted and all three are
+#: restored: an earlier version recorded only STAPM, so ResetTDP put the fast
+#: (burst) limit back to the *sustained* value. On a machine that ships
+#: stapm=25 W / fast=30 W that silently cost 5 W of burst headroom after any
+#: set/reset cycle, until the next reboot.
+_RYZENADJ_LIMITS: tuple[tuple[str, str], ...] = (
+    ("STAPM LIMIT", "stapm-limit"),
+    ("PPT LIMIT FAST", "fast-limit"),
+    ("PPT LIMIT SLOW", "slow-limit"),
+)
+
+
+def _parse_ryzenadj_row(info: str, label: str) -> int | None:
+    """Read one `ryzenadj --info` row's value, in mW.
+
+    Rows look like ``| STAPM LIMIT | 25.000 | stapm-limit |``. The value column
+    is watts on current ryzenadj but has been milliwatts, so the magnitude
+    decides - a real limit is never 1000 W and never 25 mW.
+    """
+    for line in info.splitlines():
+        upper = line.upper()
+        if label not in upper:
+            continue
+        # take the value column specifically, not the parameter name after it
+        parts = [c.strip() for c in line.split("|") if c.strip()]
+        for cell in parts[1:]:
+            m = re.fullmatch(r"([0-9]+(?:\.[0-9]+)?)", cell)
+            if m:
+                val = float(m.group(1))
+                if val <= 0:
+                    return None
+                return int(val if val > 1000 else val * 1000)  # W or mW -> mW
+    return None
+
+
+def _ryzenadj_limits_mw() -> dict[str, int]:
+    """Every power limit ryzenadj reports, in mW, keyed by its write flag."""
     try:
         info = _ryzenadj("--info")
     except (OSError, subprocess.SubprocessError):
-        return None
-    for line in info.splitlines():
-        # rows look like:  | STAPM LIMIT        |    25000.000 |  stapm-limit |
-        if "STAPM LIMIT" in line.upper():
-            m = re.search(r"([0-9]+(?:\.[0-9]+)?)", line.split("|", 2)[-1] if "|" in line else line)
-            if m:
-                val = float(m.group(1))
-                return int(val if val > 1000 else val * 1000)  # W or mW -> mW
-    return None
+        return {}
+    out: dict[str, int] = {}
+    for label, flag in _RYZENADJ_LIMITS:
+        value = _parse_ryzenadj_row(info, label)
+        if value:
+            out[flag] = value
+    return out
+
+
+def _ryzenadj_stapm_mw() -> int | None:
+    """Current STAPM (sustained) limit in mW."""
+    return _ryzenadj_limits_mw().get("stapm-limit")
 
 
 def _snapshot_tdp() -> None:
@@ -826,14 +865,16 @@ def _snapshot_tdp() -> None:
     # governor's original value is never recorded and RevertAll can't restore it.
     _snapshot()
     data = _load_state() or {}
-    if "ryzenadj_stapm_mw" in data:
+    if "ryzenadj_limits_mw" in data:
         return
-    stapm = _ryzenadj_stapm_mw()
-    if stapm:
+    limits = _ryzenadj_limits_mw()
+    if limits:
         STATE_DIR.mkdir(parents=True, exist_ok=True)
-        data["ryzenadj_stapm_mw"] = stapm
+        data["ryzenadj_limits_mw"] = limits
+        # kept for a helper that was upgraded under a running daemon
+        data["ryzenadj_stapm_mw"] = limits.get("stapm-limit")
         STATE_FILE.write_text(json.dumps(data, indent=2))
-        log.info("ryzenadj snapshot: stapm=%d mW", stapm)
+        log.info("ryzenadj snapshot: %s", limits)
 
 
 def set_tdp(watts: int) -> bool:
@@ -859,20 +900,25 @@ def reset_tdp() -> bool:
     if not RYZENADJ:
         return True
     data = _load_state() or {}
-    stapm = data.get("ryzenadj_stapm_mw")
-    if not stapm:
+    limits = data.get("ryzenadj_limits_mw") or {}
+    if not limits:
+        # a snapshot written by an older helper only recorded STAPM
+        stapm = data.get("ryzenadj_stapm_mw")
+        if stapm:
+            limits = {"stapm-limit": int(stapm)}
+    if not limits:
         log.info("ResetTDP: no snapshot; leaving current limits (cleared on reboot)")
         return True
+    # Restore every limit we recorded, each to *its own* original value - not
+    # all of them to STAPM, which would clamp the burst limit down to the
+    # sustained one and quietly cost headroom the machine shipped with.
+    args = [f"--{flag}={int(value)}" for flag, value in sorted(limits.items())]
     try:
-        _ryzenadj(
-            f"--stapm-limit={int(stapm)}",
-            f"--slow-limit={int(stapm)}",
-            f"--fast-limit={int(stapm)}",
-        )
+        _ryzenadj(*args)
     except (OSError, subprocess.SubprocessError) as exc:
         log.warning("ryzenadj ResetTDP failed: %s", exc)
         return False
-    log.info("AMD TDP restored to %d W", int(stapm) // 1000)
+    log.info("AMD TDP restored: %s", limits)
     return True
 
 

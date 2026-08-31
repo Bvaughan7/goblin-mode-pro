@@ -48,6 +48,14 @@ All notable changes to Goblin Mode Pro. Format loosely follows
   fix and nothing changed" was this. It now `enable`s and then
   `restart`s, which starts the service when stopped and replaces it when
   running.
+- **AMD TDP reset clamped your burst limit.** `set_tdp` raises the fast
+  (burst) limit to sustained + 8 W, but the snapshot only recorded the
+  STAPM (sustained) limit — so `reset_tdp` put the fast limit back to the
+  *sustained* value. On a laptop shipping stapm = 25 W / fast = 30 W,
+  running a game with a TDP preset and then exiting left the machine 5 W
+  down on burst headroom until the next reboot. All three limits are now
+  snapshotted and each restored to its own original value. Found by
+  auditing the path while writing its first tests.
 - **`user.max_user_namespaces` had never worked, on any machine.** The
   helper's unit granted `/proc/sys/user` under `ReadWritePaths=`, but
   also dropped every capability except `CAP_SYS_NICE` — and the kernel

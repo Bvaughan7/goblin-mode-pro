@@ -79,6 +79,27 @@ helper working as designed — but worth knowing before turning it on, so
 (This laptop is thermally saturated at stock; raising limits on it is not the
 right move regardless.)
 
+### What is still unverified, and why
+
+Two paths remain unproven on real hardware, and no amount of testing here can
+change that:
+
+- **AMD `ryzenadj` TDP and Curve Optimizer re-apply** — nobody involved has an
+  AMD laptop. Auditing them for the new `tests/test_helper_amd.py` did find a
+  real bug: `set_tdp` raises the *fast* (burst) limit to sustained + 8 W, but
+  the snapshot only recorded STAPM, so `reset_tdp` restored the fast limit to
+  the **sustained** value. A machine shipping stapm = 25 W / fast = 30 W
+  silently lost 5 W of burst headroom after any set/reset cycle, and kept
+  losing it until the next reboot. All three limits are now snapshotted and
+  each is restored to its own original. The parsing, snapshotting and restore
+  logic is under test with a faked `ryzenadj`; whether `ryzenadj` reaches the
+  silicon is what an AMD machine running `selftest --apply` would answer.
+- **Writing `nvidia-drm.modeset`** — the *read-out* is verified, and the write
+  is fixed-content (`options nvidia_drm modeset=0|1`, never anything else).
+  Confirming the write needs an answered polkit prompt on a machine with the
+  NVIDIA driver; it is one of the two remaining "asked for but not answered"
+  results.
+
 ### Your machine here
 
 Run `goblin-mode-pro-cli selftest --json`, open an issue, and this table grows.
