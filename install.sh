@@ -149,7 +149,14 @@ install_helper() {
     fi
 
     sudo systemctl daemon-reload
-    sudo systemctl enable --now goblin-mode-pro-helper.service
+    sudo systemctl enable goblin-mode-pro-helper.service
+    # restart, not `enable --now`: --now only *starts* a stopped service, so on
+    # an upgrade - the common case - it left the old helper running with the
+    # old code and the old unit. That is not theoretical: the CAP_SYS_RESOURCE
+    # fix for user.max_user_namespaces sat installed-but-not-running through
+    # three reinstalls because of this line. `restart` starts it when stopped
+    # and replaces it when running, which is what both cases want.
+    sudo systemctl restart goblin-mode-pro-helper.service
 }
 
 install_user_bits() {
@@ -184,7 +191,10 @@ install_user_bits() {
     fi
 
     systemctl --user daemon-reload
-    systemctl --user enable --now goblin-mode-pro.service
+    systemctl --user enable goblin-mode-pro.service
+    # restart for the same reason as the helper above: on an upgrade the
+    # running daemon is still executing the previous release's code.
+    systemctl --user restart goblin-mode-pro.service
     goblin-mode-pro-daemon --write-wrapper >/dev/null
 }
 

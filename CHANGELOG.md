@@ -25,6 +25,14 @@ All notable changes to Goblin Mode Pro. Format loosely follows
   restored from `applied.json` without touching anything.
 
 ### Fixed
+- **`./install.sh` never upgraded a running install.** It used
+  `systemctl enable --now`, which starts a stopped service but does
+  nothing at all to a running one — so re-running the installer to
+  upgrade left both the helper and the daemon executing the *previous*
+  release's code, against the previous unit file. Every "I installed the
+  fix and nothing changed" was this. It now `enable`s and then
+  `restart`s, which starts the service when stopped and replaces it when
+  running.
 - **`user.max_user_namespaces` had never worked, on any machine.** The
   helper's unit granted `/proc/sys/user` under `ReadWritePaths=`, but
   also dropped every capability except `CAP_SYS_NICE` — and the kernel
