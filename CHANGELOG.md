@@ -4,7 +4,10 @@ All notable changes to Goblin Mode Pro. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); this project uses
 [SemVer](https://semver.org/).
 
-## [Unreleased]
+## [1.2.2] — 2026-08-31
+
+The diagnostics engine stops crying wolf. Three fixes to how it decides
+something is worth telling you about — no new features, no config change.
 
 ### Fixed
 - **FPS dips were classified against a stale GPU snapshot.** The dip
