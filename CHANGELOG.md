@@ -4,6 +4,67 @@ All notable changes to Goblin Mode Pro. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); this project uses
 [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+Hardening and correctness pass over the 1.2.0 surface. No new features.
+
+### Fixed — correctness
+- **The `--revert` path was a no-op.** `goblin-mode-pro-daemon --revert`
+  (the systemd `ExecStop` / crash-recovery hook) built a fresh payload
+  whose "what's applied" flags were all empty, so it restored nothing. It
+  is now state-driven: it reads `applied.json`, unconditionally reverts
+  the helper's own `/run` snapshot, and cold-restores the compositor
+  (tearing / VRR / refresh cap) and focus mode. The daemon also runs this
+  on startup when it finds dirty state from a killed previous instance.
+- **Power limits leaked with concurrent games.** When a game with a raised
+  TDP exited while another kept the governor boosted, the limit was never
+  reset. It now resets (`ResetPowerLimits` / `ResetTDP`) whenever the
+  applied power no longer matches what any running game wants.
+- `dxvk_async` now defaults **off** — `DXVK_ASYNC=1` is a dead env var on
+  stock DXVK / current Proton-GE (existing profiles are untouched).
+
+### Fixed — security / sandbox
+- `SetNvidiaModeset`, the `user.max_user_namespaces` fix and the
+  `kernel.unprivileged_userns_clone` fix all wrote to paths the hardened
+  helper unit made read-only, so they failed on any correct install.
+  `ReadWritePaths` corrected; a coverage test now fails the build if the
+  allowlist and the code drift apart.
+- `SpinUpFans` (previously promptless, no lower bound) now has a 40 % duty
+  floor and its own prompting polkit action
+  (`com.goblinmode.pro.manage-hardware-thermal`). The helper hands fan
+  control back to the EC on startup after a dirty exit.
+- `SetPowerLimits` refuses a write below an 8 W floor (it exists to raise
+  the cap; driving PL1 to a few watts is a silent local slow-down).
+- `Renice` now fails **closed** when the caller's uid can't be resolved
+  (it was treated as root), and pins the target with a pidfd to close a
+  PID-reuse window. `SetEPP` validates its argument against the kernel's
+  advertised list.
+- The launch wrapper's env-name guard now anchors the whole token, not
+  just the first character.
+
+### Fixed — operational
+- Log directories (`logs/`, `mangohud/`) are now pruned (40 files / 500 MB
+  each, oldest first) on daemon start and after every session — they grew
+  without limit before.
+- **ananicy-cpp conflict.** It manages niceness, and so do GameMode and
+  Goblin's `renice`. The System Check warns when it's running, new
+  profiles start with `renice` off while it is, and `Wrap with GameMode`
+  is now a per-game toggle.
+
+### CI / docs
+- `shellcheck` (including the generated launch wrapper), `ruff check`
+  (pyflakes), and a polkit-policy ↔ helper consistency test added to CI.
+- README version badge is now dynamic; privilege-model table and System
+  Check list brought current; new "how this relates to GameMode /
+  ananicy-cpp / MangoHud" section.
+
+### Deferred to a follow-up
+- The `daemon.py` → `daemon_api.py` and `page_games.py` → profile-editor
+  extractions, and the GTK4 `Adw.PreferencesWindow` → `ApplicationWindow`
+  restructure + `MessageDialog` → `AlertDialog` migration (Blocks 7–9 of
+  the review plan) — better done as their own reviewed PRs than bundled
+  into a hardening branch.
+
 ## [1.2.0] — 2026-08-29
 
 The second roadmap release. Everything in `ROADMAP.md`'s post-1.1 menu,
