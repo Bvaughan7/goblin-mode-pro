@@ -1,5 +1,9 @@
-"""The one piece of tray logic that's testable without a display: the pystray
-temp-icon path fix (see goblinmode.tray._patch_pystray_icon_extension)."""
+"""The testable part of the tray: the pystray icon-handoff fix.
+
+KDE Plasma's SNI host resolves ``IconName`` via ``QIcon::fromTheme`` and has no
+reliable file-path fallback, so pystray's temp-file path handoff renders a blank
+square. goblinmode.tray patches pystray to pass the installed theme name instead.
+"""
 
 from __future__ import annotations
 
@@ -10,23 +14,20 @@ from tests._support import _SRC  # noqa: F401
 from goblinmode import tray
 
 
-class PystrayIconExtensionPatch(unittest.TestCase):
-    def test_patch_is_safe_to_call_without_a_gtk_backend(self):
-        # On the no-GTK CI runner pystray's SNI backend won't import; the
-        # patch must swallow that and no-op rather than raise.
-        tray._patch_pystray_icon_extension()
-        tray._patch_pystray_icon_extension()  # idempotent
+class PystrayTrayIconPatch(unittest.TestCase):
+    def test_patch_is_safe_to_call_and_idempotent(self):
+        tray._patch_pystray_tray_icon()
+        tray._patch_pystray_tray_icon()
 
-    def test_patched_temp_path_carries_a_png_suffix(self):
+    def test_patched_icon_path_is_the_theme_name_when_installed(self):
         try:
             from pystray._util.gtk import GtkIcon
         except Exception:  # pragma: no cover - needs gir1.2-gtk-3.0
             self.skipTest("pystray SNI backend not importable here")
 
-        tray._patch_pystray_icon_extension()
-        self.assertTrue(getattr(GtkIcon, "_gmp_png_suffix", False))
-
-        import os
+        tray._patch_pystray_tray_icon()
+        if tray._TRAY_ICON_NAME is None:
+            self.skipTest("com.goblinmode.Pro not in the icon theme on this box")
 
         class _Fake:
             icon = tray._icon_image(False)
@@ -34,11 +35,9 @@ class PystrayIconExtensionPatch(unittest.TestCase):
         _Fake._update_fs_icon = GtkIcon._update_fs_icon
         f = _Fake()
         f._update_fs_icon()
-        try:
-            self.assertTrue(f._icon_path.endswith(".png"),
-                            "KDE's QIcon(path) can't load an extensionless file")
-        finally:
-            os.unlink(f._icon_path)
+        # a theme name, not a filesystem path
+        self.assertEqual(f._icon_path, tray._THEME_ICON)
+        self.assertNotIn("/", f._icon_path)
 
 
 if __name__ == "__main__":

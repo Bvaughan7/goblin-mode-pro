@@ -34,34 +34,65 @@ except Exception as _exc:  # noqa: BLE001 - pystray/Pillow missing or no backend
 _SIZE = 64
 _ICON_PNG = Path(__file__).with_name("assets") / "goblin-tray.png"
 
+#: Installed hicolor icon (data/icons/com.goblinmode.Pro.svg). Matches the app
+#: window / .desktop icon.
+_THEME_ICON = "com.goblinmode.Pro"
 
-def _patch_pystray_icon_extension() -> None:
-    """pystray's GtkIcon writes its tray pixmap to ``tempfile.mktemp()`` - a
-    path with **no file extension** - and hands that bare path to
-    libappindicator as the icon name. KDE Plasma's SNI host then loads it with
-    ``QIcon(path)``, which is suffix-sensitive, gets nothing, and draws a blank
-    square. Adding a ``.png`` suffix makes the path load as a plain image on
-    every SNI host. Patches the class once; a no-op if pystray isn't the SNI
-    backend or its internals have changed.
+#: Set to the theme-icon name once we've confirmed it resolves, else None (then
+#: the tray falls back to pystray's temp-PNG path). See _patch_pystray_tray_icon.
+_TRAY_ICON_NAME: str | None = None
+
+
+def _patch_pystray_tray_icon() -> None:
+    """Make pystray's SNI/AppIndicator backend hand KDE a *theme icon name*
+    instead of a temp-file path.
+
+    pystray writes the icon to ``tempfile.mktemp()`` and passes that bare path
+    to libappindicator as the icon name. KDE Plasma's SNI host resolves
+    ``IconName`` through ``QIcon::fromTheme`` and has no reliable file-path
+    fallback, so it renders a blank square. Passing an installed theme name
+    (``com.goblinmode.Pro``) resolves everywhere. If that icon isn't installed
+    (e.g. running from a source checkout) we keep the temp file, but give it a
+    ``.png`` suffix so the hosts that *do* load paths can at least try.
+
+    Patches the class once; a no-op if pystray isn't the SNI backend.
     """
+    global _TRAY_ICON_NAME
     try:
         import tempfile
 
+        import gi
+
+        gi.require_version("Gtk", "3.0")
+        from gi.repository import Gtk
+
         from pystray._util.gtk import GtkIcon
 
-        if getattr(GtkIcon, "_gmp_png_suffix", False):
+        if getattr(GtkIcon, "_gmp_patched", False):
+            _TRAY_ICON_NAME = getattr(GtkIcon, "_gmp_icon_name", None)
             return
 
+        if Gtk.IconTheme.get_default().has_icon(_THEME_ICON):
+            _TRAY_ICON_NAME = _THEME_ICON
+
+        name = _TRAY_ICON_NAME
+
         def _update_fs_icon(self) -> None:
+            if name:
+                self._icon_path = name          # -> D-Bus IconName, theme-resolved
+                self._icon_valid = True
+                return
             self._icon_path = tempfile.mktemp(suffix=".png")
             with open(self._icon_path, "wb") as fh:
                 self.icon.save(fh, "PNG")
+            self._icon_valid = True
 
         GtkIcon._update_fs_icon = _update_fs_icon
-        GtkIcon._gmp_png_suffix = True
-        log.debug("patched pystray tray-icon temp path to carry a .png suffix")
+        GtkIcon._gmp_patched = True
+        GtkIcon._gmp_icon_name = name
+        log.debug("tray icon via %s", name or "temp .png file")
     except Exception as exc:  # noqa: BLE001 - best effort; falls back to stock pystray
-        log.debug("could not patch pystray icon extension: %s", exc)
+        log.debug("could not patch pystray tray icon: %s", exc)
 
 
 def _icon_image(boosting: bool) -> "Image.Image":
@@ -158,7 +189,7 @@ class Tray:
         self._onboarded = True
         self._icon = None
         if _TRAY_AVAILABLE:
-            _patch_pystray_icon_extension()
+            _patch_pystray_tray_icon()
             self._icon = pystray.Icon(
                 "goblin-mode-pro",
                 icon=_icon_image(False),
@@ -217,7 +248,12 @@ class Tray:
         if self._icon is None:
             return
         try:
-            self._icon.icon = _icon_image(self._boosting)
+            # With the themed icon the pixmap is fixed - reassigning it just
+            # churns pystray's temp-file dance for no visible change; boost
+            # state shows in the title/menu. Without it, swap the pixmap so
+            # the ember ring still tracks the boost state.
+            if _TRAY_ICON_NAME is None:
+                self._icon.icon = _icon_image(self._boosting)
             self._icon.title = f"Goblin Mode Pro - {self._status_text}"
             self._icon.menu = self._build_menu()
             self._icon.update_menu()

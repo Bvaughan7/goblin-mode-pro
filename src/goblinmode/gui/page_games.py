@@ -812,8 +812,19 @@ class GamesPage(Adw.PreferencesPage):
             get.connect("clicked", lambda _b, e=entry: (dialog.close(), self._fetch_community(e)))
             row.add_suffix(get)
             group.add(row)
-        dialog.set_extra_child(group)
+        # The list is longer than a dialog: scroll it, and keep the dialog's
+        # own Close button reachable at the bottom.
+        scroller = Gtk.ScrolledWindow(
+            hscrollbar_policy=Gtk.PolicyType.NEVER,
+            vscrollbar_policy=Gtk.PolicyType.AUTOMATIC,
+            propagate_natural_height=True,
+            max_content_height=420,
+            child=group,
+        )
+        dialog.set_extra_child(scroller)
         dialog.add_response("close", _("Close"))
+        dialog.set_default_response("close")
+        dialog.set_close_response("close")
         dialog.present()
         return False
 
