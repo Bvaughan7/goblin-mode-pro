@@ -54,7 +54,10 @@ def main() -> int:
 
     def on_activate(a: Adw.Application) -> None:
         win = MainWindow(a, bridge)
-        win.set_default_size(720, 900)
+        # Wide enough for the top view switcher rather than the collapsed
+        # bottom bar - see the 800sp breakpoint in gui/window.py. Shots should
+        # show the app as it opens, not a narrow-window special case.
+        win.set_default_size(920, 900)
         win.present()
         a.hold()
 

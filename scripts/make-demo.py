@@ -192,6 +192,40 @@ class FakeBridge:
     def apply_preflight_fixes_async(self, cb): cb({"applied": [], "failed": []}, None)
     def export_last_incident(self): return ""
 
+    # Everything else MainWindow and the pages call. Kept in step with the GUI
+    # by tests/test_fake_bridges.py, which fails the build when a new bridge
+    # call has no stub here - this file silently stopped rendering for three
+    # releases because get_health_async was added and nothing noticed.
+    def get_health_async(self, cb):
+        cb({"score": 9.5, "counts": {"ok": 10, "warn": 2, "fail": 0, "info": 0,
+                                     "unknown": 0},
+            "worst": [], "checked_at": 0.0}, None)
+
+    def get_system_info_async(self, cb):
+        cb({"controllers": ["Xbox Wireless Controller"],
+            "gamemode": {"available": True, "active": self.boost},
+            "ananicy": False}, None)
+
+    def get_nvidia_module_state_async(self, cb):
+        cb({"present": True, "modeset": "Y",
+            "gsp_firmware_version": "570.86.16"}, None)
+
+    def get_proton_info_async(self, cb):
+        cb({"builds": [{"name": "GE-Proton9-20", "kind": "Proton",
+                        "path": "~/.steam/compatibilitytools.d/GE-Proton9-20",
+                        "mtime": 0.0}],
+            "shader_caches": [{"label": "Steam shader cache", "bytes": 2_147_483_648,
+                               "path": "~/.steam/steamapps/shadercache"}]}, None)
+
+    def get_session_history_async(self, exe, cb): cb(SESSIONS, None)
+    def export_setup_async(self, cb): cb("# setup", None)
+    def clear_shader_cache_async(self, path, cb): cb({"ok": True, "message": ""}, None)
+    def revert_preflight_fix_async(self, key, cb): cb({"ok": True, "message": ""}, None)
+    def build_works_for_me_async(self, exe, note, cb):
+        cb({"markdown": "# works for me", "url": "https://example.invalid"}, None)
+    def arm_benchmark(self, exe): return True
+    def set_nvidia_modeset(self, on): return True
+
 
 def _render_png(widget: Gtk.Widget) -> Image.Image:
     ctx = GLib.MainContext.default()

@@ -160,24 +160,27 @@ class ProfileEditor:
             # Short name -> label. The one-liners matter: "scx_lavd" tells a
             # player nothing, and picking a kernel scheduler off a bare list is
             # exactly the kind of choice this app exists to make legible.
+            # Kept short: an Adw.ComboRow right-aligns the selected value and
+            # truncates it, so a long label reads as "Off …" on the collapsed
+            # row. The subtitle carries the explanation instead.
             blurbs = {
-                "lavd": _("latency-first, built for games"),
-                "bpfland": _("prioritises interactive tasks"),
-                "flash": _("low-latency, deadline based"),
-                "rusty": _("general purpose, multi-domain"),
-                "rustland": _("general purpose, userspace"),
-                "cosmos": _("hybrid, tuned for mixed loads"),
-                "p2dq": _("balanced throughput and latency"),
-                "tickless": _("fewer timer interrupts"),
-                "flow": _("throughput oriented"),
-                "cake": _("desktop responsiveness"),
-                "beerland": _("simple round-robin"),
+                "lavd": _("for games"),
+                "bpfland": _("interactive"),
+                "flash": _("low latency"),
+                "rusty": _("general purpose"),
+                "rustland": _("userspace"),
+                "cosmos": _("mixed loads"),
+                "p2dq": _("balanced"),
+                "tickless": _("fewer ticks"),
+                "flow": _("throughput"),
+                "cake": _("desktop"),
+                "beerland": _("round-robin"),
                 "forge": _("experimental"),
                 "pandemonium": _("experimental"),
-                "chaos": _("stress-testing, not for daily use"),
-                "layered": _("configurable layers, needs setup"),
+                "chaos": _("stress-testing"),
+                "layered": _("needs setup"),
             }
-            scx_opts = [("", _("Off — leave the kernel scheduler alone"))]
+            scx_opts = [("", _("Off"))]
             scx_opts += [(n, f"scx_{n} — {blurbs[n]}" if n in blurbs else f"scx_{n}")
                          for n in scx_caps["schedulers"]]
             scx = Adw.ComboRow(title=_("CPU scheduler (sched_ext)"))

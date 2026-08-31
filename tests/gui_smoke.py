@@ -235,6 +235,42 @@ class _FakeBridge:
         on_done({"present": True, "modeset": "Y",
                  "gsp_firmware_version": "570.86.16"}, None)
 
+    # --- called on interaction, not at construction ---------------------
+    # The smoke test only builds the window, so these are never reached by it
+    # today - but the GUI calls them, and tests/test_fake_bridges.py requires
+    # every bridge call to have a stand-in here. That keeps this fake honest
+    # as the real surface grows, and lets the smoke test start driving
+    # interactions without first discovering it cannot.
+    def set_profile(self, profile) -> bool: return True
+    def remove_profile(self, exe: str) -> bool: return True
+    def set_auto_detect(self, on: bool) -> bool: return True
+    def keep_game(self, exe: str) -> bool: return True
+    def ignore_game(self, exe: str) -> bool: return True
+    def arm_benchmark(self, exe: str) -> bool: return True
+    def set_nvidia_modeset(self, on: bool) -> bool: return True
+    def analyze_log(self): return []
+    def build_report(self, note: str = "") -> str: return "# report"
+    def export_last_incident(self) -> str: return ""
+
+    def apply_preflight_fixes_async(self, on_done) -> None:
+        on_done({"applied": ["swappiness"], "failed": []}, None)
+
+    def revert_preflight_fix_async(self, key, on_done) -> None:
+        on_done({"ok": True, "message": "reverted"}, None)
+
+    def get_session_history_async(self, exe, on_done) -> None:
+        self.get_sessions_async(on_done)
+
+    def export_setup_async(self, on_done) -> None:
+        on_done("# setup report", None)
+
+    def clear_shader_cache_async(self, path, on_done) -> None:
+        on_done({"ok": True, "message": "cleared 2.0 GB"}, None)
+
+    def build_works_for_me_async(self, exe, note, on_done) -> None:
+        on_done({"markdown": "# works for me",
+                 "url": "https://github.com/example/issues/new"}, None)
+
     def get_proton_info_async(self, on_done) -> None:
         on_done({
             "builds": [

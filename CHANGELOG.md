@@ -6,6 +6,20 @@ All notable changes to Goblin Mode Pro. Format loosely follows
 
 ## [Unreleased]
 
+### Fixed
+- The view switcher truncated its labels ("System Che…") on any window
+  between roughly 560 and 800 px: the breakpoint that collapses it to the
+  bottom bar was set too low. It hands over at 800sp now, and a collapsed
+  window shows the app name and the current page in the header instead of
+  a completely blank title bar.
+- `scripts/make-demo.py` had been unable to run since `get_health_async`
+  was added to the window — its fake bridge never grew the method — so
+  `docs/demo.gif`, the first image in the README, could not be
+  regenerated and went stale through an entire UI redesign. Both it and
+  the screenshots are current again, and
+  `tests/test_fake_bridges.py` now reads the bridge calls straight out of
+  the GUI and fails the build when either stand-in falls behind.
+
 ## [1.3.1] — 2026-08-31
 
 ### Fixed

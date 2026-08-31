@@ -52,7 +52,15 @@ class MainWindow(Adw.ApplicationWindow):
         self._switcher = Adw.ViewSwitcher(
             stack=self._stack, policy=Adw.ViewSwitcherPolicy.WIDE
         )
-        header = Adw.HeaderBar(title_widget=self._switcher)
+        # Shown in the header only while the switcher is collapsed to the
+        # bottom bar - otherwise a narrow window has a completely blank title
+        # bar and nothing on screen says which app this is.
+        self._title = Adw.WindowTitle(title="Goblin Mode Pro", subtitle="")
+        self._title.set_visible(False)
+        title_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        title_box.append(self._switcher)
+        title_box.append(self._title)
+        header = Adw.HeaderBar(title_widget=title_box)
         header.pack_end(self._primary_menu())
 
         switcher_bar = Adw.ViewSwitcherBar(stack=self._stack)
@@ -67,10 +75,18 @@ class MainWindow(Adw.ApplicationWindow):
         self.set_content(self._toasts)
 
         # narrow window: hide the header switcher, reveal the bottom bar
-        bp = Adw.Breakpoint.new(Adw.BreakpointCondition.parse("max-width: 560sp"))
+        # 800sp, not 560: the top ViewSwitcher needs room for four labels plus
+        # the menu and the window controls, and below ~800 it truncates them
+        # ("System Che…") rather than collapsing. The bottom ViewSwitcherBar
+        # shows all four comfortably at any width, so hand over earlier.
+        bp = Adw.Breakpoint.new(Adw.BreakpointCondition.parse("max-width: 800sp"))
         bp.add_setter(self._switcher, "visible", False)
+        bp.add_setter(self._title, "visible", True)
         bp.add_setter(switcher_bar, "reveal", True)
         self.add_breakpoint(bp)
+        # keep the collapsed title's subtitle on the page you are looking at
+        self._stack.connect("notify::visible-child-name", self._sync_title)
+        self._sync_title()
 
         self._install_actions(app)
 
@@ -106,6 +122,11 @@ class MainWindow(Adw.ApplicationWindow):
             app.set_accels_for_action("window.close", ["<Control>w"])
             for i, name in enumerate(_PAGES, start=1):
                 app.set_accels_for_action(f"win.page::{name}", [f"<Alt>{i}"])
+
+    def _sync_title(self, *_a) -> None:
+        page = self._stack.get_visible_child()
+        if page is not None and hasattr(page, "get_title"):
+            self._title.set_subtitle(page.get_title() or "")
 
     def _on_page_action(self, _act, param: GLib.Variant) -> None:
         self._stack.set_visible_child_name(param.get_string())
