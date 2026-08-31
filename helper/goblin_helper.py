@@ -222,9 +222,56 @@ INTROSPECTION_XML = f"""
 </node>
 """
 
+# --------------------------------------------------------------------------
+# Authorization routing - which methods change the machine, and what each one
+# costs the caller. Deliberately next to the interface XML above: between the
+# two, the entire privileged surface of this program - every method that
+# exists, every method that mutates, and the polkit action each requires - is
+# visible before a single implementation. That is the order somebody auditing
+# this file before installing it wants to read it in.
+# --------------------------------------------------------------------------
+_MUTATING = {
+    "SetGovernor",
+    "SetEPP",
+    "Renice",
+    "SetPowerLimits",
+    "ResetPowerLimits",
+    "SetTDP",
+    "ResetTDP",
+    "RevertAll",
+    "SetSysctl",
+    "RevertSysctl",
+    "ApplyUndervolt",
+    "ApplyAmdUndervolt",
+    "SetNvidiaModeset",
+    "SpinUpFans",
+    "ResetFans",
+}
+
+
+#: methods gated behind the stricter "persistent system config" polkit
+#: action - everything else in _MUTATING uses POLKIT_PERF.
+_KERNEL_ACTION_METHODS = {"SetSysctl", "RevertSysctl", "SetNvidiaModeset"}
+
+#: Switching a fan channel out of EC control is a thermal-safety operation and
+#: persists after the caller dies, so it prompts (its own action rather than
+#: the sysctl one - a user may reasonably allow fan spin-up but not sysctl
+#: writes, or vice versa). ResetFans deliberately stays on POLKIT_PERF:
+#: handing control back to the EC must always be possible without a prompt.
+_THERMAL_ACTION_METHODS = {"SpinUpFans"}
+
+
+def _polkit_action_for(method_name: str) -> str:
+    if method_name in _KERNEL_ACTION_METHODS:
+        return POLKIT_KERNEL
+    if method_name in _THERMAL_ACTION_METHODS:
+        return POLKIT_THERMAL
+    return POLKIT_PERF
+
+
 
 # --------------------------------------------------------------------------
-# sysfs helpers
+# CPU - governor, EPP, and process priority
 # --------------------------------------------------------------------------
 def _cpu_governor_paths() -> list[Path]:
     return [
@@ -371,6 +418,12 @@ def renice(pid: int, nice: int, caller_uid: int | None = None) -> bool:
             os.close(pidfd)
 
 
+# --------------------------------------------------------------------------
+# Kernel tunables (sysctl)
+# Only keys in SYSCTL_ALLOW, only within their stated range, and every
+# write is snapshotted first so RevertSysctl can put it back.
+# --------------------------------------------------------------------------
+
 def set_sysctl(key: str, value: str) -> bool:
     rng = SYSCTL_ALLOW.get(key)
     if rng is None:
@@ -409,6 +462,13 @@ def _snapshot_sysctl(key: str, path: Path) -> None:
     except OSError as exc:
         log.warning("could not snapshot sysctl %s: %s", key, exc)
 
+
+# --------------------------------------------------------------------------
+# Undervolt re-apply (Intel intel-undervolt / AMD ryzenadj)
+# Re-runs the user's own configuration. This code NEVER chooses an
+# undervolt value - it only re-applies one already written to a config
+# file by the user, because suspend and thermald silently drop them.
+# --------------------------------------------------------------------------
 
 def apply_undervolt() -> bool:
     """Re-apply the offsets the user has in /etc/intel-undervolt.conf. We never
@@ -484,6 +544,14 @@ def apply_amd_undervolt() -> bool:
     log.info("re-applied AMD Curve Optimizer offsets: %s", offsets)
     return True
 
+
+# --------------------------------------------------------------------------
+# Thermal - fan control
+# SpinUpFans can only ever *raise* cooling: MIN_FAN_PERCENT is a floor,
+# not a target. It has its own polkit action because it takes a fan off
+# the EC curve and outlives the caller; ResetFans deliberately does not,
+# so handing control back is always possible without a prompt.
+# --------------------------------------------------------------------------
 
 def _pwm_controls() -> list[Path]:
     """Every hwmon pwmN file that looks controllable - has the standard
@@ -573,6 +641,11 @@ def reset_fans() -> bool:
     return ok
 
 
+# --------------------------------------------------------------------------
+# NVIDIA - nvidia_drm.modeset
+# Writes a modprobe.d drop-in. Takes effect on the next boot, never now.
+# --------------------------------------------------------------------------
+
 def set_nvidia_modeset(enabled: bool) -> bool:
     """Write /etc/modprobe.d/goblin-mode-pro-nvidia.conf with a fixed
     ``options nvidia_drm modeset=0|1`` line - never arbitrary content, always
@@ -615,6 +688,12 @@ def revert_sysctl(key: str) -> bool:
     log.info("sysctl %s reverted to %s", key, original)
     return True
 
+
+# --------------------------------------------------------------------------
+# Power - Intel RAPL (PL1/PL2)
+# Bounded on both sides: _RAPL_FLOOR_UW stops a silent local DoS, and
+# every write is clamped to the zone's firmware maximum.
+# --------------------------------------------------------------------------
 
 def _rapl_constraint(idx: int, leaf: str) -> Path:
     return RAPL_BASE / f"constraint_{idx}_{leaf}"
@@ -889,47 +968,8 @@ def _caller_uid(connection, sender: str) -> int | None:
 
 
 # --------------------------------------------------------------------------
-# D-Bus glue
+# D-Bus glue - method dispatch
 # --------------------------------------------------------------------------
-_MUTATING = {
-    "SetGovernor",
-    "SetEPP",
-    "Renice",
-    "SetPowerLimits",
-    "ResetPowerLimits",
-    "SetTDP",
-    "ResetTDP",
-    "RevertAll",
-    "SetSysctl",
-    "RevertSysctl",
-    "ApplyUndervolt",
-    "ApplyAmdUndervolt",
-    "SetNvidiaModeset",
-    "SpinUpFans",
-    "ResetFans",
-}
-
-
-#: methods gated behind the stricter "persistent system config" polkit
-#: action - everything else in _MUTATING uses POLKIT_PERF.
-_KERNEL_ACTION_METHODS = {"SetSysctl", "RevertSysctl", "SetNvidiaModeset"}
-
-#: Switching a fan channel out of EC control is a thermal-safety operation and
-#: persists after the caller dies, so it prompts (its own action rather than
-#: the sysctl one - a user may reasonably allow fan spin-up but not sysctl
-#: writes, or vice versa). ResetFans deliberately stays on POLKIT_PERF:
-#: handing control back to the EC must always be possible without a prompt.
-_THERMAL_ACTION_METHODS = {"SpinUpFans"}
-
-
-def _polkit_action_for(method_name: str) -> str:
-    if method_name in _KERNEL_ACTION_METHODS:
-        return POLKIT_KERNEL
-    if method_name in _THERMAL_ACTION_METHODS:
-        return POLKIT_THERMAL
-    return POLKIT_PERF
-
-
 def _handle_call(
     connection,
     sender,

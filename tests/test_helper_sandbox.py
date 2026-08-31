@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import sys
 import unittest
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 _REPO = Path(__file__).resolve().parent.parent
@@ -132,6 +133,44 @@ class CapabilityCoverage(unittest.TestCase):
                 f"{userns_keys} live under /proc/sys/user, whose writes the "
                 "kernel gates on CAP_SYS_RESOURCE",
             )
+
+
+class InterfaceSurface(unittest.TestCase):
+    """The D-Bus interface XML is the helper's public privileged surface.
+
+    It is an f-string in the middle of the module, so it is one careless edit
+    away from swallowing code or losing a method, and neither failure shows up
+    until the helper tries to acquire the bus on a real system - as root, at
+    boot. Parsing it here turns that into a build failure.
+    """
+
+    def _iface(self):
+        node = ET.fromstring(gh.INTROSPECTION_XML)
+        ifaces = node.findall("interface")
+        self.assertEqual(len(ifaces), 1, "expected exactly one interface")
+        return ifaces[0]
+
+    def test_the_xml_is_well_formed_and_names_the_right_interface(self):
+        self.assertEqual(self._iface().get("name"), gh.IFACE)
+
+    def test_every_mutating_method_is_declared(self):
+        declared = {m.get("name") for m in self._iface().findall("method")}
+        missing = sorted(set(gh._MUTATING) - declared)
+        self.assertEqual(missing, [], f"in _MUTATING but not in the interface: {missing}")
+
+    def test_every_method_routes_to_a_real_polkit_action(self):
+        actions = {gh.POLKIT_PERF, gh.POLKIT_KERNEL, gh.POLKIT_THERMAL}
+        for method in self._iface().findall("method"):
+            self.assertIn(gh._polkit_action_for(method.get("name")), actions)
+
+    def test_the_action_split_is_what_we_think_it_is(self):
+        """Guards the routing itself, not just that it returns something."""
+        self.assertEqual(gh._polkit_action_for("SetGovernor"), gh.POLKIT_PERF)
+        self.assertEqual(gh._polkit_action_for("SetSysctl"), gh.POLKIT_KERNEL)
+        self.assertEqual(gh._polkit_action_for("SetNvidiaModeset"), gh.POLKIT_KERNEL)
+        self.assertEqual(gh._polkit_action_for("SpinUpFans"), gh.POLKIT_THERMAL)
+        # handing fan control back to the EC must never need a prompt
+        self.assertEqual(gh._polkit_action_for("ResetFans"), gh.POLKIT_PERF)
 
 
 if __name__ == "__main__":
