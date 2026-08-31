@@ -170,63 +170,45 @@ apply — it never just fails silently.
 
 ## Install
 
-**Arch / CachyOS / Manjaro** — from the AUR (see [`packaging/`](packaging/)):
+**Debian / Ubuntu and Fedora / openSUSE** — every release ships a built package,
+signed and attached by CI. Grab the latest from
+[**Releases**](https://github.com/Bvaughan7/goblin-mode-pro/releases/latest):
 
 ```sh
-cd packaging/aur && makepkg -si
-sudo systemctl enable --now goblin-mode-pro-helper.service
-systemctl --user  enable --now goblin-mode-pro.service
+sudo apt install ./goblin-mode-pro_*_all.deb      # Debian / Ubuntu
+sudo dnf install ./goblin-mode-pro-*.noarch.rpm   # Fedora / openSUSE
 ```
 
-**Debian / Ubuntu** and **Fedora / openSUSE** — source-package directories are in
-[`packaging/debian/`](packaging/debian/) and
-[`packaging/rpm/`](packaging/rpm/) (`dpkg-buildpackage` / `rpmbuild`, or point an
-OBS project at them).
+**Arch / CachyOS / Manjaro** — build the PKGBUILD (an AUR package is coming; AUR
+account registration is closed at the time of writing):
 
-**Everything else** — the installer:
+```sh
+cd packaging/arch && makepkg -si     # the tagged release
+cd packaging/aur  && makepkg -si     # or rolling, from main
+```
+
+**Everything else** — the installer. It works out your distribution, installs
+what it can, and tells you exactly what to install by hand if it doesn't
+recognise your package manager:
 
 ```sh
 git clone https://github.com/Bvaughan7/goblin-mode-pro
 cd goblin-mode-pro
-./install.sh
-```
-
-The installer figures out your distribution, installs the dependencies it can,
-and tells you exactly what to install by hand if it doesn't recognise your
-package manager. Options:
-
-```sh
-./install.sh            # full install — asks for your password once, for the root helper
-./install.sh --user     # no root helper: everything works except CPU speed/power tuning
+./install.sh            # asks for your password once, for the root helper
+./install.sh --user     # no root helper: everything but CPU speed / power tuning
 ./install.sh --uninstall
 ```
 
 **What needs your password, and why:** changing the CPU governor, priority and
-power limit requires root. Goblin Mode Pro does *not* run as root — instead it
-installs one tiny root service (`goblin-mode-pro-helper`) that does only those
-specific writes, each one checked by polkit and validated against a fixed
-allowlist. Skip it with `--user` and everything else still works ("limited
-mode").
+power limit requires root. Goblin Mode Pro does *not* run as root — it installs
+one small root service (`goblin-mode-pro-helper`) that does only those writes,
+each checked by polkit and validated against a fixed allowlist. Skip it with
+`--user` and everything else still works ("limited mode").
 
-### Dependencies (if you're installing them yourself)
-
-You need Python 3, PyGObject, GTK 4, libadwaita, and `psutil`.
-
-**Minimum versions:** Python **3.11**, GTK **4.0**, libadwaita **1.5**. The GUI
-is built on `Adw.AlertDialog`, `Adw.AboutDialog` and `Adw.Breakpoint`, all of
-which landed in libadwaita 1.5 — it checks at startup and tells you rather than
-crashing. That floor is what Ubuntu 24.04 LTS and Debian 13 ship, so any
-currently-supported distro is fine. The daemon and the `goblin-mode-pro-cli`
-command have no GTK dependency at all and work on anything older.
-
-Package names:
-
-| Distro | Command |
-|---|---|
-| Arch / CachyOS | `pacman -S python-gobject python-psutil gtk4 libadwaita python-pystray wl-clipboard mangohud gamemode gamescope` |
-| Debian / Ubuntu | `apt install python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 python3-psutil wl-clipboard mangohud gamemode gamescope` |
-| Fedora / Nobara | `dnf install python3-gobject python3-psutil gtk4 libadwaita wl-clipboard mangohud gamemode gamescope` |
-| openSUSE | `zypper install python3-gobject python3-psutil gtk4-tools libadwaita wl-clipboard mangohud gamemode gamescope` |
+Needs Python **3.11**, GTK **4**, libadwaita **1.5** and `psutil` — what Ubuntu
+24.04 LTS and Debian 13 ship, so any current distro is fine. The daemon and CLI
+have no GTK dependency at all. Per-distro package names are in
+**[Getting started](https://bvaughan7.github.io/goblin-mode-pro/getting-started/)**.
 
 ### Does it actually work on my machine?
 
@@ -239,32 +221,23 @@ path; `--json` gives a blob worth pasting into an issue.
 
 Features marked **experimental** above are ones that work in principle but
 haven't been confirmed on real hardware yet — usually because they need a
-machine nobody's run it on. [docs/verified-hardware.md](docs/verified-hardware.md)
+machine nobody's run it on. **[Verified hardware](https://bvaughan7.github.io/goblin-mode-pro/verified-hardware/)**
 records what has actually been tested where. Sending a `selftest --json` from
 your machine is the single most useful contribution you can make.
 
-`mangohud`, `gamemode` and `gamescope` are optional but recommended — the overlay,
-the frame-rate watchdog and the gamescope integration need them.
-`ryzenadj` (AUR / COPR) is needed for AMD-laptop TDP control.
+### Two things that bite people
 
-### Before you file a "not working" issue
+- **`polkit` must be installed.** Without it the root helper is inert and CPU
+  speed / power tuning silently drop to "limited mode".
+- **`ananicy-cpp` and GameMode both manage process niceness.** CachyOS ships
+  `ananicy-cpp` on by default, and stacking it with GameMode and Goblin's own
+  renice puts three tools on one knob. The System Check warns you, and new
+  profiles start with renice off while it is active.
 
-- **`polkit` must be installed** — the root helper is inert without it, and CPU
-  speed / power tuning silently drop to "limited mode."
-- **Kernel ≥ 5.16** for `WINEFSYNC` (anything current is fine; the pre-flight
-  check flags it).
-- **User namespaces must be enabled** — some hardened Debian/Ubuntu kernels ship
-  `kernel.unprivileged_userns_clone=0`, which breaks the Steam Linux Runtime and
-  EAC/BattlEye games. The System Check catches this and offers a fix.
-- **The esync FD-limit fix needs a re-login** — raising `DefaultLimitNOFILE`
-  won't take effect until you log out and back in.
-- **`ananicy-cpp` and GameMode both manage process niceness** — CachyOS ships
-  `ananicy-cpp` on by default, and stacking it with GameMode + Goblin's own
-  renice makes three tools fight over the same knob. The System Check warns
-  when it sees this; new profiles start with renice off while `ananicy-cpp` is
-  active, and you can turn off **Wrap with GameMode** per game.
-- **KDE:** if the app icon looks stale after install, run
-  `kbuildsycoca6 --noincremental` and restart Plasma (or log out/in).
+The rest — hardened-kernel user namespaces, the esync FD limit, stale KDE
+icons — is in
+**[Troubleshooting](https://bvaughan7.github.io/goblin-mode-pro/troubleshooting/)**,
+and `goblin-mode-pro-cli selftest` will usually just tell you.
 
 ---
 
@@ -285,185 +258,38 @@ the frame-rate watchdog and the gamescope integration need them.
 
 ### From the terminal
 
-`goblin-mode-pro-cli` talks to the running daemon over the session bus — handy
-over SSH or in scripts:
+`goblin-mode-pro-cli` talks to the running daemon over the session bus, so it
+works over SSH and in scripts:
 
 ```sh
-goblin-mode-pro-cli status              # what's boosting right now
-goblin-mode-pro-cli health              # the 0–10 readiness score
-goblin-mode-pro-cli boost / unboost     # force performance mode on/off
-goblin-mode-pro-cli benchmark "Wow.exe" # arm a benchmark run
-goblin-mode-pro-cli sessions            # recent session / benchmark report cards
-goblin-mode-pro-cli preflight --fix     # run the System Check, apply safe fixes
-goblin-mode-pro-cli report              # the Markdown bug report
-goblin-mode-pro-cli setup               # the full-setup export
-goblin-mode-pro-cli compare "Wow.exe"   # diff the last two sessions for a game
-goblin-mode-pro-cli works-for-me "Wow.exe" --note "runs great"  # share what worked
-goblin-mode-pro-cli gamescope-session   # launch Steam Big Picture in its own gamescope session
+goblin-mode-pro-cli status      # what's boosting right now
+goblin-mode-pro-cli selftest    # what this machine can actually do
+goblin-mode-pro-cli sessions    # recent session / benchmark report cards
 ```
 
-### Sharing a profile with a friend
+Full command list:
+**[Command line](https://bvaughan7.github.io/goblin-mode-pro/cli/)**.
 
-On any game row, the **Export** button (↗) writes the profile to a `.json` file.
-Your friend uses the **Import** button (📂) at the top of the Games list to load
-it. Handy for "here's the exact config that fixed the stutter in <game>".
+### Sharing a profile
 
-The **↓ community** button next to it downloads a small set of known-good
-starting profiles (kept in the [`profiles/`](profiles/) directory of this repo)
-straight from GitHub — anonymous HTTPS GET, nothing uploaded, and you confirm
-before anything is applied. Send a pull request to `profiles/` to add your own.
+Every game row exports its profile to a `.json` your friend can import — "here
+is the exact config that fixed the stutter". The **↓ community** button pulls a
+small set of known-good starting profiles from
+[`profiles/`](profiles/) in this repo over anonymous HTTPS, and asks before
+applying anything. Send a pull request to add yours.
 
----
+### How it works
 
-<details>
-<summary><b>Technical reference</b> (architecture, the privilege model, every module)</summary>
+Three processes: an unprivileged **daemon** that watches for games, a small
+**root helper** that owns every privileged write, and a **GTK4 GUI** that is a
+pure client of the daemon. The helper is the only privileged code and it is
+deliberately small and auditable — every method it exposes, every method that
+changes anything, and the polkit action each one requires all read in the first
+150 lines of the file.
 
-### Architecture
-
-Three cooperating processes:
-
-```
- ┌─────────────────────────┐        session bus         ┌──────────────┐
- │  goblin-mode-pro-daemon  │◄──────  com.goblinmode.Pro ─►│     GUI      │
- │  (systemd --user)        │                             │ GTK4 / Adw   │
- │  Observer · Diagnostics  │                             └──────────────┘
- │  LogWatch · Tray · Bridge│
- └───────────┬─────────────┘
-             │ system bus  com.goblinmode.ProHelper  (polkit-gated)
-             ▼
- ┌─────────────────────────┐
- │ goblin-mode-pro-helper   │  governor · EPP · renice · RAPL PL1/PL2 · sysctls
- │ (systemd system, root)   │  snapshots originals to /run/goblin-mode-pro/state.json
- └─────────────────────────┘
-```
-
-- **Daemon** (unprivileged, `systemd --user`): the `psutil` poll loop that
-  detects games, the diagnostics sampler, the log watcher, the tray icon. Applies
-  the payload once on launch and reverts once on exit.
-- **Helper** (root, `systemd` system service): does *only* the privileged sysfs
-  writes, each gated by polkit and re-validated against a fixed allowlist.
-- **GUI** (on demand): a pure D-Bus client of the daemon. No privileged code.
-
-Config is a single JSON file, `~/.config/goblin-mode-pro/config.json`, shared by
-all three. Incidents: `~/.local/share/goblin-mode-pro/incidents.jsonl`. Captured
-game logs: `~/.local/share/goblin-mode-pro/logs/`.
-
-### Modules
-
-| Module | Behaviour |
-|---|---|
-| **Observer** | `psutil` poll loop. Per-profile state machine: `ABSENT→PRESENT` applies, `PRESENT→ABSENT` reverts. Global tweaks are refcounted across concurrent games. |
-| **Auto-detect** | Recognises any game, not just the profile list — launcher tags (Steam/Lutris/Heroic) plus a signal stack (DRM `fdinfo` GPU activity, `libSDL2`/`libwine` links, a DE blocklist). New games get a default profile and a **Keep / Ignore** notification. |
-| **Performance Payload** | governor→`performance`, EPP→`performance`, TDP raise (RAPL PL1/PL2 or `ryzenadj`, with a lower on-battery preset), `renice` (default `-5`), CPU-affinity pinning (P-cores / CCD), tearing + VRR (KWin `AllowTearing`/`kscreen-doctor`, or Hyprland `hyprctl keyword`) with optional per-output restriction on KDE, an internal-panel refresh-rate cap, Focus mode, MangoHud config, runner env vars, per-game GPU-driver tuning, Intel/AMD undervolt re-apply, preemptive fan spin-up, gamescope. Global tweaks are refcounted across concurrent games. |
-| **Benchmark comparison & cards** | `benchmarkcard.py` diffs two sessions' metrics (correctly treating temps/stutter as "lower is better") and renders a small Cairo report-card PNG; JSON export is the session record as-is. |
-| **Prometheus exporter** | Off by default (`Settings.prometheus_textfile`); writes the Dashboard's own metrics as a node_exporter textfile-collector `.prom` file on the daemon's existing status-broadcast path. |
-| **Regression tracking** | On each game exit, summarises the MangoHud frame log (avg / median / 1% low FPS, duration, active tweaks) into `sessions.jsonl` and compares it to the recent history for that game. A >10% swing in the 1% low or average is flagged on the Diagnostics page. |
-| **Capabilities** | One-time hardware probe (CPU vendor, cpufreq driver, EPP/RAPL availability, GPU vendors, `nvidia-smi`, compositor, distro, package manager, kernel flavour, handheld model, controllers, GameMode, `intel-undervolt`, `gpu-screen-recorder`). Attached to daemon status so the GUI labels or hides features that don't apply. |
-| **Benchmark mode** | Arm a game; on exit the frame log is summarised into a report card (avg / 1% / 0.1% low FPS, frame-time stutter %, peak temps) and stored as a session. |
-| **Web lookups** *(GUI only)* | ProtonDB tier and AreWeAntiCheatYet verdict — anonymous HTTPS GET to a fixed two-host allowlist, size-capped, disk-cached. The daemon and helper make **zero** network connections. |
-| **Proton tools** | Discovers custom Proton/Wine builds and every shader-cache location with sizes; `Clear` deletes a listed cache's contents only. |
-| **First-run wizard** | Shown once (marker file). System check + safe fixes → launcher wrapper → done. |
-| **CLI** | `goblin-mode-pro-cli` — a headless session-bus client (status / boost / health / benchmark / sessions / preflight / report / setup / games / compare / works-for-me / gamescope-session). |
-| **System Check** | Pre-flight panel: `vm.max_map_count`, esync FD limit, split-lock mitigation, `nvidia-drm.modeset`, THP, `compaction_proactiveness`, swappiness, kernel fsync support, `user.max_user_namespaces` **and** the Debian/Ubuntu `kernel.unprivileged_userns_clone` (Steam Runtime + anti-cheat), Vulkan ICD, gamemode/MangoHud presence, an `ananicy-cpp` niceness-conflict warning, plus an anti-cheat status note. Safe fixes are one-click; the `sysctl.d` / kernel-param text is shown for permanence. |
-| **Proton log analyzer** | ~16 known failure patterns → plain-language cause + fix, run on the captured Wine/Proton log. |
-| **Frame-rate watchdog** | Per game. Logs FPS via MangoHud; on a dip that persists ~4 s (default ≤22 fps or <50% of the frozen pre-dip baseline) takes a fresh deep GPU snapshot and files an `fps_dip` incident classified *withheld* (alt-tab / loading), *GPU-bound scene*, *CPU-bound scene*, or *starved* (a real fault, with ranked causes). Checks whether VRAM was released after exit (leak detection). |
-| **MangoHud Integrator** | Round-trips `MangoHud.conf` (or a per-game `<exe>.conf`), touching only its managed block. |
-| **Diagnostic Engine** | While a game runs: CPU pkg temp, per-core load, package power vs PL1/PL2, GPU load/temp, throttle flags. Debounced incidents on throttle onset or GPU driver fault. |
-| **Bug report** | System info + pre-flight + last incident + log analysis + active tweaks → Markdown on the clipboard. |
-| **LLM Export** | Packages an incident (+ metric window, FPS trace, GPU state, log tail, active tweaks) into structured JSON wrapped in a diagnostic system prompt. |
-
-### Privilege model
-
-| polkit action | covers | default on the active session |
-|---|---|---|
-| `com.goblinmode.pro.manage-performance` | governor, EPP, renice, **raising** RAPL PL1/PL2 / ryzenadj TDP, re-applying your `intel-undervolt` / Curve-Optimizer offsets, handing fan control back to the EC | allowed without a prompt |
-| `com.goblinmode.pro.manage-kernel-tunables` | persistent sysctls from the System Check (and their **Undo**), the `nvidia-drm.modeset` modprobe write | prompts for admin auth |
-| `com.goblinmode.pro.manage-hardware-thermal` | taking manual control of the fans (preemptive spin-up) | prompts for admin auth |
-
-Lowering a power limit isn't offered over the bus at all — `SetPowerLimits`
-has a 6 W floor, since it exists to *raise* the cap, and driving it to a few
-watts would be a silent local slow-down. Fan spin-up can only ever *increase*
-duty (40 % floor).
-
-`manage-performance` is silent on the active session so a boost applies the
-instant a game launches. To require a prompt there too, set
-`<allow_active>auth_admin_keep</allow_active>` in
-`/usr/share/polkit-1/actions/com.goblinmode.pro.policy`.
-
-Input is constrained at the helper: the governor must be one the kernel
-advertises; `renice` only raises priority and only for a process the caller owns;
-RAPL writes are clamped to the firmware maximum; sysctl keys are a fixed
-allowlist with per-key numeric ranges and the target path is confirmed under
-`/proc/sys/`. See [SECURITY.md](SECURITY.md) for the full threat model.
-
-### Runner variables
-
-| Toggle | Environment |
-|---|---|
-| NVAPI | `PROTON_ENABLE_NVAPI=1`, `DXVK_ENABLE_NVAPI=1` |
-| Force Fsync | `WINEFSYNC=1` |
-| Disable Esync | `PROTON_NO_ESYNC=1` |
-| Async shader compile | `DXVK_ASYNC=1` |
-
-Plus the per-game **GPU driver tuning** toggles (only those matching your GPU are
-shown):
-
-| Toggle | Environment |
-|---|---|
-| NVIDIA: threaded GL | `__GL_THREADED_OPTIMIZATIONS=1` |
-| NVIDIA: unlimited shader cache | `__GL_SHADER_DISK_CACHE=1`, `__GL_SHADER_DISK_CACHE_SKIP_CLEANUP=1` |
-| NVIDIA: force G-SYNC / VRR | `__GL_GSYNC_ALLOWED=1`, `__GL_VRR_ALLOWED=1` |
-| AMD: Mesa glthread | `mesa_glthread=true` |
-| AMD: RADV pipeline library / NGG culling / ray-tracing | `RADV_PERFTEST=gpl,nggc,rt` (comma-merged) |
-
-The launch wrapper imports all of these as strict `NAME=VALUE` lines — no `eval`,
-no `source`.
-
-### Compositor tweaks (Wayland note)
-
-KWin cannot *suspend* compositing on Wayland, so on **KDE Wayland** the
-"compositor" tweaks instead enable **Allow Tearing** (`kwriteconfig6` + a KWin
-reconfigure) and switch **VRR** to `automatic` on VRR-capable outputs
-(`kscreen-doctor`), reverting both on exit. On **KDE + X11** it does a real
-compositor suspend/resume. On **GNOME / wlroots / unknown** it no-ops with a log
-line — `gamemoderun` covers the rest.
-
-### Development
-
-```sh
-python -m goblinmode.daemon -v                        # daemon, foreground
-python -m goblinmode.gui.app                           # GUI
-goblin-mode-pro-daemon --write-wrapper
-goblin-mode-pro-daemon --print-env-for -- /path/to/game
-goblin-mode-pro-daemon --print-gamescope -- /path/to/game
-goblin-mode-pro-daemon --revert
-```
-
-Source is under `src/goblinmode/`; `daemon.py` wires the components together,
-`payload.py` orchestrates apply/revert, and the privileged helper is
-`helper/goblin_helper.py`.
-
-Tests are stdlib `unittest` (no third-party dependency):
-
-```sh
-python -m unittest discover -s tests
-```
-
-They cover the pure logic — config validation, capability parsing, the session
-/ regression maths, the CSV and MangoHud parsers, env-var filtering, gamescope
-args, the community-fetch host guard, and the helper's polkit-gate dispatch
-(every `_MUTATING` method denied before its underlying function runs, stubbed
-`_check_authorized`, no real D-Bus). 190 tests. GitHub Actions also
-import-checks every module, constructs the real `MainWindow` headlessly under
-Xvfb (`tests/gui_smoke.py`), and validates the `profiles/` JSON on each push.
-
-`scripts/make-screenshots.py` and `scripts/make-demo.py` regenerate the README visuals
-by rendering the real GUI off-screen (needs a running daemon; `make-demo.py`
-also needs `ffmpeg`).
-
-</details>
-
----
+See **[How it works](https://bvaughan7.github.io/goblin-mode-pro/architecture/)**
+for the architecture, the module map, the privilege model, the runner variables
+it injects and the compositor calls it makes.
 
 ## Contributing & what's next
 

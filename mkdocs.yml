@@ -39,6 +39,7 @@ nav:
   - Per-game settings: per-game-settings.md
   - Diagnostics & benchmarking: diagnostics.md
   - Command line: cli.md
+  - How it works: architecture.md
   - Troubleshooting: troubleshooting.md
   - Verified hardware: verified-hardware.md
   - Glossary: glossary.md

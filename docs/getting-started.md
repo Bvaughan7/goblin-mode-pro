@@ -47,6 +47,25 @@ Goblin Mode Pro needs a small wrapper on the game's launch command:
 
 Without it, env-var injection and the Proton-log capture are skipped.
 
+## Dependency package names
+
+You need Python 3, PyGObject, GTK 4, libadwaita and `psutil`. Minimum versions:
+Python **3.11**, GTK **4.0**, libadwaita **1.5** — the GUI checks at startup and
+tells you rather than crashing. The daemon and `goblin-mode-pro-cli` have no GTK
+dependency at all and work on anything older.
+
+| Distro | Command |
+|---|---|
+| Arch / CachyOS | `pacman -S python-gobject python-psutil gtk4 libadwaita python-pystray wl-clipboard mangohud gamemode gamescope` |
+| Debian / Ubuntu | `apt install python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 python3-psutil wl-clipboard mangohud gamemode gamescope` |
+| Fedora / Nobara | `dnf install python3-gobject python3-psutil gtk4 libadwaita wl-clipboard mangohud gamemode gamescope` |
+| openSUSE | `zypper install python3-gobject python3-psutil gtk4-tools libadwaita wl-clipboard mangohud gamemode gamescope` |
+
+`mangohud`, `gamemode` and `gamescope` are optional but recommended — the
+overlay, the frame-rate watchdog and the gamescope integration need them.
+`ryzenadj` (AUR / COPR) is needed for AMD-laptop TDP control, and `scx-scheds`
+for the per-game sched_ext scheduler.
+
 ## Requirements
 
 - **systemd** and **polkit** (the helper is inert without polkit)
