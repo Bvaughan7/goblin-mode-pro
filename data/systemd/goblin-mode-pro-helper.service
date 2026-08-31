@@ -60,6 +60,12 @@ RestrictNamespaces=yes
 RestrictRealtime=yes
 RestrictSUIDSGID=yes
 LockPersonality=yes
+# PyGObject dispatches our D-Bus handler through a libffi closure. libffi has
+# used static (non-writable-executable) trampolines since 3.4.2 (2021), so MDWE
+# is safe on every distro the CI .deb/.rpm target: Debian 12 (libffi 3.4.4),
+# Ubuntu 22.04 (3.4.2), Fedora, Arch. It would break on libffi < 3.4.2
+# (e.g. Ubuntu 20.04) - if a bug report shows "helper down, no error" on such a
+# system, this line is the first suspect.
 MemoryDenyWriteExecute=yes
 SystemCallArchitectures=native
 SystemCallFilter=@system-service
