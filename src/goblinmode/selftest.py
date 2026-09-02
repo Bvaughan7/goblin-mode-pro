@@ -25,6 +25,7 @@ result. A blank line is not.
 
 from __future__ import annotations
 
+import contextlib
 import os
 import re
 import shutil
@@ -314,10 +315,10 @@ class SelfTest:
         helper = self.helper()
         if helper is not None:
             identity = {}
-            try:
+            # Decoration on a diagnostic row: an identity lookup that fails
+            # must not turn a working helper into a FAIL.
+            with contextlib.suppress(Exception):
                 identity = helper.identity()
-            except Exception:                             # noqa: BLE001
-                pass
             # Which implementation answered is the first thing a bug report
             # needs while two of them exist, and it is invisible otherwise.
             if identity:
