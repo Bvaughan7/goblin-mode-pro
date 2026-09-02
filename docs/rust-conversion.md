@@ -35,7 +35,10 @@ Two things make the seam trustworthy enough to swap an implementation across:
   scale, which is what turns "the Rust one seems fine" into a number.
 
 Against the Python helper on real hardware, that suite currently scores
-**35 PASS / 0 FAIL**, including runtime confirmation of all 15 polkit routings.
+**39 PASS / 0 FAIL / 1 SKIP**, including runtime confirmation of all 15 polkit
+routings. The skip is the `Renice` ownership gate: uid 0 skips that check by
+design, so it cannot be observed from a `sudo` run and needs a separate
+unprivileged one.
 That is the bar the Rust helper has to clear — a measured baseline, not an
 aspiration.
 
@@ -184,7 +187,7 @@ Block by block, tracked in [issue #1](https://github.com/Bvaughan7/goblin-mode-p
 
 | Block | What it is | State |
 |---|---|---|
-| **R1** | Freeze the D-Bus contract; build an implementation-agnostic conformance suite | **Done.** 35 PASS / 0 FAIL on hardware; found the `SetPowerLimits` bug |
+| **R1** | Freeze the D-Bus contract; build an implementation-agnostic conformance suite | **Done.** 39 PASS / 0 FAIL / 1 SKIP on hardware; found the `SetPowerLimits` bug |
 | **R2** | Cargo workspace, the polkit authorization path, the state snapshot, and all 19 methods as refusing stubs | **Done.** The binary serves the frozen contract; `--introspect` is graded byte for byte by the same canonicalizer the Python helper goes through |
 | **R3** | Port the hardware operations, group by group | **Done.** All seven groups; every method verified against the Python helper's answers on this machine or on an identical fake tree |
 | **H1** | One unit, symlinked implementation, rollback as a drop-in | Not started - the next block |

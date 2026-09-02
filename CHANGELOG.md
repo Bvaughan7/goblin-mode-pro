@@ -14,7 +14,9 @@ All notable changes to Goblin Mode Pro. Format loosely follows
   system bus and never imports its source — so it grades any implementation of
   that interface on the same scale. Both exist because the helper is being
   rewritten in Rust and "it seems to work" is not a migration plan. The suite
-  scores 35 PASS / 0 FAIL against the Python helper on real hardware, and
+  scores 39 PASS / 0 FAIL / 1 SKIP against the Python helper on real
+  hardware — the skip is the Renice ownership gate, which uid 0 skips by
+  design and so cannot be observed from a `sudo` run — and
   found the `SetPowerLimits` bug below on its first run.
 - [The Rust conversion](https://github.com/Bvaughan7/goblin-mode-pro/blob/main/docs/rust-conversion.md)
   — a new documentation page covering the scope (the root helper only; the
