@@ -1,0 +1,161 @@
+<!--
+  FROZEN INTERFACE - v1. Do not edit to make a test pass.
+
+  This is the contract the unprivileged daemon serves on the SESSION bus, and
+  it is the second of two seams in this project. The first
+  (docs/dbus-interface-v1.xml) is between the daemon and the root helper; this
+  one is between the GUI/CLI and the daemon.
+
+    bus name     com.goblinmode.Pro.Daemon
+    object path  /com/goblinmode/Pro/Daemon
+    interface    com.goblinmode.Pro.Daemon
+
+  Freezing it does NOT mean the daemon is being rewritten. It means the GUI and
+  the daemon can be worked on independently, that a change to what the GUI is
+  allowed to assume has to be deliberate, and that any future implementation
+  has something exact to be measured against. The helper port showed what this
+  buys: the freeze and its conformance suite found a real bug in the Python
+  helper before a line of Rust existed.
+
+  Everything here is unprivileged. The daemon runs as the user; anything
+  needing root goes on to the helper over the other interface, which is
+  authorized separately. Nothing on this interface is authorized at all, so
+  every method here is reachable by anything in the user's session - that is
+  the correct trust model for a per-user service, and it is why the privileged
+  operations are NOT here.
+
+  Payloads are JSON strings rather than D-Bus structs, deliberately: the shapes
+  change often, and a struct signature change is a breaking interface change
+  where a JSON field addition is not. The signature freeze therefore protects
+  the CALL surface; the payload shapes are covered by the daemon's own tests.
+
+  The three properties are read-only identity, matching the helper's. Nothing
+  may branch on Implementation - it is for bug reports.
+
+  The file is stored in the canonical form produced by tests/_dbusxml.py, and
+  tests/test_daemon_interface_freeze.py asserts the daemon still serves exactly
+  this. If that test fails, the interface changed: either revert the change or
+  cut a v2 and update every caller. Regenerating this file to match new
+  behaviour is how the check stops protecting anything.
+-->
+<node>
+  <interface name="com.goblinmode.Pro.Daemon">
+    <method name="AnalyzeLog">
+      <arg name="json" type="s" direction="out"/>
+    </method>
+    <method name="ApplyPreflightFixes">
+      <arg name="json" type="s" direction="out"/>
+    </method>
+    <method name="ArmBenchmark">
+      <arg name="exe" type="s" direction="in"/>
+      <arg name="ok" type="b" direction="out"/>
+    </method>
+    <method name="BuildReport">
+      <arg name="note" type="s" direction="in"/>
+      <arg name="markdown" type="s" direction="out"/>
+    </method>
+    <method name="BuildWorksForMe">
+      <arg name="exe" type="s" direction="in"/>
+      <arg name="note" type="s" direction="in"/>
+      <arg name="json" type="s" direction="out"/>
+    </method>
+    <method name="ClearShaderCache">
+      <arg name="path" type="s" direction="in"/>
+      <arg name="json" type="s" direction="out"/>
+    </method>
+    <method name="ExportLastIncident">
+      <arg name="payload" type="s" direction="out"/>
+    </method>
+    <method name="ExportSetup">
+      <arg name="markdown" type="s" direction="out"/>
+    </method>
+    <method name="ForceBoost">
+      <arg name="on" type="b" direction="in"/>
+      <arg name="ok" type="b" direction="out"/>
+    </method>
+    <method name="GetHealth">
+      <arg name="json" type="s" direction="out"/>
+    </method>
+    <method name="GetIncidents">
+      <arg name="json" type="s" direction="out"/>
+    </method>
+    <method name="GetMetrics">
+      <arg name="json" type="s" direction="out"/>
+    </method>
+    <method name="GetNvidiaModuleState">
+      <arg name="json" type="s" direction="out"/>
+    </method>
+    <method name="GetProtonInfo">
+      <arg name="json" type="s" direction="out"/>
+    </method>
+    <method name="GetSessionHistory">
+      <arg name="exe" type="s" direction="in"/>
+      <arg name="json" type="s" direction="out"/>
+    </method>
+    <method name="GetSessions">
+      <arg name="json" type="s" direction="out"/>
+    </method>
+    <method name="GetStatus">
+      <arg name="json" type="s" direction="out"/>
+    </method>
+    <method name="GetSystemInfo">
+      <arg name="json" type="s" direction="out"/>
+    </method>
+    <method name="IgnoreGame">
+      <arg name="exe" type="s" direction="in"/>
+      <arg name="ok" type="b" direction="out"/>
+    </method>
+    <method name="KeepGame">
+      <arg name="exe" type="s" direction="in"/>
+      <arg name="ok" type="b" direction="out"/>
+    </method>
+    <method name="RemoveProfile">
+      <arg name="exe" type="s" direction="in"/>
+      <arg name="ok" type="b" direction="out"/>
+    </method>
+    <method name="RevertPreflightFix">
+      <arg name="key" type="s" direction="in"/>
+      <arg name="json" type="s" direction="out"/>
+    </method>
+    <method name="RunPreflight">
+      <arg name="json" type="s" direction="out"/>
+    </method>
+    <method name="SetAutoDetect">
+      <arg name="enabled" type="b" direction="in"/>
+      <arg name="ok" type="b" direction="out"/>
+    </method>
+    <method name="SetMasterEnabled">
+      <arg name="enabled" type="b" direction="in"/>
+      <arg name="ok" type="b" direction="out"/>
+    </method>
+    <method name="SetNvidiaModeset">
+      <arg name="enabled" type="b" direction="in"/>
+      <arg name="ok" type="b" direction="out"/>
+    </method>
+    <method name="SetProfile">
+      <arg name="json" type="s" direction="in"/>
+      <arg name="ok" type="b" direction="out"/>
+    </method>
+    <method name="WriteWrapper">
+      <arg name="path" type="s" direction="out"/>
+    </method>
+    <signal name="GameDetected">
+      <arg name="json" type="s"/>
+    </signal>
+    <signal name="IncidentLogged">
+      <arg name="json" type="s"/>
+    </signal>
+    <signal name="MetricsUpdated">
+      <arg name="json" type="s"/>
+    </signal>
+    <signal name="SessionLogged">
+      <arg name="json" type="s"/>
+    </signal>
+    <signal name="StatusChanged">
+      <arg name="json" type="s"/>
+    </signal>
+    <property name="Implementation" type="s" access="read"/>
+    <property name="InterfaceVersion" type="u" access="read"/>
+    <property name="Version" type="s" access="read"/>
+  </interface>
+</node>

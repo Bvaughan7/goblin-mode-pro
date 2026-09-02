@@ -31,6 +31,16 @@ BUS_NAME = BRIDGE_BUS_NAME
 OBJECT_PATH = BRIDGE_OBJECT_PATH
 IFACE = "com.goblinmode.Pro.Daemon"
 
+#: The frozen contract's version, and it stays 1. A second version would mean a
+#: caller has to care which implementation answered, which is the property the
+#: freeze exists to deny - see docs/dbus-daemon-interface-v1.xml.
+INTERFACE_VERSION = 1
+
+#: Which implementation is answering. For bug reports ONLY; nothing may branch
+#: on it. Unlike the helper, the daemon can import __about__, so its Version
+#: needs no separate bump site.
+IMPLEMENTATION = "python"
+
 INTROSPECTION_XML = f"""
 <node>
   <interface name="{IFACE}">
@@ -98,6 +108,9 @@ INTROSPECTION_XML = f"""
     <method name="SetNvidiaModeset">
       <arg type="b" name="enabled" direction="in"/><arg type="b" name="ok" direction="out"/>
     </method>
+    <property name="Implementation" type="s" access="read"/>
+    <property name="InterfaceVersion" type="u" access="read"/>
+    <property name="Version" type="s" access="read"/>
     <signal name="StatusChanged"><arg type="s" name="json"/></signal>
     <signal name="MetricsUpdated"><arg type="s" name="json"/></signal>
     <signal name="IncidentLogged"><arg type="s" name="json"/></signal>
@@ -165,9 +178,24 @@ class DaemonBridge:
         self._conn = conn
         node = Gio.DBusNodeInfo.new_for_xml(INTROSPECTION_XML)
         self._reg_id = conn.register_object(
-            OBJECT_PATH, node.interfaces[0], self._handle_call, None, None
+            OBJECT_PATH, node.interfaces[0], self._handle_call,
+            self._handle_get_property, None,
         )
         log.info("daemon bridge published on %s", name)
+
+    def _handle_get_property(self, conn, sender, path, iface, prop, error):
+        """Read-only identity. Same three properties the helper serves, for the
+        same reason: with more than one implementation of an interface, "which
+        one answered?" is the first question a bug report has to settle."""
+        from goblinmode.__about__ import __version__
+
+        if prop == "Version":
+            return GLib.Variant("s", __version__)
+        if prop == "InterfaceVersion":
+            return GLib.Variant("u", INTERFACE_VERSION)
+        if prop == "Implementation":
+            return GLib.Variant("s", IMPLEMENTATION)
+        return None
 
     def _handle_call(
         self, conn, sender, path, iface, method, params, invocation

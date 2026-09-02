@@ -128,6 +128,10 @@ jobs:
           GMP_REQUIRE_RUST_HELPER: "1"
         run: python3 -m unittest tests.test_dbus_interface_freeze -v
 
+      # The second seam: GUI/CLI to daemon. Same canonicalizer, same rules.
+      - name: The daemon still serves its frozen v1 interface
+        run: python3 -m unittest tests.test_daemon_interface_freeze -v
+
       - name: The conformance suite is runnable
         # It needs a live system bus and a polkit agent, so CI cannot execute
         # it - but a syntax error or a bad import in the suite would not be
