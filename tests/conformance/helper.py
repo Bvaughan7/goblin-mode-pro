@@ -129,36 +129,27 @@ FROZEN_XML = _REPO / "docs" / "dbus-interface-v1.xml"
 CPU_BASE = Path("/sys/devices/system/cpu")
 HWMON_BASE = Path("/sys/class/hwmon")
 
-PASS, FAIL, SKIP, INFO = "PASS", "FAIL", "SKIP", "INFO"
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _report import (  # noqa: E402
+    FAIL,
+    INFO,
+    PASS,
+    SKIP,
+    Result,
+    counts,
+    dbus_error_name,
+    dbus_error_message,
+)
+from _report import render as _render_report  # noqa: E402
 
 
 class _NotProbeable(Exception):
     """This method cannot be probed without changing the machine."""
 
 
-@dataclass
-class Result:
-    name: str
-    title: str
-    status: str
-    detail: str
-    section: str = "General"
-    observed: dict = field(default_factory=dict)
-
-
 # --------------------------------------------------------------------------
 # bus plumbing
 # --------------------------------------------------------------------------
-def _dbus_error_name(exc: GLib.Error) -> str:
-    return Gio.dbus_error_get_remote_error(exc) or ""
-
-
-def _dbus_error_message(exc: GLib.Error) -> str:
-    stripped = GLib.Error.copy(exc)
-    Gio.dbus_error_strip_remote_error(stripped)
-    return stripped.message
-
-
 class Helper:
     """A thin, deliberately dumb D-Bus client. No retries, no cleverness."""
 
@@ -378,8 +369,8 @@ class Conformance:
         try:
             self.helper.call(method, params)
         except GLib.Error as exc:
-            got_name = _dbus_error_name(exc)
-            got_msg = _dbus_error_message(exc)
+            got_name = dbus_error_name(exc)
+            got_msg = dbus_error_message(exc)
             if got_name == ERR_NOT_AUTHORIZED:
                 return self._denied(name, title, method, got_msg, section)
             if got_name != want_name:
@@ -420,7 +411,7 @@ class Conformance:
             served = self.helper.introspect()
         except GLib.Error as exc:
             return self._add("bus", "Helper is on the system bus", FAIL,
-                             f"cannot reach {BUS_NAME}: {_dbus_error_message(exc)} "
+                             f"cannot reach {BUS_NAME}: {dbus_error_message(exc)} "
                              "- every check below will SKIP without it", sec)
         self._add("bus", "Helper is on the system bus", PASS,
                   self.caps["helper_exec_start"] or BUS_NAME, sec)
@@ -457,7 +448,7 @@ class Conformance:
                 reply = self.helper.call(method, timeout_ms=10000)
             except GLib.Error as exc:
                 self._add(f"ro_{method}", method, FAIL,
-                          f"{_dbus_error_name(exc)}: {_dbus_error_message(exc)}", sec)
+                          f"{dbus_error_name(exc)}: {dbus_error_message(exc)}", sec)
                 continue
             sig = reply.get_type_string()
             if sig != expect[method]:
@@ -551,11 +542,11 @@ class Conformance:
             self._add("reject_unknown_method", "An unknown method is refused by name",
                       FAIL, "the call was accepted", sec)
         except GLib.Error as exc:
-            name = _dbus_error_name(exc)
+            name = dbus_error_name(exc)
             ok = name in (ERR_UNKNOWN_METHOD, "org.freedesktop.DBus.Error.UnknownMethod")
             self._add("reject_unknown_method", "An unknown method is refused by name",
                       PASS if ok else FAIL,
-                      f"{name}: {_dbus_error_message(exc)}", sec, error_name=name)
+                      f"{name}: {dbus_error_message(exc)}", sec, error_name=name)
 
     def check_renice_ownership(self):
         """The ownership gate can only be observed as a non-root caller.
@@ -634,11 +625,11 @@ class Conformance:
         try:
             self.helper.call("SetGovernor", GLib.Variant("(s)", (target,)))
         except GLib.Error as exc:
-            if _dbus_error_name(exc) == ERR_NOT_AUTHORIZED:
+            if dbus_error_name(exc) == ERR_NOT_AUTHORIZED:
                 return self._denied("snapshot", "Snapshot and RevertAll round-trip",
-                                    "SetGovernor", _dbus_error_message(exc), sec)
+                                    "SetGovernor", dbus_error_message(exc), sec)
             return self._add("snapshot", "Snapshot and RevertAll round-trip", FAIL,
-                             f"SetGovernor failed: {_dbus_error_message(exc)}", sec)
+                             f"SetGovernor failed: {dbus_error_message(exc)}", sec)
 
         try:
             now = _read(_governor_paths()[0])
@@ -657,7 +648,7 @@ class Conformance:
                 reverted = False
                 self._add("revert", "RevertAll restores the recorded state", FAIL,
                           f"RevertAll failed - YOUR GOVERNOR MAY STILL BE {target!r}: "
-                          f"{_dbus_error_message(exc)}", sec)
+                          f"{dbus_error_message(exc)}", sec)
         if not reverted:
             return
         back = _read(_governor_paths()[0])
@@ -713,12 +704,12 @@ class Conformance:
                 first = self.helper.call(method, params).unpack()[0]
                 second = self.helper.call(method, params).unpack()[0]
             except GLib.Error as exc:
-                if _dbus_error_name(exc) == ERR_NOT_AUTHORIZED:
+                if dbus_error_name(exc) == ERR_NOT_AUTHORIZED:
                     self._denied(name, f"{method} twice with nothing applied",
-                                 method, _dbus_error_message(exc), sec)
+                                 method, dbus_error_message(exc), sec)
                     continue
                 self._add(name, f"{method} twice with nothing applied", FAIL,
-                          f"{_dbus_error_name(exc)}: {_dbus_error_message(exc)}", sec)
+                          f"{dbus_error_name(exc)}: {dbus_error_message(exc)}", sec)
                 continue
             self._add(name, f"{method} twice with nothing applied",
                       PASS if (first, second) == (True, True) else FAIL,
@@ -741,7 +732,7 @@ class Conformance:
             except GLib.Error as exc:
                 self._add("set_same_governor",
                           "SetGovernor to the value it already has", FAIL,
-                          _dbus_error_message(exc), sec)
+                          dbus_error_message(exc), sec)
             finally:
                 # SetGovernor snapshots even when it changes nothing, so the
                 # state file has to be cleared or the next run refuses to start.
@@ -794,7 +785,7 @@ class Conformance:
         except GLib.Error as exc:
             return self._add("polkit_routing", "Each method demands the right action",
                              SKIP, f"could not become a bus monitor: "
-                             f"{_dbus_error_message(exc)}", sec)
+                             f"{dbus_error_message(exc)}", sec)
 
         for method, expected in sorted(EXPECTED_ACTION.items()):
             if _prompts(method) and not self.allow_prompts:
@@ -958,9 +949,6 @@ class _PolkitMonitor:
 # --------------------------------------------------------------------------
 # output
 # --------------------------------------------------------------------------
-_COLOUR = {PASS: "\033[32m", FAIL: "\033[31m", SKIP: "\033[33m", INFO: "\033[36m"}
-
-
 def complementary_run() -> str:
     """The other run, for the checks this one structurally cannot grade.
 
@@ -988,37 +976,19 @@ def complementary_run() -> str:
 
 
 def render(results: list[Result], caps: dict, use_colour: bool) -> str:
-    out = []
-    sections: dict[str, list[Result]] = {}
-    for r in results:
-        sections.setdefault(r.section, []).append(r)
-    for section, rows in sections.items():
-        out.append(f"\n{section}")
-        out.append("-" * len(section))
-        for r in rows:
-            tag = r.status
-            if use_colour:
-                tag = f"{_COLOUR.get(r.status, '')}{r.status}\033[0m"
-            out.append(f"  {tag}  {r.title}")
-            for line in r.detail.splitlines():
-                out.append(f"        {line}")
-    counts = {s: sum(1 for r in results if r.status == s)
-              for s in (PASS, FAIL, SKIP, INFO)}
-    out.append("")
-    out.append(f"{counts[PASS]} PASS  {counts[FAIL]} FAIL  "
-               f"{counts[SKIP]} SKIP  {counts[INFO]} INFO")
-    if counts[SKIP]:
-        out.append("A SKIP is not a pass. Each one above says what is missing.")
-        out.append(complementary_run())
+    """This suite's footer, on the shared report body (see _report.py)."""
+    footer: list[str] = []
+    if counts(results)[SKIP]:
+        footer.append(complementary_run())
     if caps["session_active"] is False and os.geteuid() != 0:
-        out.append("NOTE: this is not an active local session, so polkit will not "
-                   "grant manage-performance without a prompt.")
+        footer.append("NOTE: this is not an active local session, so polkit will not "
+                      "grant manage-performance without a prompt.")
     elif caps["session_active"] is None and os.geteuid() != 0:
-        out.append("NOTE: could not tell whether this is an active local session "
-                   "(loginctl knows no session for this process). polkit resolves "
-                   "the subject from the bus name's pid and may well authorize it "
-                   "anyway - the Authorization section above is the real answer.")
-    return "\n".join(out)
+        footer.append("NOTE: could not tell whether this is an active local session "
+                      "(loginctl knows no session for this process). polkit resolves "
+                      "the subject from the bus name's pid and may well authorize it "
+                      "anyway - the Authorization section above is the real answer.")
+    return _render_report(results, use_colour, footer)
 
 
 def build_parser() -> argparse.ArgumentParser:
