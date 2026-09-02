@@ -94,7 +94,6 @@ impl Snapshot {
         serde_json::to_string_pretty(self)
     }
 
-    #[allow(dead_code, reason = "consumed by RevertAll")]
     pub fn load(path: &Path) -> Option<Self> {
         let text = std::fs::read_to_string(path).ok()?;
         Self::from_json(&text)
@@ -129,6 +128,19 @@ fn lenient_i64<'de, D: Deserializer<'de>>(de: D) -> Result<Option<i64>, D::Error
             .or_else(|| n.as_f64().filter(|f| f.is_finite()).map(|f| f as i64)),
         Some(_) => None,
     })
+}
+
+/// Write a snapshot back, creating the state directory if needed.
+///
+/// Used when a later operation adds to an existing baseline - the AMD limits,
+/// which are only discoverable by running ryzenadj and so cannot be captured
+/// in the general snapshot.
+pub fn save(roots: &sys::Roots, snapshot: &Snapshot) -> std::io::Result<()> {
+    std::fs::create_dir_all(&roots.state_dir)?;
+    let json = snapshot
+        .to_json()
+        .map_err(|err| std::io::Error::new(std::io::ErrorKind::InvalidData, err))?;
+    std::fs::write(roots.state_file(), json)
 }
 
 /// Record the machine's baseline, unless one is already recorded.

@@ -171,8 +171,7 @@ impl Manager {
         #[zbus(header)] hdr: Header<'_>,
     ) -> Result<bool> {
         authorize(conn, &hdr).await?;
-        let _ = (pl1_uw, pl2_uw);
-        Err(unported("SetPowerLimits"))
+        power::set_power_limits(&self.roots, pl1_uw, pl2_uw)
     }
 
     #[zbus(out_args("ok"))]
@@ -182,7 +181,7 @@ impl Manager {
         #[zbus(header)] hdr: Header<'_>,
     ) -> Result<bool> {
         authorize(conn, &hdr).await?;
-        Err(unported("ResetPowerLimits"))
+        power::reset_power_limits(&self.roots)
     }
 
     #[zbus(name = "SetTDP", out_args("ok"))]
@@ -193,8 +192,7 @@ impl Manager {
         #[zbus(header)] hdr: Header<'_>,
     ) -> Result<bool> {
         authorize(conn, &hdr).await?;
-        let _ = watts;
-        Err(unported("SetTDP"))
+        power::set_tdp(&self.roots, watts).await
     }
 
     #[zbus(name = "ResetTDP", out_args("ok"))]
@@ -204,7 +202,7 @@ impl Manager {
         #[zbus(header)] hdr: Header<'_>,
     ) -> Result<bool> {
         authorize(conn, &hdr).await?;
-        Err(unported("ResetTDP"))
+        power::reset_tdp(&self.roots).await
     }
 
     #[zbus(out_args("ok"))]
