@@ -1,0 +1,6 @@
+{
+  "governor": "powersave",
+  "epp": "balance_power",
+  "pl1_uw": 107000000,
+  "pl2_uw": 107000000
+}

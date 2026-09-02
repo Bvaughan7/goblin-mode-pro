@@ -34,3 +34,6 @@ packaging/*/*.log
 po/_build/
 *.mo
 site/
+
+# Rust build output
+/target/
