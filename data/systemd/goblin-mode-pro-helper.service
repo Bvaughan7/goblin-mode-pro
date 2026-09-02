@@ -5,8 +5,13 @@ Documentation=https://github.com/Bvaughan7/goblin-mode-pro
 [Service]
 Type=dbus
 BusName=com.goblinmode.ProHelper
-ExecStart=/usr/bin/python3 /usr/lib/goblin-mode-pro/goblin_helper.py
-ExecStopPost=/usr/bin/python3 /usr/lib/goblin-mode-pro/goblin_helper.py --revert
+# Both point at a SYMLINK, not at an implementation. The helper is being
+# ported to Rust, and the two meet only over D-Bus, so which one runs is a
+# property of the machine rather than of the unit: relink and restart to
+# switch, relink back to roll back. One unit, so there is no way to end up
+# with both enabled and racing for the bus name.
+ExecStart=/usr/libexec/goblin-mode-pro/helper
+ExecStopPost=/usr/libexec/goblin-mode-pro/helper --revert
 Restart=on-failure
 RestartSec=2
 TimeoutStopSec=10

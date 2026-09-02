@@ -54,6 +54,9 @@ package() {
 
   # privileged helper
   install -Dm0755 helper/goblin_helper.py "$libdir/goblin_helper.py"
+  # the unit runs this symlink, not the file directly - see install.sh
+  install -d "$pkgdir/usr/libexec/$_pkgname"
+  ln -sfn "/usr/lib/$_pkgname/goblin_helper.py" "$pkgdir/usr/libexec/$_pkgname/helper"
 
   # /usr/bin entry-point shims (mirror install.sh)
   _shim() {

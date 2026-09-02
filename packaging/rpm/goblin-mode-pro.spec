@@ -51,6 +51,9 @@ python3 -m compileall -q src/goblinmode || true
 install -d %{buildroot}%{libdir}
 cp -rT src/goblinmode %{buildroot}%{libdir}/goblinmode
 install -Dm0755 helper/goblin_helper.py %{buildroot}%{libdir}/goblin_helper.py
+# the unit runs this symlink, not the file directly - see install.sh
+install -d %{buildroot}/usr/libexec/%{name}
+ln -sfn %{libdir}/goblin_helper.py %{buildroot}/usr/libexec/%{name}/helper
 
 install -d %{buildroot}%{_bindir}
 for spec in daemon:goblinmode.daemon gui:goblinmode.gui.app cli:goblinmode.cli; do

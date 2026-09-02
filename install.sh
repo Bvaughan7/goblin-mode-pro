@@ -15,6 +15,7 @@ set -euo pipefail
 REPO_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 PREFIX="/usr"
 LIB_DIR="/usr/lib/goblin-mode-pro"
+LIBEXEC_DIR="/usr/libexec/goblin-mode-pro"
 MODE="${1:-}"
 
 msg()  { printf '\033[1;32m::\033[0m %s\n' "$*"; }
@@ -125,6 +126,12 @@ EOF
 install_helper() {
     msg "Installing the privileged helper, polkit action, D-Bus policy and system unit"
     sudo install -Dm0755 "$REPO_DIR/helper/goblin_helper.py" "$LIB_DIR/goblin_helper.py"
+    # The unit runs $LIBEXEC_DIR/helper, a symlink to whichever implementation
+    # this machine should use. Python is the default and the only one any
+    # release currently ships; the Rust port is swapped in by relinking, so a
+    # rollback is one symlink and a restart rather than a reinstall.
+    sudo install -d -m0755 -- "$LIBEXEC_DIR"
+    sudo ln -sfn "$LIB_DIR/goblin_helper.py" "$LIBEXEC_DIR/helper"
     sudo install -Dm0644 "$REPO_DIR/data/polkit/com.goblinmode.pro.policy" \
         "$PREFIX/share/polkit-1/actions/com.goblinmode.pro.policy"
     sudo install -Dm0644 "$REPO_DIR/data/dbus/com.goblinmode.ProHelper.conf" \

@@ -17,6 +17,9 @@ override_dh_auto_install:
 	install -d $(DESTDIR)$(LIBDIR)
 	cp -rT src/goblinmode $(DESTDIR)$(LIBDIR)/goblinmode
 	install -Dm0755 helper/goblin_helper.py $(DESTDIR)$(LIBDIR)/goblin_helper.py
+	# the unit runs this symlink, not the file directly - see install.sh
+	install -d $(DESTDIR)/usr/libexec/goblin-mode-pro
+	ln -sfn $(LIBDIR)/goblin_helper.py $(DESTDIR)/usr/libexec/goblin-mode-pro/helper
 	install -d $(DESTDIR)/usr/bin
 	printf '#!/usr/bin/python3\nimport sys\nsys.path.insert(0, "$(LIBDIR)")\nfrom goblinmode.daemon import main\nraise SystemExit(main())\n'  > $(DESTDIR)/usr/bin/goblin-mode-pro-daemon
 	printf '#!/usr/bin/python3\nimport sys\nsys.path.insert(0, "$(LIBDIR)")\nfrom goblinmode.gui.app import main\nraise SystemExit(main())\n' > $(DESTDIR)/usr/bin/goblin-mode-pro

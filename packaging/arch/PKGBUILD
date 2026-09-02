@@ -34,6 +34,9 @@ package() {
   cp -rT src/goblinmode "$libdir/goblinmode"
   python -m compileall -q "$libdir/goblinmode" || true
   install -Dm0755 helper/goblin_helper.py "$libdir/goblin_helper.py"
+  # the unit runs this symlink, not the file directly - see install.sh
+  install -d "$pkgdir/usr/libexec/$pkgname"
+  ln -sfn "/usr/lib/$pkgname/goblin_helper.py" "$pkgdir/usr/libexec/$pkgname/helper"
 
   _shim() {
     install -d "$pkgdir/usr/bin"
