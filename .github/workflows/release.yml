@@ -106,6 +106,10 @@ jobs:
           cd ..
           rpmbuild -bb src-checkout/packaging/rpm/goblin-mode-pro.spec \
             --define "_topdir $PWD/rpmbuild"
+          # Separate spec, not a subpackage: rpm refuses an arch-specific
+          # subpackage of a noarch one, and the main package stays noarch.
+          rpmbuild -bb src-checkout/packaging/rpm/goblin-mode-pro-helper-rust.spec \
+            --define "_topdir $PWD/rpmbuild"
           mkdir -p dist
           find rpmbuild/RPMS -name '*.rpm' -exec mv {} dist/ \;
 

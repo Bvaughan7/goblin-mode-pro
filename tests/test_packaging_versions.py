@@ -47,6 +47,13 @@ class PackagingVersions(unittest.TestCase):
         self.assertIsNotNone(m, "no pkgver= in the Arch PKGBUILD")
         self.assertEqual(m.group(1), __version__)
 
+    def test_rpm_helper_rust_spec(self):
+        """The Rust helper's own spec - a second rpm to keep in step."""
+        m = re.search(r"^Version:\s+(\S+)$",
+                      (_PKG / "rpm/goblin-mode-pro-helper-rust.spec").read_text(), re.M)
+        self.assertIsNotNone(m, "no Version: in the helper-rust spec")
+        self.assertEqual(m.group(1), __version__)
+
     def test_rpm_spec(self):
         m = re.search(r"^Version:\s+(\S+)$",
                       (_PKG / "rpm/goblin-mode-pro.spec").read_text(), re.M)

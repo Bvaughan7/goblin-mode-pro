@@ -211,7 +211,7 @@ class PackagedRustHelper(unittest.TestCase):
         """One extra package per target, carrying the one compiled file."""
         checks = {
             "packaging/debian/control": "Package: goblin-mode-pro-helper-rust",
-            "packaging/rpm/goblin-mode-pro.spec": "%package helper-rust",
+            "packaging/rpm/goblin-mode-pro-helper-rust.spec": "Name:           goblin-mode-pro-helper-rust",
             "packaging/arch/PKGBUILD": "package_goblin-mode-pro-helper-rust()",
             "packaging/aur/PKGBUILD": "package_goblin-mode-pro-helper-rust-git()",
         }
@@ -227,12 +227,37 @@ class PackagedRustHelper(unittest.TestCase):
         Installing a package should never silently change which implementation
         runs as root. Switching is the user relinking, deliberately.
         """
-        for path in ("packaging/debian/rules", "packaging/rpm/goblin-mode-pro.spec",
+        for path in ("packaging/debian/rules",
+                     "packaging/rpm/goblin-mode-pro-helper-rust.spec",
                      "packaging/arch/PKGBUILD", "packaging/aur/PKGBUILD"):
             with self.subTest(path=path):
                 for line in _install_actions(_REPO / path).splitlines():
                     if "ln -sfn" in line and "helper-rust" in line:
                         self.fail(f"{path} points the symlink at the Rust helper: {line}")
+
+    def test_the_rpm_split_is_two_specs_not_a_subpackage(self):
+        """rpm refuses an arch-specific subpackage of a noarch package.
+
+            error: Only noarch subpackages are supported: BuildArch: x86_64
+
+        noarch-inside-arch is allowed; arch-inside-noarch is not. That is a
+        real rpm limitation and not something to work around by making the
+        whole package x86_64, so the compiled half gets its own spec. This
+        failed a release build once; a string check on the main spec could not
+        see it, because the string was present and the spec was still invalid.
+        """
+        main = (_REPO / "packaging/rpm/goblin-mode-pro.spec").read_text()
+        self.assertIn("BuildArch:      noarch", main)
+        self.assertNotIn("%package", main,
+                         "an arch-specific subpackage of a noarch spec will not build")
+        rust = _REPO / "packaging/rpm/goblin-mode-pro-helper-rust.spec"
+        self.assertTrue(rust.exists(), "the Rust helper has no spec of its own")
+        self.assertIn("ExclusiveArch:  x86_64", rust.read_text())
+
+    def test_the_release_workflow_builds_both_specs(self):
+        workflow = (_REPO / ".github" / "workflows" / "release.yml").read_text()
+        self.assertIn("goblin-mode-pro-helper-rust.spec", workflow,
+                      "the release job never builds the Rust helper's spec")
 
     def test_the_release_workflow_can_build_what_the_packaging_asks_for(self):
         """The packages compile Rust now; the release jobs have to be able to.
@@ -249,7 +274,7 @@ class PackagedRustHelper(unittest.TestCase):
         workflow = (_REPO / ".github" / "workflows" / "release.yml").read_text()
         builds_rust = [
             path for path in ("packaging/debian/rules",
-                              "packaging/rpm/goblin-mode-pro.spec")
+                              "packaging/rpm/goblin-mode-pro-helper-rust.spec")
             if "cargo build" in (_REPO / path).read_text()
         ]
         self.assertTrue(builds_rust, "no packaging target builds Rust any more")
@@ -273,7 +298,7 @@ class PackagedRustHelper(unittest.TestCase):
     def test_the_targets_that_build_rust_declare_a_toolchain(self):
         checks = {
             "packaging/debian/control": "cargo",
-            "packaging/rpm/goblin-mode-pro.spec": "BuildRequires:  cargo",
+            "packaging/rpm/goblin-mode-pro-helper-rust.spec": "BuildRequires:  cargo",
             "packaging/arch/PKGBUILD": "makedepends=('cargo')",
             "packaging/aur/PKGBUILD": "'cargo'",
         }
