@@ -163,3 +163,29 @@ jobs:
         uses: EmbarkStudios/cargo-deny-action@v2
         with:
           command: check
+
+  state-compat:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install PyGObject (the helper imports Gio at module scope)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-gi gir1.2-glib-2.0
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      # The three files under /run/goblin-mode-pro are read and written by both
+      # helper implementations, so either may find one the other wrote - which
+      # is exactly what a rollback depends on. The fixtures in tests/fixtures/
+      # were captured from the real writers; these two runs read every one of
+      # them with both readers.
+      - name: Python reads what Rust wrote
+        run: python3 -m unittest tests.test_state_compat -v
+
+      # cargo test takes a single filter, and the compat tests live in two
+      # modules, so this runs the lot. It is a few seconds and it means the
+      # job fails on its own terms rather than depending on `rust` passing.
+      - name: Rust reads what Python wrote
+        run: cargo test --workspace

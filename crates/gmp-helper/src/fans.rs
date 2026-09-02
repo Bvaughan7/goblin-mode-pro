@@ -27,6 +27,12 @@ use crate::sys;
 pub const MIN_FAN_PERCENT: u32 = 40;
 
 /// What a channel looked like before it was touched.
+///
+/// Same compatibility rules as the state snapshot, and for the same reason:
+/// either helper may find a file the other wrote. Unknown keys are carried
+/// through untouched so that rolling back from a newer version cannot silently
+/// drop a field it recorded - and for fans, a dropped field is a channel that
+/// does not get handed back to the EC.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 struct FanChannel {
     /// The mode: 1 = manual, usually 2 = automatic.
@@ -35,6 +41,9 @@ struct FanChannel {
     /// The duty cycle, 0-255.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pwm: Option<String>,
+    /// Anything this version does not know about, preserved on rewrite.
+    #[serde(flatten)]
+    unknown: BTreeMap<String, serde_json::Value>,
 }
 
 /// Whether a previous spin-up is still recorded. RevertAll only calls
@@ -166,6 +175,7 @@ pub fn spin_up_fans(roots: &sys::Roots, hwmon_base: &Path, percent: u32) -> Resu
                 FanChannel {
                     enable: Some(enable),
                     pwm: Some(current),
+                    unknown: BTreeMap::new(),
                 },
             );
         }
@@ -426,5 +436,44 @@ mod tests {
         );
         assert!(!fan_state_file(&roots).exists());
         let _ = std::fs::remove_dir_all(hwmon.parent().unwrap());
+    }
+
+    /// Real captured fan state, one file from each implementation.
+    const PYTHON_FANS: &str = include_str!("../../../tests/fixtures/fans.python.json");
+    const RUST_FANS: &str = include_str!("../../../tests/fixtures/fans.rust.json");
+
+    fn parse(text: &str) -> BTreeMap<String, FanChannel> {
+        serde_json::from_str(text).expect("a captured fan state must load")
+    }
+
+    #[test]
+    fn both_implementations_record_fan_state_the_same_way() {
+        assert_eq!(parse(PYTHON_FANS), parse(RUST_FANS));
+        let channels = parse(PYTHON_FANS);
+        assert_eq!(channels.len(), 2);
+        let first = &channels["/sys/class/hwmon/hwmon0/pwm1"];
+        // enable=2 is the EC's automatic mode - what a reset must restore.
+        assert_eq!(first.enable.as_deref(), Some("2"));
+        assert_eq!(first.pwm.as_deref(), Some("80"));
+    }
+
+    #[test]
+    fn a_python_written_fan_state_survives_a_rust_rewrite() {
+        let original = parse(PYTHON_FANS);
+        let text = serde_json::to_string_pretty(&original).unwrap();
+        assert_eq!(parse(&text), original);
+    }
+
+    #[test]
+    fn an_unknown_channel_field_is_not_dropped_on_rewrite() {
+        // A dropped field here is a channel that does not get handed back to
+        // the EC, which is the one state this helper must never leave behind.
+        let mut value: serde_json::Value = serde_json::from_str(PYTHON_FANS).unwrap();
+        value["/sys/class/hwmon/hwmon0/pwm1"]["future_mode"] = serde_json::json!("3");
+        let text = serde_json::to_string(&value).unwrap();
+        let channels = parse(&text);
+        let rewritten = serde_json::to_string(&channels).unwrap();
+        assert!(rewritten.contains("future_mode"), "{rewritten}");
+        assert!(rewritten.contains("\"3\""), "{rewritten}");
     }
 }

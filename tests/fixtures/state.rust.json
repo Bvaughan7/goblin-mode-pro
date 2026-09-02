@@ -4,9 +4,9 @@
   "pl1_uw": 107000000,
   "pl2_uw": 107000000,
   "ryzenadj_limits_mw": {
-    "stapm-limit": 25000,
     "fast-limit": 33000,
-    "slow-limit": 25000
+    "slow-limit": 25000,
+    "stapm-limit": 25000
   },
   "ryzenadj_stapm_mw": 25000
 }

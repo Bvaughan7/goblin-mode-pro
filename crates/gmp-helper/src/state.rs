@@ -193,6 +193,70 @@ mod tests {
     /// Captured from the Python helper. See tests/fixtures/.
     const REAL: &str = include_str!("../../../tests/fixtures/state.python.json");
 
+    /// Captured from the Rust writer. Its pair is state.python.json; the two
+    /// describe the same machine and differ only in key order.
+    const OURS: &str = include_str!("../../../tests/fixtures/state.rust.json");
+
+    #[test]
+    fn the_two_implementations_snapshots_are_semantically_equal() {
+        // Key ORDER differs - Python preserves insertion order, this sorts -
+        // and that is fine. Parsing both into the same struct is the check
+        // that matters, because that is what either helper actually does with
+        // a file the other wrote.
+        assert_eq!(
+            Snapshot::from_json(REAL).unwrap(),
+            Snapshot::from_json(OURS).unwrap(),
+            "the two helpers disagree about what they recorded"
+        );
+    }
+
+    #[test]
+    fn a_python_written_snapshot_survives_a_rust_rewrite_intact() {
+        // THE ROLLBACK PATH, on real captured bytes rather than a literal: read
+        // what Python wrote, write it back out, and lose nothing on the way.
+        let original = Snapshot::from_json(REAL).unwrap();
+        let round_tripped = Snapshot::from_json(&original.to_json().unwrap()).unwrap();
+        assert_eq!(round_tripped, original);
+        assert_eq!(
+            round_tripped.ryzenadj_limits_mw,
+            original.ryzenadj_limits_mw
+        );
+    }
+
+    #[test]
+    fn the_amd_limits_keep_their_own_values_across_the_two_writers() {
+        // f33c437: restoring them all to STAPM costs the burst headroom the
+        // machine shipped with. If either fixture ever collapses them, this
+        // says so.
+        for (label, text) in [("python", REAL), ("rust", OURS)] {
+            let limits = Snapshot::from_json(text)
+                .unwrap()
+                .ryzenadj_limits_mw
+                .unwrap();
+            assert_eq!(limits.get("stapm-limit"), Some(&25_000), "{label}");
+            assert_eq!(limits.get("fast-limit"), Some(&33_000), "{label}");
+            assert_ne!(
+                limits.get("fast-limit"),
+                limits.get("stapm-limit"),
+                "{label}"
+            );
+        }
+    }
+
+    #[test]
+    fn an_unknown_key_in_a_real_python_file_is_carried_through() {
+        // A NEWER Python helper adds a field; this one reads the file,
+        // rewrites it, and must not drop what it did not understand.
+        let mut value: serde_json::Value = serde_json::from_str(REAL).unwrap();
+        value["future_knob"] = serde_json::json!({"added": "later"});
+        let text = serde_json::to_string_pretty(&value).unwrap();
+        let snap = Snapshot::from_json(&text).unwrap();
+        assert_eq!(snap.governor.as_deref(), Some("powersave"));
+        let rewritten = snap.to_json().unwrap();
+        assert!(rewritten.contains("future_knob"), "{rewritten}");
+        assert!(rewritten.contains("\"added\""), "{rewritten}");
+    }
+
     #[test]
     fn reads_a_snapshot_written_by_the_python_helper() {
         let snap = Snapshot::from_json(REAL).expect("the real fixture must load");
@@ -262,5 +326,43 @@ mod tests {
         .unwrap();
         assert!(!json.contains("null"), "{json}");
         assert!(!json.contains("epp"), "{json}");
+    }
+
+    /// Every committed fixture loads with the reader that owns its format.
+    ///
+    /// Enumerated at runtime rather than pinned with include_str!, so adding a
+    /// fixture cannot silently escape this: a file nobody can read is not a
+    /// compatibility record, it is a decoration.
+    #[test]
+    fn every_committed_fixture_loads() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures");
+        let mut seen = 0;
+        for entry in std::fs::read_dir(&dir).expect("the fixture directory must exist") {
+            let path = entry.unwrap().path();
+            let Some(name) = path.file_name().map(|n| n.to_string_lossy().into_owned()) else {
+                continue;
+            };
+            if !name.ends_with(".json") {
+                continue;
+            }
+            let text = std::fs::read_to_string(&path).unwrap();
+            assert!(!text.trim().is_empty(), "{name} is empty");
+            if name.starts_with("state.") {
+                Snapshot::from_json(&text).unwrap_or_else(|e| panic!("{name}: {e}"));
+            } else if name.starts_with("fans.") {
+                serde_json::from_str::<serde_json::Value>(&text)
+                    .unwrap_or_else(|e| panic!("{name}: {e}"));
+            } else if name.starts_with("sysctls.") {
+                serde_json::from_str::<BTreeMap<String, String>>(&text)
+                    .unwrap_or_else(|e| panic!("{name}: {e}"));
+            } else {
+                panic!("{name} matches no reader; name it state.*, fans.* or sysctls.*");
+            }
+            seen += 1;
+        }
+        assert!(
+            seen >= 6,
+            "expected the six captured fixtures, found {seen}"
+        );
     }
 }

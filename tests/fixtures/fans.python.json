@@ -1,0 +1,10 @@
+{
+  "/sys/class/hwmon/hwmon0/pwm1": {
+    "enable": "2",
+    "pwm": "80"
+  },
+  "/sys/class/hwmon/hwmon1/pwm1": {
+    "enable": "2",
+    "pwm": "90"
+  }
+}
