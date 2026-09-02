@@ -16,12 +16,10 @@ mod polkit;
 mod power;
 mod sys;
 mod undervolt;
-// Every field and helper here is exercised by its own tests, but nothing in
-// the binary reads a snapshot until RevertAll and the power-limit methods are
-// ported. Porting the format first is deliberate: it is the compatibility
-// surface between the two helpers, so it has to be right before either one
-// writes through it.
-#[allow(dead_code, reason = "consumed when the hardware operations land")]
+// The snapshot is WRITTEN from here already; it is not read back until
+// RevertAll is ported. Getting the format right first is deliberate - it is
+// the compatibility surface between the two helpers, and a Python RevertAll
+// has to be able to restore from a file this binary wrote.
 mod state;
 
 use anyhow::Context;
@@ -46,7 +44,10 @@ async fn main() -> anyhow::Result<()> {
         .context("no system bus - the helper is not meant to run on a session bus")?
         .name(manager::BUS_NAME)
         .context("invalid bus name")?
-        .serve_at(manager::OBJECT_PATH, manager::Manager)
+        .serve_at(
+            manager::OBJECT_PATH,
+            manager::Manager::new(sys::Roots::system()),
+        )
         .context("invalid object path")?
         .build()
         .await

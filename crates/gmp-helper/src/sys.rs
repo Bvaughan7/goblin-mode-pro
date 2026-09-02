@@ -16,6 +16,48 @@ pub const CPU_BASE: &str = "/sys/devices/system/cpu";
 /// so guessing at multi-socket support would be worse than not having it.
 pub const RAPL_BASE: &str = "/sys/class/powercap/intel-rapl/intel-rapl:0";
 
+/// tmpfs, root-only. Wiped on reboot, which is the point: a snapshot describes
+/// what was true before this boot's changes, and a stale one from a previous
+/// boot would restore values that are no longer meaningful.
+pub const STATE_DIR: &str = "/run/goblin-mode-pro";
+
+/// The filesystem roots every operation works against.
+///
+/// Passed in rather than reached for as globals so the operations can be
+/// tested against a temporary tree instead of needing root and real hardware.
+/// It is also the seam the plan asks for: a write takes a path derived from
+/// one of these roots by ENUMERATION, never a path assembled from anything a
+/// caller sent, so traversal is structurally impossible rather than filtered.
+#[derive(Debug, Clone)]
+pub struct Roots {
+    pub cpu: PathBuf,
+    pub rapl: PathBuf,
+    pub state_dir: PathBuf,
+}
+
+impl Roots {
+    /// The real machine.
+    pub fn system() -> Self {
+        Self {
+            cpu: PathBuf::from(CPU_BASE),
+            rapl: PathBuf::from(RAPL_BASE),
+            state_dir: PathBuf::from(STATE_DIR),
+        }
+    }
+
+    pub fn state_file(&self) -> PathBuf {
+        self.state_dir.join("state.json")
+    }
+}
+
+/// Write a value to a sysfs attribute.
+///
+/// No trailing newline, matching the Python helper's `_write`: sysfs parses
+/// the value itself and some attributes reject the extra byte.
+pub fn write_value(path: &Path, value: &str) -> io::Result<()> {
+    std::fs::write(path, value)
+}
+
 /// Read a sysfs value, trimmed. Mirrors `_read` in the Python helper, whose
 /// `.strip()` matters: sysfs values carry a trailing newline and a comparison
 /// against an untrimmed read silently never matches.

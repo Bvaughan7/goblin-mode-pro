@@ -25,6 +25,8 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
+use crate::sys;
+
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 
@@ -79,6 +81,10 @@ pub struct Snapshot {
 }
 
 impl Snapshot {
+    /// The read side of the format. Written snapshots already flow through
+    /// `to_json` below; these land when `RevertAll` is ported and is the
+    /// thing that reads a baseline back.
+    #[allow(dead_code, reason = "consumed by RevertAll")]
     pub fn from_json(text: &str) -> Result<Self, serde_json::Error> {
         serde_json::from_str(text)
     }
@@ -88,6 +94,7 @@ impl Snapshot {
         serde_json::to_string_pretty(self)
     }
 
+    #[allow(dead_code, reason = "consumed by RevertAll")]
     pub fn load(path: &Path) -> Option<Self> {
         let text = std::fs::read_to_string(path).ok()?;
         Self::from_json(&text)
@@ -122,6 +129,49 @@ fn lenient_i64<'de, D: Deserializer<'de>>(de: D) -> Result<Option<i64>, D::Error
             .or_else(|| n.as_f64().filter(|f| f.is_finite()).map(|f| f as i64)),
         Some(_) => None,
     })
+}
+
+/// Record the machine's baseline, unless one is already recorded.
+///
+/// Early-returns when the file exists, exactly like the Python `_snapshot()`.
+/// That is what makes the baseline describe the state before the FIRST change
+/// of the session rather than before the most recent one - `RevertAll` has to
+/// restore what the user had, not what they had a moment ago.
+///
+/// It must be called only AFTER a request has been validated. Calling it first
+/// is the bug the conformance suite found in the Python helper: a refused call
+/// still wrote the file, and because of the early return above, the next
+/// legitimate change then never recorded its own baseline.
+pub fn capture_if_absent(roots: &sys::Roots) -> std::io::Result<()> {
+    let file = roots.state_file();
+    if file.exists() {
+        return Ok(());
+    }
+    std::fs::create_dir_all(&roots.state_dir)?;
+
+    let mut snap = Snapshot::default();
+    // An empty governor is STORED, not omitted: get_governor answers "" on a
+    // machine with no cpufreq and the Python helper records that answer.
+    if let Ok(governor) = crate::cpu::get_governor(&roots.cpu) {
+        snap.governor = Some(governor);
+    }
+    if let Some(path) = sys::cpu_leaf_paths(&roots.cpu, "energy_performance_preference").first() {
+        if let Ok(epp) = sys::read_trimmed(path) {
+            snap.epp = Some(epp);
+        }
+    }
+    // Both limits or neither - half a power baseline cannot be restored.
+    if let Ok((pl1, pl2)) = crate::power::get_power_limits(&roots.rapl) {
+        snap.pl1_uw = Some(pl1);
+        snap.pl2_uw = Some(pl2);
+    }
+
+    let json = snap
+        .to_json()
+        .map_err(|err| std::io::Error::new(std::io::ErrorKind::InvalidData, err))?;
+    std::fs::write(&file, json)?;
+    tracing::info!("snapshot saved to {}", file.display());
+    Ok(())
 }
 
 #[cfg(test)]

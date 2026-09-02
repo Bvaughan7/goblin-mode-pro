@@ -13,8 +13,6 @@
 //! before it can change a single sysfs file. Wiring the security path first
 //! and the hardware second is the point of doing the port in this order.
 
-use std::path::Path;
-
 use zbus::message::Header;
 use zbus::object_server::Interface;
 use zbus::{interface, Connection};
@@ -31,7 +29,15 @@ pub const BUS_NAME: &str = "com.goblinmode.ProHelper";
 pub const OBJECT_PATH: &str = "/com/goblinmode/ProHelper";
 pub const INTERFACE: &str = "com.goblinmode.ProHelper.Manager";
 
-pub struct Manager;
+pub struct Manager {
+    roots: sys::Roots,
+}
+
+impl Manager {
+    pub fn new(roots: sys::Roots) -> Self {
+        Self { roots }
+    }
+}
 
 /// Refuse a method that exists on the contract but has not been ported.
 ///
@@ -86,13 +92,13 @@ impl Manager {
 
     #[zbus(out_args("governor"))]
     async fn get_governor(&self) -> Result<String> {
-        cpu::get_governor(Path::new(sys::CPU_BASE))
+        cpu::get_governor(&self.roots.cpu)
             .map_err(|err| HelperError::Failed(format!("could not read the governor: {err}")))
     }
 
     #[zbus(out_args("pl1_uw", "pl2_uw"))]
     async fn get_power_limits(&self) -> Result<(u64, u64)> {
-        power::get_power_limits(Path::new(sys::RAPL_BASE))
+        power::get_power_limits(&self.roots.rapl)
             .map_err(|err| HelperError::Failed(format!("could not read the power limits: {err}")))
     }
 
@@ -116,8 +122,7 @@ impl Manager {
         #[zbus(header)] hdr: Header<'_>,
     ) -> Result<bool> {
         authorize(conn, &hdr).await?;
-        let _ = governor;
-        Err(unported("SetGovernor"))
+        cpu::set_governor(&self.roots, governor)
     }
 
     #[zbus(name = "SetEPP", out_args("ok"))]
@@ -128,8 +133,7 @@ impl Manager {
         #[zbus(header)] hdr: Header<'_>,
     ) -> Result<bool> {
         authorize(conn, &hdr).await?;
-        let _ = epp;
-        Err(unported("SetEPP"))
+        cpu::set_epp(&self.roots, epp)
     }
 
     #[zbus(out_args("ok"))]
@@ -295,7 +299,9 @@ impl Manager {
 /// how a freeze check starts passing for the wrong reason.
 pub fn introspection_xml() -> String {
     let mut out = String::from("<node>\n");
-    Manager.introspect_to_writer(&mut out, 2);
+    // Introspection reads no files, so the real roots are safe here and this
+    // stays runnable in CI and in a container.
+    Manager::new(sys::Roots::system()).introspect_to_writer(&mut out, 2);
     out.push_str("</node>\n");
     out
 }
