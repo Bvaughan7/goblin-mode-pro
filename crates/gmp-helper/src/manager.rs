@@ -20,7 +20,7 @@ use zbus::{interface, Connection};
 use crate::error::{HelperError, Result};
 use std::path::Path;
 
-use crate::{cpu, polkit, power, renice, sys, sysctl, undervolt};
+use crate::{cpu, fans, polkit, power, renice, sys, sysctl, undervolt};
 
 /// The frozen contract. These three strings are the whole compatibility
 /// surface between the Python and Rust helpers, and the conversion plan gets
@@ -246,7 +246,7 @@ impl Manager {
         #[zbus(header)] hdr: Header<'_>,
     ) -> Result<bool> {
         authorize(conn, &hdr).await?;
-        Err(unported("ResetFans"))
+        fans::reset_fans(&self.roots)
     }
 
     // ---- manage-kernel-tunables: persistent system configuration ----
@@ -296,8 +296,7 @@ impl Manager {
         #[zbus(header)] hdr: Header<'_>,
     ) -> Result<bool> {
         authorize(conn, &hdr).await?;
-        let _ = percent;
-        Err(unported("SpinUpFans"))
+        fans::spin_up_fans(&self.roots, Path::new(sys::HWMON_BASE), percent)
     }
 }
 

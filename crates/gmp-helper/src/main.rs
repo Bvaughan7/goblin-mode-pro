@@ -11,6 +11,7 @@
 
 mod cpu;
 mod error;
+mod fans;
 mod manager;
 mod polkit;
 mod power;
@@ -42,14 +43,18 @@ async fn main() -> anyhow::Result<()> {
         return Ok(());
     }
 
+    let roots = sys::Roots::system();
+
+    // BEFORE anything is served. A fan left under manual control by an
+    // instance that died is the one state this helper must never sit in, and
+    // a caller must not be able to race the recovery.
+    fans::recover_after_restart(&roots);
+
     let _conn = zbus::connection::Builder::system()
         .context("no system bus - the helper is not meant to run on a session bus")?
         .name(manager::BUS_NAME)
         .context("invalid bus name")?
-        .serve_at(
-            manager::OBJECT_PATH,
-            manager::Manager::new(sys::Roots::system()),
-        )
+        .serve_at(manager::OBJECT_PATH, manager::Manager::new(roots))
         .context("invalid object path")?
         .build()
         .await

@@ -25,6 +25,9 @@ pub const STATE_DIR: &str = "/run/goblin-mode-pro";
 /// be tested against a fake one without root.
 pub const PROC_SYS: &str = "/proc/sys";
 
+/// hwmon, where the fan controls live.
+pub const HWMON_BASE: &str = "/sys/class/hwmon";
+
 /// The filesystem roots every operation works against.
 ///
 /// Passed in rather than reached for as globals so the operations can be
