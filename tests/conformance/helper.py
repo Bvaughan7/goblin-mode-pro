@@ -95,6 +95,22 @@ EXPECTED_ACTION = {
 #: methods that need no authorization at all
 READ_ONLY = ("GetGovernor", "GetPowerLimits", "HasTDPControl", "ReadUndervolt")
 
+#: polkit actions the policy puts behind auth_admin_keep. Calling a method on
+#: one of these raises an authentication dialog on the user's desktop, and the
+#: client cannot prevent it: the HELPER passes AllowUserInteraction=1 in its
+#: own CheckAuthorization, so the prompt is raised before any answer this
+#: suite could give. Three dismissed or mistyped dialogs trip pam_faillock
+#: (deny=3 by default) and lock the account out of sudo for ten minutes, which
+#: is a genuinely hostile thing for a test to do to somebody who is not
+#: watching their screen. So every check that touches one is opt-in.
+PROMPTING_ACTIONS = frozenset({POLKIT_KERNEL, POLKIT_THERMAL})
+
+NVIDIA_MODESET_CONF = Path("/etc/modprobe.d/goblin-mode-pro-nvidia.conf")
+
+
+def _prompts(method: str) -> bool:
+    return EXPECTED_ACTION.get(method) in PROMPTING_ACTIONS
+
 MIN_FAN_PERCENT = 40
 RAPL_FLOOR_UW = 6_000_000
 SYSCTL_RANGES = {
@@ -114,6 +130,10 @@ CPU_BASE = Path("/sys/devices/system/cpu")
 HWMON_BASE = Path("/sys/class/hwmon")
 
 PASS, FAIL, SKIP, INFO = "PASS", "FAIL", "SKIP", "INFO"
+
+
+class _NotProbeable(Exception):
+    """This method cannot be probed without changing the machine."""
 
 
 @dataclass
@@ -297,8 +317,9 @@ def capabilities() -> dict:
 # the suite
 # --------------------------------------------------------------------------
 class Conformance:
-    def __init__(self, apply: bool = False):
+    def __init__(self, apply: bool = False, allow_prompts: bool = False):
         self.apply = apply
+        self.allow_prompts = allow_prompts
         self.results: list[Result] = []
         #: polkit actions this caller was refused, judged together at the end
         self.denied_actions: set[str] = set()
@@ -337,6 +358,14 @@ class Conformance:
         fragment of the message, and - the one that actually matters - that
         the machine is unchanged afterwards.
         """
+        if _prompts(method) and not self.allow_prompts:
+            return self._add(
+                name, title, SKIP,
+                f"{method} is gated by {EXPECTED_ACTION[method]}, which is "
+                "auth_admin_keep: calling it raises a password dialog on the "
+                "desktop even though the call is going to be refused on its "
+                "arguments. Pass --prompts, while watching the screen, to "
+                "include it.", section)
         before = unchanged() if unchanged else None
         try:
             self.helper.call(method, params)
@@ -703,6 +732,29 @@ class Conformance:
                 with contextlib.suppress(GLib.Error):
                     self.helper.call("RevertAll")
 
+    def _neutral_args(self, method: str) -> GLib.Variant | None:
+        """Arguments that reach the authorization check and do as little as
+        possible if it grants.
+
+        Most probes are inert because the value is refused by validation after
+        the polkit check - an unknown governor, a key outside the allowlist, a
+        fan duty under the floor. `SetNvidiaModeset` is the exception: it takes
+        a bool, and BOTH values write /etc/modprobe.d. So it is probed with the
+        value already on disk, which makes the write a byte-identical no-op,
+        and skipped entirely when the file does not exist rather than creating
+        one as a side effect of a test.
+        """
+        if method != "SetNvidiaModeset":
+            return _NEUTRAL_ARGS.get(method)
+        text = _read(NVIDIA_MODESET_CONF)
+        if text is None:
+            raise _NotProbeable(
+                f"{NVIDIA_MODESET_CONF} does not exist, and SetNvidiaModeset takes "
+                "a bool - either value would CREATE it. Refusing to change the "
+                "machine's boot configuration to observe a polkit action.")
+        current = "modeset=1" in text
+        return GLib.Variant("(b)", (current,))
+
     def check_polkit_routing(self, enabled: bool):
         """Which polkit action does each mutating method actually demand?
 
@@ -729,7 +781,18 @@ class Conformance:
                              f"{_dbus_error_message(exc)}", sec)
 
         for method, expected in sorted(EXPECTED_ACTION.items()):
-            params = _NEUTRAL_ARGS.get(method)
+            if _prompts(method) and not self.allow_prompts:
+                self._add(f"action_{method}", f"{method} -> {expected}", SKIP,
+                          f"{expected} is auth_admin_keep: calling this raises a "
+                          "password dialog on the desktop. Pass --prompts, while "
+                          "watching the screen, to include it.", sec)
+                continue
+            try:
+                params = self._neutral_args(method)
+            except _NotProbeable as exc:
+                self._add(f"action_{method}", f"{method} -> {expected}", SKIP,
+                          str(exc), sec)
+                continue
             monitor.clear()
             # The verdict does not matter: the action id is read out of the
             # CheckAuthorization call, which happens first. Under sudo the
@@ -924,11 +987,17 @@ def main(argv=None) -> int:
     ap.add_argument("--polkit-routing", action="store_true",
                     help="assert which polkit action each method demands; needs "
                          "root, and expects its own calls to be denied")
+    ap.add_argument("--prompts", action="store_true",
+                    help="include the checks whose polkit action is "
+                         "auth_admin_keep. These raise a password dialog on "
+                         "your desktop - run this only while you are watching "
+                         "the screen, because three dismissed dialogs lock the "
+                         "account out of sudo for ten minutes (pam_faillock)")
     ap.add_argument("--json", action="store_true",
                     help="machine-readable results plus the capability report")
     args = ap.parse_args(argv)
 
-    suite = Conformance(apply=args.apply)
+    suite = Conformance(apply=args.apply, allow_prompts=args.prompts)
     suite.run(polkit_routing=args.polkit_routing)
 
     failed = sum(1 for r in suite.results if r.status == FAIL)
