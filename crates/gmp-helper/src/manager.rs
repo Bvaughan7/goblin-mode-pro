@@ -20,7 +20,7 @@ use zbus::{interface, Connection};
 use crate::error::{HelperError, Result};
 use std::path::Path;
 
-use crate::{cpu, fans, polkit, power, renice, sys, sysctl, undervolt};
+use crate::{cpu, fans, nvidia, polkit, power, renice, revert, sys, sysctl, undervolt};
 
 /// The frozen contract. These three strings are the whole compatibility
 /// surface between the Python and Rust helpers, and the conversion plan gets
@@ -41,20 +41,7 @@ impl Manager {
     }
 }
 
-/// Refuse a method that exists on the contract but has not been ported.
-///
-/// `NotSupported` rather than a bespoke error: a caller written against the
-/// Python helper already has to handle standard D-Bus errors, and inventing a
-/// new error name would be a change to the interface the freeze exists to
-/// prevent.
-fn unported(method: &str) -> HelperError {
-    HelperError::NotImplemented(format!(
-        "{method} is not implemented in the Rust helper yet; \
-         install the Python helper for this operation"
-    ))
-}
-
-/// Authorize the call described by `hdr`, or return `AccessDenied`.
+/// Authorize the call described by `hdr`, or refuse it.
 ///
 /// FAILS CLOSED at every step. A message with no sender, a uid that cannot be
 /// resolved, an unreachable polkit - none of them are permission to proceed.
@@ -214,7 +201,7 @@ impl Manager {
         #[zbus(header)] hdr: Header<'_>,
     ) -> Result<bool> {
         authorize(conn, &hdr).await?;
-        Err(unported("RevertAll"))
+        revert::revert_all(&self.roots).await
     }
 
     #[zbus(out_args("ok"))]
@@ -224,7 +211,7 @@ impl Manager {
         #[zbus(header)] hdr: Header<'_>,
     ) -> Result<bool> {
         authorize(conn, &hdr).await?;
-        Err(unported("ApplyUndervolt"))
+        Ok(undervolt::apply_undervolt().await)
     }
 
     #[zbus(out_args("ok"))]
@@ -234,7 +221,7 @@ impl Manager {
         #[zbus(header)] hdr: Header<'_>,
     ) -> Result<bool> {
         authorize(conn, &hdr).await?;
-        Err(unported("ApplyAmdUndervolt"))
+        Ok(undervolt::apply_amd_undervolt(&undervolt::amd_conf()).await)
     }
 
     /// Handing a fan back to the embedded controller is on the permissive
@@ -282,8 +269,7 @@ impl Manager {
         #[zbus(header)] hdr: Header<'_>,
     ) -> Result<bool> {
         authorize(conn, &hdr).await?;
-        let _ = enabled;
-        Err(unported("SetNvidiaModeset"))
+        Ok(nvidia::set_modeset(&nvidia::conf_path(), enabled))
     }
 
     // ---- manage-hardware-thermal ----

@@ -37,6 +37,12 @@ struct FanChannel {
     pwm: Option<String>,
 }
 
+/// Whether a previous spin-up is still recorded. RevertAll only calls
+/// reset_fans when there is something to reset.
+pub(crate) fn has_state(roots: &sys::Roots) -> bool {
+    fan_state_file(roots).exists()
+}
+
 fn fan_state_file(roots: &sys::Roots) -> PathBuf {
     roots.state_dir.join("fans.json")
 }

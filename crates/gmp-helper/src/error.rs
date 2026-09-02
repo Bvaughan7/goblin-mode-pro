@@ -24,13 +24,6 @@ pub enum HelperError {
     /// The operation was attempted and did not work. Mirrors the catch-all in
     /// the Python helper's `_handle_call`.
     Failed(String),
-
-    /// On the contract, not yet ported. TEMPORARY: this variant must have no
-    /// remaining users before the Rust helper becomes the default, because a
-    /// caller cannot tell "this build cannot do it" from "your machine cannot
-    /// do it" - and the whole promise of the frozen interface is that it does
-    /// not matter which implementation answered.
-    NotImplemented(String),
 }
 
 pub type Result<T> = std::result::Result<T, HelperError>;
@@ -62,17 +55,23 @@ mod tests {
         );
     }
 
+    /// Every method on the contract is implemented, so there is no longer a
+    /// "not ported" error to return. This is deliberately an exhaustive match
+    /// rather than a comment: adding a variant here is adding a failure mode
+    /// callers have never seen, and it should not happen by accident.
     #[test]
-    fn the_unported_error_is_distinguishable_from_a_real_failure() {
-        // Deliberately NOT Failed: during the port a caller has to be able to
-        // tell "this build cannot do it" from "your machine cannot do it".
-        let unported = HelperError::NotImplemented(String::new());
-        let failed = HelperError::Failed(String::new());
-        assert_eq!(
-            unported.name().as_str(),
-            "com.goblinmode.ProHelper.Manager.NotImplemented"
-        );
-        assert_ne!(unported.name().as_str(), failed.name().as_str());
+    fn the_helper_has_exactly_two_ways_to_refuse() {
+        let cases: Vec<HelperError> = vec![
+            HelperError::NotAuthorized(String::new()),
+            HelperError::Failed(String::new()),
+        ];
+        for case in &cases {
+            match case {
+                HelperError::NotAuthorized(_) | HelperError::Failed(_) => {}
+                HelperError::ZBus(_) => panic!("transport errors are not ours to return"),
+            }
+        }
+        assert_eq!(cases.len(), 2);
     }
 
     #[test]

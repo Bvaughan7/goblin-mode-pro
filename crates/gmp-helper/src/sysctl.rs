@@ -153,13 +153,6 @@ pub fn revert_sysctl(roots: &sys::Roots, proc_sys: &Path, key: &str) -> Result<b
     Ok(true)
 }
 
-/// The sysctl state file, named here for RevertAll - which clears it
-/// separately from state.json, because these are undone key by key.
-#[allow(dead_code, reason = "consumed by RevertAll")]
-pub fn state_file(roots: &sys::Roots) -> PathBuf {
-    sysctl_state_file(roots)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -241,7 +234,7 @@ mod tests {
         for (key, value) in [("vm.dirty_ratio", "42"), ("vm.swappiness", "999")] {
             let _ = set_sysctl(&roots, &proc_sys, key, value);
         }
-        assert!(!state_file(&roots).exists());
+        assert!(!sysctl_state_file(&roots).exists());
         let _ = std::fs::remove_dir_all(proc_sys.parent().unwrap());
     }
 

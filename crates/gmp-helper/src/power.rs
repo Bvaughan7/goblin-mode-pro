@@ -38,7 +38,7 @@ pub fn get_power_limits(rapl_base: &Path) -> std::io::Result<(u64, u64)> {
 /// running keeps reporting no TDP control until the service restarts, on both
 /// implementations. Matching that matters more than being cleverer, because
 /// `HasTDPControl` is what the GUI greys a control on.
-pub fn ryzenadj() -> Option<&'static Path> {
+pub(crate) fn ryzenadj() -> Option<&'static Path> {
     static RYZENADJ: OnceLock<Option<PathBuf>> = OnceLock::new();
     RYZENADJ.get_or_init(|| sys::which("ryzenadj")).as_deref()
 }
@@ -141,8 +141,16 @@ pub fn reset_power_limits(roots: &sys::Roots) -> Result<bool> {
         // success, not failure - the machine is already as it was.
         return Ok(true);
     };
+    let ok = restore_power_limits(roots, &snapshot);
+    tracing::info!("power limits reset to their recorded values (ok={ok})");
+    Ok(ok)
+}
+
+/// Write PL1/PL2 back from a snapshot already in hand. Shared with RevertAll,
+/// which has loaded the state file for its other fields anyway.
+pub(crate) fn restore_power_limits(roots: &sys::Roots, snapshot: &state::Snapshot) -> bool {
     let (Some(pl1), Some(pl2)) = (snapshot.pl1_uw, snapshot.pl2_uw) else {
-        return Ok(true);
+        return true;
     };
     let mut ok = true;
     for (idx, value) in [(0u8, pl1), (1u8, pl2)] {
@@ -154,12 +162,11 @@ pub fn reset_power_limits(roots: &sys::Roots) -> Result<bool> {
             ok = false;
         }
     }
-    tracing::info!("power limits reset to their recorded values (ok={ok})");
-    Ok(ok)
+    ok
 }
 
 /// Run ryzenadj and return its stdout. A non-zero exit is a failure.
-async fn run_ryzenadj(binary: &Path, args: &[String]) -> std::io::Result<String> {
+pub(crate) async fn run_ryzenadj(binary: &Path, args: &[String]) -> std::io::Result<String> {
     let run = tokio::process::Command::new(binary)
         .args(args)
         .stdin(std::process::Stdio::null())
