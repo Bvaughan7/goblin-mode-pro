@@ -14,6 +14,7 @@ mod error;
 mod manager;
 mod polkit;
 mod power;
+mod renice;
 mod sys;
 mod undervolt;
 // The snapshot is WRITTEN from here already; it is not read back until

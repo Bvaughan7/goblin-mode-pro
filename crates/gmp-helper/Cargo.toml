@@ -13,6 +13,7 @@ name = "gmp-helper"
 path = "src/main.rs"
 
 [dependencies]
+rustix.workspace = true
 zbus.workspace = true
 tokio.workspace = true
 serde.workspace = true

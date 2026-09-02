@@ -209,6 +209,7 @@ name = "gmp-helper"
 version = "1.3.2"
 dependencies = [
  "anyhow",
+ "rustix",
  "serde",
  "serde_json",
  "thiserror",

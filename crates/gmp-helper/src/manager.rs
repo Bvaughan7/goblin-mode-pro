@@ -18,7 +18,7 @@ use zbus::object_server::Interface;
 use zbus::{interface, Connection};
 
 use crate::error::{HelperError, Result};
-use crate::{cpu, polkit, power, sys, undervolt};
+use crate::{cpu, polkit, power, renice, sys, undervolt};
 
 /// The frozen contract. These three strings are the whole compatibility
 /// surface between the Python and Rust helpers, and the conversion plan gets
@@ -145,8 +145,21 @@ impl Manager {
         #[zbus(header)] hdr: Header<'_>,
     ) -> Result<bool> {
         authorize(conn, &hdr).await?;
-        let _ = (pid, nice);
-        Err(unported("Renice"))
+        // Renice is the only method that needs to know WHO is calling, not
+        // merely that they are allowed to call. An unresolvable uid is refused
+        // here rather than passed down as "unknown", matching the Python
+        // dispatch - and renice() fails closed on it a second time anyway.
+        let sender = hdr.sender().map(|s| s.as_str().to_owned());
+        let uid = match &sender {
+            Some(sender) => polkit::caller_uid(conn, sender).await,
+            None => None,
+        };
+        let Some(uid) = uid else {
+            return Err(HelperError::NotAuthorized(
+                "could not determine the calling user's uid - refusing".into(),
+            ));
+        };
+        renice::renice(pid, nice, Some(uid))
     }
 
     #[zbus(out_args("ok"))]

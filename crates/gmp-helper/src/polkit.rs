@@ -84,11 +84,8 @@ pub fn is_mutating(method: &str) -> bool {
 /// called out here because the obvious translation of an `Option` into a
 /// default is what reintroduces it.
 ///
-/// Not called until `Renice` is ported in the next block, which is the only
-/// method that needs to know who the caller is beyond whether they are
-/// authorized. It lands here with the authorization path because getting it
-/// wrong is the same bug class, and it is tested now rather than later.
-#[allow(dead_code, reason = "consumed by Renice when hardware ops land")]
+/// Used only by `Renice`, the one method that needs to know WHO is calling
+/// rather than merely that they are allowed to.
 pub async fn caller_uid(conn: &Connection, sender: &str) -> Option<u32> {
     let reply = conn
         .call_method(
