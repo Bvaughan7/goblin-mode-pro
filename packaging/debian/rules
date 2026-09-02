@@ -45,9 +45,16 @@ override_dh_auto_install:
 	install -Dm0644 data/systemd/helper-amd-tdp.conf $(DESTDIR)/usr/share/goblin-mode-pro/helper-amd-tdp.conf
 	install -Dm0644 data/systemd/helper-undervolt.conf $(DESTDIR)/usr/share/goblin-mode-pro/helper-undervolt.conf
 	install -Dm0644 LICENSE $(DESTDIR)/usr/share/doc/goblin-mode-pro/copyright
-
-# The Rust helper goes in its own package so the main one can stay
-# Architecture: all. Installing it does not switch to it - the unit runs a
-# symlink, which the main package still points at the Python helper.
-override_dh_auto_install-arch:
-	install -Dm0755 target/release/gmp-helper $(RUSTDIR)/usr/libexec/goblin-mode-pro/helper-rust
+	# The Rust helper goes in its own package so the main one can stay
+	# Architecture: all. Installing it does not switch to it - the unit runs a
+	# symlink, which the main package still points at the Python helper.
+	#
+	# Guarded by the same dh_listpackages check as the build above, and kept in
+	# THIS target rather than an override_dh_auto_install-arch: whether dh runs a
+	# plain override and a -arch variant, or only one of them, depends on how the
+	# build was invoked, and a release path is a bad place to depend on a
+	# subtlety I cannot test outside Debian.
+	if [ -n "$(filter goblin-mode-pro-helper-rust,$(shell dh_listpackages))" ]; then \
+		install -Dm0755 target/release/gmp-helper \
+			$(RUSTDIR)/usr/libexec/goblin-mode-pro/helper-rust; \
+	fi
