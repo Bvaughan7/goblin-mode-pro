@@ -185,9 +185,9 @@ Block by block, tracked in [issue #1](https://github.com/Bvaughan7/goblin-mode-p
 | Block | What it is | State |
 |---|---|---|
 | **R1** | Freeze the D-Bus contract; build an implementation-agnostic conformance suite | **Done.** 35 PASS / 0 FAIL on hardware; found the `SetPowerLimits` bug |
-| **R2** | Cargo workspace, the polkit authorization path, the state snapshot, and all 19 methods as refusing stubs | **In progress.** Workspace up; `polkit.rs` and `state.rs` ported and green; the zbus service is next |
-| **R3** | Port the hardware operations, group by group | Not started |
-| **H1** | One unit, symlinked implementation, rollback as a drop-in | Not started |
+| **R2** | Cargo workspace, the polkit authorization path, the state snapshot, and all 19 methods as refusing stubs | **Done.** The binary serves the frozen contract; `--introspect` is graded byte for byte by the same canonicalizer the Python helper goes through |
+| **R3** | Port the hardware operations, group by group | **Done.** All seven groups; every method verified against the Python helper's answers on this machine or on an identical fake tree |
+| **H1** | One unit, symlinked implementation, rollback as a drop-in | Not started - the next block |
 | **H5** | `.deb` / `.rpm` become architecture-specific | Not started |
 
 The Rust sources live in `crates/gmp-helper/`. `cargo test` covers the polkit
@@ -195,6 +195,33 @@ routing table method by method (a privilege boundary is pinned explicitly, not
 re-derived from the same sets the code is built from) and the snapshot
 format's compatibility rules, including a fixture captured from the Python
 helper itself.
+
+What the port has found so far, none of which was in the plan:
+
+- **The D-Bus error NAMES are part of the contract**, though the frozen XML
+  covers only methods and signatures. The conformance suite matches on
+  `com.goblinmode.ProHelper.Manager.NotAuthorized` to tell a refusal from a
+  breakage, so returning the standard `org.freedesktop.DBus.Error.AccessDenied`
+  - which is what reaching for `zbus::fdo::Error` gives you - would have been
+  graded as a failure by this project's own suite while looking correct.
+- **Refusal MESSAGES are contract too.** The suite matches fragments:
+  "unsupported governor", "unsupported epp", "not in allowlist", "out of
+  range", "non-numeric".
+- **70% fan duty is 178, not 179.** Python's `round()` rounds half to even and
+  70% of 255 is exactly 178.5. It is the only value in the permitted 40-100
+  range where the two disagree.
+- **zbus derives PascalCase from Rust method names**, which would have served
+  `SetEpp`, `SetTdp`, `ResetTdp` and `HasTdpControl` - four methods the daemon
+  calls and would never have reached.
+- **rustix cannot express `pidfd_send_signal(fd, 0)`**, the null signal the
+  Python uses for liveness, because its `Signal` is non-zero by construction
+  and this crate forbids `unsafe`. The pidfd's `/proc/self/fdinfo` entry
+  answers the same question instead.
+
+Two bugs the Python helper once had are pinned by tests that fail if the
+translation reintroduces them: snapshotting before validating (a refused call
+must leave no state behind), and letting an unresolvable caller uid stand in
+for root.
 
 Nothing about the Python helper changes while this is built. It remains the
 shipped implementation until the Rust one clears the same suite on the same

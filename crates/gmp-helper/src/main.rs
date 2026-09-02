@@ -62,7 +62,9 @@ async fn main() -> anyhow::Result<()> {
         .await
         .with_context(|| {
             format!(
-                "could not claim {}; is the Python helper still running?",
+                "could not claim {}. Either the bus policy does not allow this \
+                 user to own it (it is root-only, so run under the unit rather \
+                 than by hand), or another helper already holds it",
                 manager::BUS_NAME
             )
         })?;

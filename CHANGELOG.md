@@ -21,6 +21,15 @@ All notable changes to Goblin Mode Pro. Format loosely follows
   daemon, GUI and CLI stay Python), the reasoning, the honest argument
   against doing it at all, the on-disk state format's two-way compatibility
   rules, and where each block currently stands.
+- A Rust implementation of the privileged helper (`crates/gmp-helper/`),
+  serving the same frozen D-Bus interface on the same bus name. All 19
+  methods are ported. It is **not installed or shipped yet** — the Python
+  helper remains the only implementation any release runs, and swapping them
+  is a later block. `gmp-helper --introspect` prints what the binary serves
+  without touching the bus, and the existing interface-freeze test grades both
+  implementations through the same canonicalizer, so a drift in either one
+  fails CI. Every operation was checked against the Python helper's answers,
+  either on real hardware or on an identical fake sysfs tree.
 
 ### Fixed
 - `SetPowerLimits` snapshotted the machine's state *before* validating its
