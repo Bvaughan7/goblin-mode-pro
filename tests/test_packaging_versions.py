@@ -1,10 +1,11 @@
 """Every packaging target's version matches src/goblinmode/__about__.py.
 
-The release process bumps six places by hand (__about__, the two PKGBUILDs and
-the .SRCINFO, the RPM spec, the Debian changelog, and the helper's own
-HELPER_VERSION). Missing one is silent: the build still succeeds and ships a
-package labelled with the wrong version. The AUR placeholder had drifted a full
-release behind before this test existed.
+The release process bumps seven places by hand alongside __about__: the two
+PKGBUILDs and the .SRCINFO, the RPM spec, the Debian changelog, the helper's own
+HELPER_VERSION (it is installed standalone and cannot import __about__) and the
+Cargo workspace version. Missing one is silent: the build still succeeds and
+ships a package labelled with the wrong version. The AUR placeholder had drifted
+a full release behind before this test existed.
 """
 
 from __future__ import annotations

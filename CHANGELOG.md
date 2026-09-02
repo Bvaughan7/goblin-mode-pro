@@ -25,9 +25,9 @@ All notable changes to Goblin Mode Pro. Format loosely follows
   rules, and where each block currently stands.
 - A Rust implementation of the privileged helper (`crates/gmp-helper/`),
   serving the same frozen D-Bus interface on the same bus name. All 19
-  methods are ported. It is **not installed or shipped yet** — the Python
-  helper remains the only implementation any release runs, and swapping them
-  is a later block. `gmp-helper --introspect` prints what the binary serves
+  methods are ported. **The Python helper is still the default** and is
+  installed either way; the Rust one is opt-in, and switching between them is
+  a symlink. `gmp-helper --introspect` prints what the binary serves
   without touching the bus, and the existing interface-freeze test grades both
   implementations through the same canonicalizer, so a drift in either one
   fails CI. Every operation was checked against the Python helper's answers,
@@ -43,6 +43,21 @@ All notable changes to Goblin Mode Pro. Format loosely follows
   a symlink. A freshly built Rust binary is checked against the frozen D-Bus
   interface *before* it is installed — a helper that starts, claims the bus
   name and answers nothing presents as a hang rather than a failure.
+- An optional `goblin-mode-pro-helper-rust` package, carrying the compiled
+  helper. It is the only architecture-specific thing this project ships, so it
+  is packaged separately rather than making everything `x86_64`: the main
+  package stays `all`/`noarch`/`any` and installs anywhere, including aarch64
+  handhelds and ARM boards. Installing it does **not** switch to it.
+- The helper now reports `Version`, `InterfaceVersion` and `Implementation`
+  as D-Bus properties, surfaced in `goblin-mode-pro-cli selftest`, in the
+  bug-report bundle and in About → Debug Information. With two interchangeable
+  helpers on one bus name, "which one answered?" is the first question any bug
+  report has to settle, and until now nothing could tell you.
+- Tests that the two helpers can read each other's files. The three files under
+  `/run/goblin-mode-pro` are written by whichever helper is running and read by
+  whichever one runs next, so a rollback depends on it. Fixtures captured from
+  both real writers are checked in, and the tests exercise behaviour rather than
+  parsing: reverting a machine from a snapshot the *other* implementation wrote.
 
 ### Fixed
 - `SetPowerLimits` snapshotted the machine's state *before* validating its
