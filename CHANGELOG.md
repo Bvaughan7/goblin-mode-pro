@@ -6,6 +6,8 @@ All notable changes to Goblin Mode Pro. Format loosely follows
 
 ## [Unreleased]
 
+## [1.3.2] — 2026-09-02
+
 ### Fixed
 - The view switcher truncated its labels ("System Che…") on any window
   between roughly 560 and 800 px: the breakpoint that collapses it to the
