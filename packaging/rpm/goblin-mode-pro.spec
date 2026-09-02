@@ -59,7 +59,8 @@ install -Dm0755 helper/goblin_helper.py %{buildroot}%{libdir}/goblin_helper.py
 # the unit runs this symlink, not the file directly - see install.sh
 install -d %{buildroot}/usr/libexec/%{name}
 ln -sfn %{libdir}/goblin_helper.py %{buildroot}/usr/libexec/%{name}/helper
-# the Rust helper - its own subpackage, see %%files
+
+%files
 %license LICENSE
 %doc README.md SECURITY.md
 %{libdir}/
@@ -82,17 +83,17 @@ ln -sfn %{libdir}/goblin_helper.py %{buildroot}/usr/libexec/%{name}/helper
 - See CHANGELOG.md for the full list of changes.
 * Wed Sep 02 2026 Bryan Vaughan <bryanvaughan07@gmail.com> - 1.3.2-1
 - See CHANGELOG.md for the full list of changes.
-* Sun Aug 31 2026 Bryan Vaughan <bryanvaughan07@gmail.com> - 1.3.1-1
+* Mon Aug 31 2026 Bryan Vaughan <bryanvaughan07@gmail.com> - 1.3.1-1
 - See CHANGELOG.md for the full list of changes.
-* Sun Aug 31 2026 Bryan Vaughan <bryanvaughan07@gmail.com> - 1.3.0-1
+* Mon Aug 31 2026 Bryan Vaughan <bryanvaughan07@gmail.com> - 1.3.0-1
 - See CHANGELOG.md for the full list of changes.
-* Sun Aug 31 2026 Bryan Vaughan <bryanvaughan07@gmail.com> - 1.2.3-1
+* Mon Aug 31 2026 Bryan Vaughan <bryanvaughan07@gmail.com> - 1.2.3-1
 - See CHANGELOG.md for the full list of changes.
-* Sun Aug 31 2026 Bryan Vaughan <bryanvaughan07@gmail.com> - 1.2.2-1
+* Mon Aug 31 2026 Bryan Vaughan <bryanvaughan07@gmail.com> - 1.2.2-1
 - See CHANGELOG.md for the full list of changes.
 * Sun Aug 30 2026 Bryan Vaughan <bryanvaughan07@gmail.com> - 1.2.1-1
 - See CHANGELOG.md for the full list of changes.
 * Sat Aug 29 2026 Bryan Vaughan <bryanvaughan07@gmail.com> - 1.2.0-1
 - See CHANGELOG.md for the full list of changes.
-* Fri Aug 29 2026 Bryan Vaughan <bryanvaughan07@gmail.com> - 1.1.0-1
+* Sat Aug 29 2026 Bryan Vaughan <bryanvaughan07@gmail.com> - 1.1.0-1
 - See CHANGELOG.md for the full list of changes.
