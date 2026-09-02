@@ -6,6 +6,19 @@ All notable changes to Goblin Mode Pro. Format loosely follows
 
 ## [Unreleased]
 
+### Fixed
+- `SetPowerLimits` snapshotted the machine's state *before* validating its
+  arguments, so a request below the 6 W RAPL floor was correctly refused
+  and still left a root-owned `state.json` in `/run`. Two things went
+  wrong after that: the machine looked mid-session to anything inspecting
+  `/run`, and because the snapshot is only taken when that file is absent,
+  the next legitimate apply never recorded its own baseline — so a later
+  `RevertAll` would restore whatever had been true at the moment of the
+  rejected call. Every other method already validated first. Found by the
+  new conformance suite on its first run against real hardware; the unit
+  test that covered the floor had patched the snapshot out, which is why
+  it never showed up.
+
 ## [1.3.2] — 2026-09-02
 
 ### Fixed

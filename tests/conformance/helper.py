@@ -367,6 +367,14 @@ class Conformance:
                 "arguments. Pass --prompts, while watching the screen, to "
                 "include it.", section)
         before = unchanged() if unchanged else None
+        # A refused call must leave NO state behind - not just leave the value
+        # it was asked to change alone. set_power_limits snapshotted before it
+        # validated, so a below-floor request was correctly refused and still
+        # wrote a root-owned state.json, which made the machine look
+        # mid-session and stopped the next real apply recording its baseline.
+        # Only observable when this caller can read the state dir; see
+        # _state_dir_readable.
+        state_before = STATE_FILE.exists() if _state_dir_readable() else None
         try:
             self.helper.call(method, params)
         except GLib.Error as exc:
@@ -389,6 +397,14 @@ class Conformance:
                                  f"rejected correctly but the machine changed anyway: "
                                  f"{before!r} -> {after!r}",
                                  section, before=before, after=after)
+            if state_before is False and STATE_FILE.exists():
+                return self._add(
+                    name, title, FAIL,
+                    f"rejected correctly, but the call created {STATE_FILE}. A "
+                    "refused call must leave no state behind: once that file "
+                    "exists the helper's _snapshot() early-returns, so the next "
+                    "real apply never records its own baseline and RevertAll "
+                    "restores the wrong values.", section)
             return self._add(name, title, PASS,
                              f"{got_name}: {got_msg}", section,
                              error_name=got_name, message=got_msg,

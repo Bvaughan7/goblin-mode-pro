@@ -721,16 +721,31 @@ _RAPL_CEILING_UW = 1_000_000_000
 _RAPL_FLOOR_UW = 6_000_000
 
 def set_power_limits(pl1_uw: int, pl2_uw: int) -> bool:
-    _snapshot()
-    ok = True
-    for idx, value in ((0, int(pl1_uw)), (1, int(pl2_uw))):
-        if value <= 0:
-            continue
-        if value < _RAPL_FLOOR_UW:
+    # Validate everything BEFORE snapshotting. This used to snapshot first and
+    # validate inside the write loop, so a request below the floor was
+    # correctly refused but still left a root-owned state.json in /run. Two
+    # ways that hurts: the machine looks mid-session to anything inspecting
+    # /run, and - because _snapshot() early-returns once the file exists - the
+    # next legitimate apply never records its own baseline, so RevertAll
+    # restores whatever was true at the moment of the rejected call instead.
+    # Every sibling here already validates first (set_governor, set_epp,
+    # set_sysctl, spin_up_fans); this one was the odd one out. Found by the
+    # conformance suite, which noticed /run/goblin-mode-pro/state.json
+    # appearing after a call that had just been refused.
+    requested = ((0, int(pl1_uw)), (1, int(pl2_uw)))
+    for idx, value in requested:
+        # <= 0 means "leave this constraint alone", not "set it to zero", so
+        # it is not a floor violation.
+        if 0 < value < _RAPL_FLOOR_UW:
             raise ValueError(
                 f"RAPL constraint {idx} request {value} µW is below the "
                 f"{_RAPL_FLOOR_UW} µW floor - this method only raises the limit"
             )
+    _snapshot()
+    ok = True
+    for idx, value in requested:
+        if value <= 0:
+            continue
         value = min(value, _RAPL_CEILING_UW)
         try:
             cap = int(_read(_rapl_constraint(idx, "max_power_uw")))

@@ -105,6 +105,36 @@ class PowerLimitFloor(unittest.TestCase):
             with self.assertRaises(ValueError):
                 gh.set_power_limits(0, 5_000_000)          # 5 W PL2
 
+    def test_a_refused_request_leaves_no_snapshot_behind(self):
+        """A call that is refused must not touch /run.
+
+        set_power_limits used to snapshot before validating, so a below-floor
+        request was correctly rejected and still wrote a root-owned
+        state.json. Because _snapshot() early-returns once that file exists,
+        the next real apply then never recorded its own baseline, and
+        RevertAll would restore whatever happened to be true at the moment of
+        the rejected call.
+
+        Note the test above patches _snapshot out, which is precisely why this
+        went unnoticed - it mocked away the side effect that was the bug. This
+        one asserts on the mock instead of ignoring it. Found by
+        tests/conformance/helper.py against the live helper.
+        """
+        for bad in ((4_000_000, 0), (0, 5_000_000), (1, 1)):
+            with self.subTest(request=bad), patch.object(gh, "_snapshot") as snap:
+                with self.assertRaises(ValueError):
+                    gh.set_power_limits(*bad)
+                snap.assert_not_called()
+
+    def test_an_accepted_request_does_snapshot_first(self):
+        """The complement: the snapshot must still happen on the happy path,
+        or RevertAll has nothing to restore to."""
+        with patch.object(gh, "_snapshot") as snap, \
+             patch.object(gh, "_rapl_constraint",
+                          side_effect=lambda i, leaf: Path("/nonexistent")):
+            gh.set_power_limits(gh._RAPL_FLOOR_UW, gh._RAPL_FLOOR_UW)
+            snap.assert_called_once()
+
     def test_zero_means_leave_alone_and_is_not_a_floor_violation(self):
         with patch.object(gh, "_snapshot"), \
              patch.object(gh, "_rapl_constraint",
