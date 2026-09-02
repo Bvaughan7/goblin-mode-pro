@@ -195,7 +195,7 @@ Block by block, tracked in [issue #1](https://github.com/Bvaughan7/goblin-mode-p
 |---|---|---|
 | **R1** | Freeze the D-Bus contract; build an implementation-agnostic conformance suite | **Done.** 39 PASS / 0 FAIL / 1 SKIP on hardware; found the `SetPowerLimits` bug |
 | **R2** | Cargo workspace, the polkit authorization path, the state snapshot, and all 19 methods as refusing stubs | **Done.** The binary serves the frozen contract; `--introspect` is graded byte for byte by the same canonicalizer the Python helper goes through |
-| **R3** | Port the hardware operations, group by group | **Done.** All seven groups; every method verified against the Python helper's answers on this machine or on an identical fake tree |
+| **R3** | Port the hardware operations, group by group | **Done, and verified on hardware.** The Rust helper served the conformance suite live and scored identically to the Python one - 39/0 root, 19/0 unprivileged. See [verified hardware](verified-hardware.md) |
 | **H1** | One unit, symlinked implementation, rollback as a drop-in | **Done.** The unit runs `/usr/libexec/goblin-mode-pro/helper`, a symlink, verified on hardware. `install.sh --helper=rust` builds, contract-checks and installs the Rust binary; Python is installed either way so rolling back needs no toolchain |
 | **H5** | `.deb` / `.rpm` become architecture-specific | Not started |
 

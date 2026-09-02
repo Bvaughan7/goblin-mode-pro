@@ -31,7 +31,18 @@ All notable changes to Goblin Mode Pro. Format loosely follows
   without touching the bus, and the existing interface-freeze test grades both
   implementations through the same canonicalizer, so a drift in either one
   fails CI. Every operation was checked against the Python helper's answers,
-  either on real hardware or on an identical fake sysfs tree.
+  either on real hardware or on an identical fake sysfs tree. It has now been
+  run for real: served the conformance suite live on the development machine
+  and scored **identically to the Python helper** — 39 PASS / 0 FAIL root, 19
+  PASS / 0 FAIL unprivileged, all 15 polkit routings, the `Renice` ownership
+  gate, and the 0644 nvidia drop-in. Opt in with `./install.sh --helper=rust`;
+  the Python helper is installed either way, so going back is
+  `ln -sfn` and a restart with no toolchain needed.
+- `install.sh --helper=python|rust` picks which implementation the unit runs.
+  The unit itself names neither: it runs `/usr/libexec/goblin-mode-pro/helper`,
+  a symlink. A freshly built Rust binary is checked against the frozen D-Bus
+  interface *before* it is installed — a helper that starts, claims the bus
+  name and answers nothing presents as a hang rather than a failure.
 
 ### Fixed
 - `SetPowerLimits` snapshotted the machine's state *before* validating its

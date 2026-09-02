@@ -25,6 +25,34 @@ is just as useful as one saying it does.
 
 ## Machines
 
+### Both helper implementations, same machine, same score
+
+The privileged helper exists twice: the Python one that ships, and the Rust
+port. They serve the same frozen D-Bus interface, and on 2026-09-02 both were
+graded by `tests/conformance/helper.py` on the Dell G7 below, running under the
+real unit, real polkit and the real systemd sandbox.
+
+| | Python | Rust |
+|---|---|---|
+| root run (`--apply --polkit-routing --prompts`) | 39 PASS / 0 FAIL / 1 SKIP | **39 PASS / 0 FAIL / 1 SKIP** |
+| unprivileged run (`--apply`) | 19 PASS / 0 FAIL | **19 PASS / 0 FAIL** |
+| `Renice` ownership gate | PASS | **PASS** |
+| all 15 polkit routings | PASS | **PASS** |
+
+The two runs grade disjoint sets, so both are needed: root cannot observe the
+ownership gate at all, because `renice()` skips it for uid 0.
+
+Also confirmed against the Rust helper on hardware, because neither is
+observable from a test suite: `/etc/modprobe.d/goblin-mode-pro-nvidia.conf` is
+written **0644**, not 0600 — the unit's `UMask=0077` is right for `/run` and
+wrong for `/etc`, which is the v1.3.1 bug — and the service survived the switch
+with `NRestarts=0` and nothing but INFO in its journal.
+
+One known, harmless difference: an unknown method is refused with the same
+error *name* (`org.freedesktop.DBus.Error.UnknownMethod`) but different wording
+— GDBus says `No such method "X"`, zbus says `Unknown method 'X'`. The name is
+the contract; the prose is not.
+
 ### Dell G7 7590 — i7-10750H / RTX 2060 — CachyOS (kernel 7.2.2)
 
 Intel Comet Lake laptop, `intel_pstate` active, KDE Plasma 6 on Wayland.
