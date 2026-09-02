@@ -9,7 +9,7 @@
 # toolchain.
 pkgbase=goblin-mode-pro
 pkgname=('goblin-mode-pro' 'goblin-mode-pro-helper-rust')
-pkgver=1.3.2
+pkgver=1.4.0
 pkgrel=1
 pkgdesc="One-switch performance helper for Linux gaming: auto-detects a game, tunes CPU/compositor/Proton, reverts on exit, diagnoses crashes and FPS drops"
 arch=('x86_64')

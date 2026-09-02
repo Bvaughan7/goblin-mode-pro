@@ -1,3 +1,13 @@
+goblin-mode-pro (1.4.0-1) unstable; urgency=medium
+
+  * The privileged helper now has a second implementation, in Rust, serving
+    the same frozen D-Bus interface. The Python one is still the default and
+    is installed either way; the compiled one ships as the optional
+    goblin-mode-pro-helper-rust package and is enabled by relinking. See
+    CHANGELOG.md.
+
+ -- Bryan Vaughan <bryanvaughan07@gmail.com>  Wed, 02 Sep 2026 22:30:00 +0000
+
 goblin-mode-pro (1.3.2-1) unstable; urgency=medium
 
   * Fix the view switcher truncating its labels between roughly 560 and

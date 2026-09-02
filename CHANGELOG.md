@@ -6,6 +6,8 @@ All notable changes to Goblin Mode Pro. Format loosely follows
 
 ## [Unreleased]
 
+## [1.4.0] — 2026-09-02
+
 ### Added
 - The privileged helper's D-Bus interface is now a frozen contract
   (`docs/dbus-interface-v1.xml`, 19 methods), checked on every push against

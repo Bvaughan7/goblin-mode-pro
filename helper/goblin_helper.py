@@ -47,7 +47,7 @@ from gi.repository import Gio, GLib
 #: package, so it cannot read src/goblinmode/__about__.py at runtime. This is a
 #: sixth place the release process has to bump, and
 #: tests/test_packaging_versions.py fails if it drifts.
-HELPER_VERSION = "1.3.2"
+HELPER_VERSION = "1.4.0"
 
 #: The frozen D-Bus contract's version. This stays 1 for the whole Python-to-Rust
 #: conversion. If it ever needs bumping, the interface freeze has failed and THAT

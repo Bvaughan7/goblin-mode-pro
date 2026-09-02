@@ -1,5 +1,5 @@
 Name:           goblin-mode-pro
-Version:        1.3.2
+Version:        1.4.0
 Release:        1%{?dist}
 Summary:        One-switch performance helper for Linux gaming
 
@@ -143,6 +143,8 @@ toolchain.
 %{_datadir}/%{name}/
 
 %changelog
+* Wed Sep 02 2026 Bryan Vaughan <bryanvaughan07@gmail.com> - 1.4.0-1
+- See CHANGELOG.md for the full list of changes.
 * Wed Sep 02 2026 Bryan Vaughan <bryanvaughan07@gmail.com> - 1.3.2-1
 - See CHANGELOG.md for the full list of changes.
 * Sun Aug 31 2026 Bryan Vaughan <bryanvaughan07@gmail.com> - 1.3.1-1
