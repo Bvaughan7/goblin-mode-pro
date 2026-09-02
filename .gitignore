@@ -30,6 +30,8 @@ packaging/*/pkg/
 packaging/*/src/
 packaging/*/goblin-mode-pro/
 packaging/*/*.pkg.tar*
+# the source tarball makepkg downloads for a tagged build
+packaging/*/*.tar.gz
 packaging/*/*.log
 po/_build/
 *.mo
