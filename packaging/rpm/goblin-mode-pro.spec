@@ -7,6 +7,11 @@ License:        MIT
 URL:            https://github.com/Bvaughan7/goblin-mode-pro
 Source0:        %{url}/archive/refs/tags/v%{version}.tar.gz#/%{name}-%{version}.tar.gz
 
+# Pure Python, so it installs anywhere. The compiled helper is a SEPARATE
+# spec (goblin-mode-pro-helper-rust.spec), not a subpackage: rpm refuses an
+# arch-specific subpackage of a noarch package - "Only noarch subpackages
+# are supported" - so the split has to be two builds.
+BuildArch:      noarch
 BuildRequires:  python3
 BuildRequires:  systemd-rpm-macros
 
@@ -27,12 +32,6 @@ Recommends:     python3-pillow
 Recommends:     python3-pystray
 Recommends:     python3-cairo
 Suggests:       ryzenadj
-
-# Pure Python, so it installs anywhere. The compiled helper is a SEPARATE
-# spec (goblin-mode-pro-helper-rust.spec), not a subpackage: rpm refuses an
-# arch-specific subpackage of a noarch package - "Only noarch subpackages
-# are supported" - so the split has to be two builds.
-BuildArch:      noarch
 Suggests:       intel-undervolt
 Suggests:       gpu-screen-recorder
 
@@ -60,10 +59,52 @@ install -Dm0755 helper/goblin_helper.py %{buildroot}%{libdir}/goblin_helper.py
 install -d %{buildroot}/usr/libexec/%{name}
 ln -sfn %{libdir}/goblin_helper.py %{buildroot}/usr/libexec/%{name}/helper
 
+install -d %{buildroot}%{_bindir}
+for spec in daemon:goblinmode.daemon gui:goblinmode.gui.app cli:goblinmode.cli; do
+    name=${spec%%:*}; mod=${spec##*:}
+    case $name in
+        daemon) out=goblin-mode-pro-daemon ;;
+        gui)    out=goblin-mode-pro ;;
+        cli)    out=goblin-mode-pro-cli ;;
+    esac
+    printf '#!/usr/bin/python3\nimport sys\nsys.path.insert(0, "%s")\nfrom %s import main\nraise SystemExit(main())\n' \
+        "%{libdir}" "$mod" > %{buildroot}%{_bindir}/$out
+    chmod 0755 %{buildroot}%{_bindir}/$out
+done
+
+install -Dm0644 data/polkit/com.goblinmode.pro.policy       %{buildroot}%{_datadir}/polkit-1/actions/com.goblinmode.pro.policy
+install -Dm0644 data/dbus/com.goblinmode.ProHelper.conf     %{buildroot}%{_datadir}/dbus-1/system.d/com.goblinmode.ProHelper.conf
+install -Dm0644 data/systemd/goblin-mode-pro-helper.service %{buildroot}%{_unitdir}/goblin-mode-pro-helper.service
+install -Dm0644 data/systemd/goblin-mode-pro.service        %{buildroot}%{_userunitdir}/goblin-mode-pro.service
+install -Dm0644 data/com.goblinmode.Pro.desktop            %{buildroot}%{_datadir}/applications/com.goblinmode.Pro.desktop
+install -Dm0644 data/com.goblinmode.Pro.GamescopeSession.desktop %{buildroot}%{_datadir}/applications/com.goblinmode.Pro.GamescopeSession.desktop
+install -Dm0644 data/icons/com.goblinmode.Pro.svg          %{buildroot}%{_datadir}/icons/hicolor/scalable/apps/com.goblinmode.Pro.svg
+# PNG icons - Qt/KDE can't render the SVG's CSS + filters
+for png in data/icons/hicolor/*/apps/*.png; do
+  install -Dm0644 "$png" "%{buildroot}%{_datadir}/icons/${png#data/icons/}"
+done
+install -Dm0644 data/systemd/helper-amd-tdp.conf           %{buildroot}%{_datadir}/%{name}/helper-amd-tdp.conf
+install -Dm0644 data/systemd/helper-undervolt.conf         %{buildroot}%{_datadir}/%{name}/helper-undervolt.conf
+
+%post
+%systemd_post goblin-mode-pro-helper.service
+%systemd_user_post goblin-mode-pro.service
+
+%preun
+%systemd_preun goblin-mode-pro-helper.service
+%systemd_user_preun goblin-mode-pro.service
+
+%postun
+%systemd_postun_with_restart goblin-mode-pro-helper.service
+
 %files
 %license LICENSE
 %doc README.md SECURITY.md
 %{libdir}/
+# the symlink the unit runs; the Rust implementation it can point at
+# instead lives in the separate goblin-mode-pro-helper-rust package
+%dir %{_prefix}/libexec/%{name}
+%{_prefix}/libexec/%{name}/helper
 %{_bindir}/goblin-mode-pro
 %{_bindir}/goblin-mode-pro-daemon
 %{_bindir}/goblin-mode-pro-cli

@@ -87,6 +87,46 @@ class SpecStructure(unittest.TestCase):
                     self.assertEqual(weekday, actual,
                                      f"{spec.name}: {m.group(0)} is a {actual}")
 
+    def test_every_tree_installed_into_is_also_packaged(self):
+        """rpmbuild fails the build on files installed but not listed.
+
+        H1 added the /usr/libexec symlink to %install and never to %files. That
+        alone would have failed the rpm build; nothing noticed because an
+        earlier error reached rpmbuild first.
+
+        Deliberately COARSE: it compares the top-level tree written into
+        (libexec, bin, share, lib), not whole paths. Matching paths properly
+        would mean expanding rpm's macros - %install says /usr/libexec/%{name}
+        where %files says %{_prefix}/libexec/%{name} - and reimplementing that
+        to check a spec is a worse bet than a check that cannot be precise but
+        also cannot be wrong. Forgetting an entire tree is the mistake that
+        actually happens.
+        """
+        trees = {
+            "_bindir": "bin", "_datadir": "share", "_unitdir": "lib",
+            "_userunitdir": "lib", "libdir": "lib", "libexec": "libexec",
+        }
+        for spec in _SPECS:
+            sections = _sections(spec.read_text())
+            install = sections.get("%install", "")
+            files = sections.get("%files", "")
+            written = set()
+            for dest in re.findall(r"%\{buildroot\}(\S+)", install):
+                for macro, tree in trees.items():
+                    if macro in dest or f"/{tree}/" in dest:
+                        written.add(tree)
+            self.assertTrue(written, f"{spec.name}: %install writes nothing?")
+            for tree in sorted(written):
+                covered = any(
+                    macro in files or f"/{tree}" in files
+                    for macro, t in trees.items() if t == tree
+                ) or f"/{tree}" in files
+                with self.subTest(spec=spec.name, tree=tree):
+                    self.assertTrue(
+                        covered,
+                        f"{spec.name} installs into /{tree} but %files never mentions it",
+                    )
+
     def test_the_two_specs_do_not_ship_the_same_paths(self):
         """Both installing a path would make the packages conflict on disk."""
         files = {}
