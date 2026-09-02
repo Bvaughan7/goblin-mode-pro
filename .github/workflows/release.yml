@@ -37,12 +37,23 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y debhelper dpkg-dev fakeroot build-essential
 
+      # The goblin-mode-pro-helper-rust package is compiled, so this job needs
+      # a toolchain. Deliberately rustup rather than apt: Ubuntu's rustc lags
+      # behind the workspace's rust-version, and pinning the packaging to
+      # whatever the runner image happens to ship is how a release starts
+      # failing for reasons nobody changed.
+      - uses: dtolnay/rust-toolchain@stable
+
       - name: Build the .deb
         run: |
           cp -r packaging/debian .   # dpkg-buildpackage expects ./debian
-          dpkg-buildpackage -us -uc -b
+          # -d skips the build-dependency check: cargo and rustc come from
+          # rustup above rather than from apt, so dpkg cannot see them. These
+          # are CI-built binary packages, not Debian-archive submissions - see
+          # packaging/README.md.
+          dpkg-buildpackage -us -uc -b -d
           mkdir -p dist
-          mv ../goblin-mode-pro_*.deb dist/
+          mv ../goblin-mode-pro*.deb dist/
 
       # Signs with the maintainer's own key, added as repo secrets - see
       # CONTRIBUTING.md "Signing releases". Skips cleanly (unsigned artifact,
@@ -72,7 +83,7 @@ jobs:
       GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
     steps:
       - name: Install packaging tools
-        run: dnf install -y rpm-build rpm-sign systemd-rpm-macros gnupg2 git python3 tar gzip
+        run: dnf install -y rpm-build rpm-sign systemd-rpm-macros gnupg2 git python3 tar gzip cargo rust
 
       # actions/checkout doesn't work inside every container image, and we
       # only need a plain source tree here - git clone it ourselves.

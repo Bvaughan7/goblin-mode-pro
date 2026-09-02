@@ -234,6 +234,42 @@ class PackagedRustHelper(unittest.TestCase):
                     if "ln -sfn" in line and "helper-rust" in line:
                         self.fail(f"{path} points the symlink at the Rust helper: {line}")
 
+    def test_the_release_workflow_can_build_what_the_packaging_asks_for(self):
+        """The packages compile Rust now; the release jobs have to be able to.
+
+        This is the failure that would only show up when a tag is pushed - the
+        worst possible moment, because by then the release is half-published.
+        Both jobs built fine for years without a toolchain, so nothing else
+        would notice that they suddenly need one.
+
+        Parsed as text, not YAML: the CI job that runs these tests installs no
+        pyyaml, and adding a dependency to check a workflow file is a poor
+        trade.
+        """
+        workflow = (_REPO / ".github" / "workflows" / "release.yml").read_text()
+        builds_rust = [
+            path for path in ("packaging/debian/rules",
+                              "packaging/rpm/goblin-mode-pro.spec")
+            if "cargo build" in (_REPO / path).read_text()
+        ]
+        self.assertTrue(builds_rust, "no packaging target builds Rust any more")
+        # the .deb job takes its toolchain from rustup, the .rpm job from dnf
+        self.assertIn("dtolnay/rust-toolchain", workflow,
+                      "the .deb job has no Rust toolchain")
+        self.assertRegex(workflow, r"dnf install[^\n]*\bcargo\b",
+                         "the .rpm job installs no cargo")
+
+    def test_the_deb_job_collects_both_packages(self):
+        """The glob has to widen when a second binary package appears.
+
+        `goblin-mode-pro_*.deb` matches the main package only - the helper one
+        is `goblin-mode-pro-helper-rust_*`, with a hyphen where the underscore
+        was. It would have been silently left behind in the build directory.
+        """
+        workflow = (_REPO / ".github" / "workflows" / "release.yml").read_text()
+        self.assertNotIn("goblin-mode-pro_*.deb", workflow,
+                         "the deb glob still matches only the main package")
+
     def test_the_targets_that_build_rust_declare_a_toolchain(self):
         checks = {
             "packaging/debian/control": "cargo",
