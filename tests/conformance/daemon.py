@@ -42,10 +42,10 @@ from pathlib import Path
 import gi
 
 gi.require_version("Gio", "2.0")
-from gi.repository import Gio, GLib  # noqa: E402
+from gi.repository import Gio, GLib
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _report import (  # noqa: E402
+from _report import (
     FAIL,
     INFO,
     PASS,
@@ -55,7 +55,7 @@ from _report import (  # noqa: E402
     dbus_error_message,
     dbus_error_name,
 )
-from _report import render as _render_report  # noqa: E402
+from _report import render as _render_report
 
 _REPO = Path(__file__).resolve().parent.parent.parent
 FROZEN = _REPO / "docs" / "dbus-daemon-interface-v1.xml"
@@ -163,8 +163,6 @@ class Conformance:
         self._add("on_bus", "Daemon is on the session bus", PASS,
                   f"{BUS_NAME} at {OBJECT_PATH}", sec)
 
-        served = self.daemon.call("org.freedesktop.DBus.Introspectable.Introspect") \
-            if False else None
         # Introspection is compared byte for byte by
         # tests/test_daemon_interface_freeze.py, which can do it without a live
         # bus. Repeating it here would add a second place to keep in step.

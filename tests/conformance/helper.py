@@ -42,7 +42,6 @@ import re
 import subprocess
 import sys
 import time
-from dataclasses import dataclass, field
 from pathlib import Path
 
 import gi
@@ -130,7 +129,7 @@ CPU_BASE = Path("/sys/devices/system/cpu")
 HWMON_BASE = Path("/sys/class/hwmon")
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _report import (  # noqa: E402
+from _report import (
     FAIL,
     INFO,
     PASS,
@@ -140,7 +139,7 @@ from _report import (  # noqa: E402
     dbus_error_name,
     dbus_error_message,
 )
-from _report import render as _render_report  # noqa: E402
+from _report import render as _render_report
 
 
 class _NotProbeable(Exception):
