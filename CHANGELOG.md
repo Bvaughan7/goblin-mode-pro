@@ -16,7 +16,7 @@ All notable changes to Goblin Mode Pro. Format loosely follows
   rewritten in Rust and "it seems to work" is not a migration plan. The suite
   scores 35 PASS / 0 FAIL against the Python helper on real hardware, and
   found the `SetPowerLimits` bug below on its first run.
-- [The Rust conversion](https://bvaughan7.github.io/goblin-mode-pro/rust-conversion/)
+- [The Rust conversion](https://github.com/Bvaughan7/goblin-mode-pro/blob/main/docs/rust-conversion.md)
   — a new documentation page covering the scope (the root helper only; the
   daemon, GUI and CLI stay Python), the reasoning, the honest argument
   against doing it at all, the on-disk state format's two-way compatibility

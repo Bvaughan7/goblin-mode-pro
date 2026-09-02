@@ -85,12 +85,20 @@ Fixed in [`34e600f`](https://github.com/Bvaughan7/goblin-mode-pro/commit/34e600f
   anyone who could make the lookup fail. The Rust port carries a comment
   saying so, because the obvious translation of an `Option` into a default is
   precisely what reintroduces it.
-- **Cheaper to start and to keep resident.** The helper spends almost all of
-  its life idle, waiting on a bus it will be asked to use a handful of times
-  per gaming session. A CPython process is a poor shape for that job.
+- **Rollback is a symlink, not a migration.** Block H1 puts a single unit at
+  `/usr/libexec/goblin-mode-pro/helper` with a symlink choosing the
+  implementation, so going back to the Python helper is a symlink swap and a
+  restart — something a user can do over SSH at midnight when their machine is
+  misbehaving. That property is what makes shipping the Rust helper to other
+  people defensible at all.
 - **It forces packaging honesty.** Both the `.deb` and the `.rpm` are still
   `noarch` / `all`. The moment a compiled binary ships they become `x86_64` /
   `amd64`, which is what they should have said all along.
+
+**Speed is explicitly not a reason.** The migration plan says to leave
+performance alone, and the helper is idle almost all the time anyway — it is
+asked to do a handful of things per gaming session. Any page that sold this
+rewrite as a speed win would be selling something that was never measured.
 
 ## The argument against, recorded rather than buried
 
@@ -171,6 +179,8 @@ depending on how a value was computed, so anything that might have been
 through a float is parsed permissively rather than demanding an integer token.
 
 ## Where it stands
+
+Block by block, tracked in [issue #1](https://github.com/Bvaughan7/goblin-mode-pro/issues/1):
 
 | Block | What it is | State |
 |---|---|---|

@@ -292,7 +292,7 @@ for the architecture, the module map, the privilege model, the runner variables
 it injects and the compositor calls it makes.
 
 That helper is being rewritten in Rust — the daemon, GUI and CLI stay Python.
-**[The Rust conversion](https://bvaughan7.github.io/goblin-mode-pro/rust-conversion/)**
+**[The Rust conversion](https://github.com/Bvaughan7/goblin-mode-pro/blob/main/docs/rust-conversion.md)**
 explains why, what the argument against it is, and how the frozen D-Bus
 contract makes swapping one implementation for the other something you can
 verify rather than hope for.
