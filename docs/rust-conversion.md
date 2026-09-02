@@ -35,10 +35,16 @@ Two things make the seam trustworthy enough to swap an implementation across:
   scale, which is what turns "the Rust one seems fine" into a number.
 
 Against the Python helper on real hardware, that suite currently scores
-**39 PASS / 0 FAIL / 1 SKIP**, including runtime confirmation of all 15 polkit
-routings. The skip is the `Renice` ownership gate: uid 0 skips that check by
-design, so it cannot be observed from a `sudo` run and needs a separate
-unprivileged one.
+**39 PASS / 0 FAIL / 1 SKIP** as root, including runtime confirmation of all 15
+polkit routings, plus a second unprivileged run that closes the remaining skip.
+
+The two runs grade **disjoint** sets and neither alone is complete, which is
+easy to miss because each one looks like the whole suite. Root is needed to read
+the root-only state directory and to eavesdrop the bus for polkit routing.
+Unprivileged is the *only* way to see the ownership gate, because `renice()`
+skips it for uid 0 - so the run with the most privilege is the one that cannot
+check who you are. Across both runs every check passes and nothing fails; the
+suite now prints the complementary command whenever it skips anything.
 That is the bar the Rust helper has to clear — a measured baseline, not an
 aspiration.
 

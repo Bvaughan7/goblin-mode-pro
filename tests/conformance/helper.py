@@ -961,6 +961,32 @@ class _PolkitMonitor:
 _COLOUR = {PASS: "\033[32m", FAIL: "\033[31m", SKIP: "\033[33m", INFO: "\033[36m"}
 
 
+def complementary_run() -> str:
+    """The other run, for the checks this one structurally cannot grade.
+
+    A root run and an unprivileged run cover DISJOINT sets, and neither alone
+    is complete - which is easy to miss, because each one looks like the whole
+    suite. Root is needed to read the root-only state directory and to
+    eavesdrop the bus for polkit routing; unprivileged is the only way to see
+    the ownership gate at all, because renice() skips it for uid 0. So the run
+    that can check the most is also the one that cannot check who you are.
+    """
+    if os.geteuid() == 0:
+        return (
+            "Some checks CANNOT be graded from a root run: renice() skips the "
+            "ownership check for uid 0, so the gate that protects other users "
+            "is invisible here. For those, also run:\n"
+            "    python3 tests/conformance/helper.py --apply"
+        )
+    return (
+        "Some checks need root: reading the root-only state directory, and "
+        "eavesdropping the bus to confirm polkit routing. For those, also run, "
+        "while watching the screen for password dialogs:\n"
+        "    sudo python3 tests/conformance/helper.py --apply --polkit-routing "
+        "--prompts"
+    )
+
+
 def render(results: list[Result], caps: dict, use_colour: bool) -> str:
     out = []
     sections: dict[str, list[Result]] = {}
@@ -983,6 +1009,7 @@ def render(results: list[Result], caps: dict, use_colour: bool) -> str:
                f"{counts[SKIP]} SKIP  {counts[INFO]} INFO")
     if counts[SKIP]:
         out.append("A SKIP is not a pass. Each one above says what is missing.")
+        out.append(complementary_run())
     if caps["session_active"] is False and os.geteuid() != 0:
         out.append("NOTE: this is not an active local session, so polkit will not "
                    "grant manage-performance without a prompt.")
@@ -994,7 +1021,11 @@ def render(results: list[Result], caps: dict, use_colour: bool) -> str:
     return "\n".join(out)
 
 
-def main(argv=None) -> int:
+def build_parser() -> argparse.ArgumentParser:
+    """Split out from main() so the suggestions in `complementary_run` can be
+    parsed back and proved runnable - a renamed flag should break a test, not
+    quietly leave the summary pointing somebody at a command that no longer
+    exists."""
     ap = argparse.ArgumentParser(
         description="Conformance suite for the goblin-mode-pro privileged helper.")
     ap.add_argument("--apply", action="store_true",
@@ -1011,7 +1042,11 @@ def main(argv=None) -> int:
                          "account out of sudo for ten minutes (pam_faillock)")
     ap.add_argument("--json", action="store_true",
                     help="machine-readable results plus the capability report")
-    args = ap.parse_args(argv)
+    return ap
+
+
+def main(argv=None) -> int:
+    args = build_parser().parse_args(argv)
 
     suite = Conformance(apply=args.apply, allow_prompts=args.prompts)
     suite.run(polkit_routing=args.polkit_routing)
