@@ -40,12 +40,47 @@ async fn main() -> anyhow::Result<()> {
     // `--introspect` prints the served interface and exits without touching
     // the bus, so the freeze test can run anywhere - in CI, in a container, on
     // a machine where the real helper is already running and holding the name.
-    if std::env::args().skip(1).any(|arg| arg == "--introspect") {
+    //
+    // Deliberately BEFORE the root check, and deliberately the only thing that
+    // is: it reads no privileged state and CI has to be able to run it. Every
+    // other mode needs root.
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.iter().any(|arg| arg == "--introspect") {
         print!("{}", manager::introspection_xml());
         return Ok(());
     }
 
+    // Unknown arguments are refused rather than ignored, and refused BEFORE
+    // the root check so a typo is distinguishable from a permission problem.
+    // The Python helper only ever compares argv[1] against "--revert" and
+    // starts serving the bus for anything else, which means a mistyped flag
+    // silently launches a privileged service. Not worth reproducing.
+    if let Some(unknown) = args.iter().find(|arg| arg.as_str() != "--revert") {
+        eprintln!("goblin-helper: unknown argument {unknown}");
+        eprintln!("usage: gmp-helper [--revert | --introspect]");
+        std::process::exit(2);
+    }
+
+    // Matches the Python helper, which refuses the same way. Without it the
+    // failure further down is a confusing permission error from the bus
+    // instead of a sentence saying what is wrong.
+    if !rustix::process::geteuid().is_root() {
+        eprintln!("goblin-helper must run as root");
+        std::process::exit(1);
+    }
+
     let roots = sys::Roots::system();
+
+    // The unit's ExecStopPost runs this. It is what puts the machine back when
+    // the service stops, so it has to exist in BOTH implementations or
+    // swapping the symlink silently stops reverting on shutdown - the sort of
+    // break nobody notices until a governor survives a reboot cycle.
+    if args.iter().any(|arg| arg == "--revert") {
+        let reverted = revert::revert_all(&roots)
+            .await
+            .map_err(|err| anyhow::anyhow!("revert failed: {err:?}"))?;
+        std::process::exit(i32::from(!reverted));
+    }
 
     // BEFORE anything is served. A fan left under manual control by an
     // instance that died is the one state this helper must never sit in, and

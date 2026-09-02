@@ -280,3 +280,67 @@ class RustImplementation(unittest.TestCase):
             signatures(self._served(), gh.IFACE),
             signatures(gh.INTROSPECTION_XML, gh.IFACE),
         )
+
+
+class DropInParity(unittest.TestCase):
+    """Both helpers answer the same way to the way the UNIT invokes them.
+
+    Swapping which implementation the unit runs is only safe if the command
+    line is the same shape too. `ExecStopPost=... --revert` is the one that
+    matters: it is what puts the machine back when the service stops, so a
+    Rust helper that ignored the flag would silently stop reverting on
+    shutdown - a break nobody notices until a governor survives a reboot.
+    """
+
+    def setUp(self):
+        self.binary = _rust_helper()
+        if self.binary is None:
+            if os.environ.get("GMP_REQUIRE_RUST_HELPER") == "1":
+                self.fail("GMP_REQUIRE_RUST_HELPER=1 but no Rust helper was found")
+            self.skipTest("the Rust helper is not built; run `cargo build`")
+
+    def _run(self, command: list[str]) -> tuple[int, str]:
+        proc = subprocess.run(
+            command, capture_output=True, text=True, timeout=30, check=False
+        )
+        return proc.returncode, proc.stderr.strip()
+
+    def test_the_unit_only_uses_flags_both_helpers_implement(self):
+        """Driven off the unit file, so adding a flag there fails here."""
+        unit = (_REPO / "data" / "systemd" / "goblin-mode-pro-helper.service").read_text()
+        flags = set()
+        for line in unit.splitlines():
+            if line.startswith("Exec"):
+                flags.update(re.findall(r"(--[a-z][a-z-]*)", line))
+        self.assertEqual(flags, {"--revert"}, "the unit's flags changed; port the new one")
+
+    def test_both_refuse_revert_identically_without_root(self):
+        """Same message, same exit status, from both implementations."""
+        python = self._run(
+            [sys.executable, str(_REPO / "helper" / "goblin_helper.py"), "--revert"]
+        )
+        rust = self._run([str(self.binary), "--revert"])
+        self.assertEqual(python, rust)
+        self.assertEqual(rust, (1, "goblin-helper must run as root"))
+
+    def test_the_rust_helper_actually_recognises_revert(self):
+        """The check above is not enough on its own, and that is the point.
+
+        The root gate runs BEFORE the flag is handled, so unprivileged
+        `--revert` answers "must run as root" whether or not the flag is
+        implemented at all - deleting the whole branch keeps that test green.
+        What proves the flag exists is that it is treated DIFFERENTLY from one
+        that does not: a known flag reaches the root gate (exit 1), an unknown
+        one is refused as a usage error first (exit 2).
+        """
+        known = self._run([str(self.binary), "--revert"])
+        unknown = self._run([str(self.binary), "--definitely-not-a-flag"])
+        self.assertEqual(known[0], 1, f"--revert should reach the root gate: {known}")
+        self.assertEqual(unknown[0], 2, f"an unknown flag should be usage: {unknown}")
+        self.assertIn("unknown argument", unknown[1])
+
+    def test_introspect_is_the_only_mode_that_works_without_root(self):
+        """It has to: CI runs it, and it reads nothing privileged."""
+        code, _ = self._run([str(self.binary), "--introspect"])
+        self.assertEqual(code, 0)
+
