@@ -6,6 +6,22 @@ All notable changes to Goblin Mode Pro. Format loosely follows
 
 ## [Unreleased]
 
+### Added
+- The privileged helper's D-Bus interface is now a frozen contract
+  (`docs/dbus-interface-v1.xml`, 19 methods), checked on every push against
+  what the helper actually serves, plus a conformance suite
+  (`tests/conformance/helper.py`) that drives the helper from outside over the
+  system bus and never imports its source — so it grades any implementation of
+  that interface on the same scale. Both exist because the helper is being
+  rewritten in Rust and "it seems to work" is not a migration plan. The suite
+  scores 35 PASS / 0 FAIL against the Python helper on real hardware, and
+  found the `SetPowerLimits` bug below on its first run.
+- [The Rust conversion](https://bvaughan7.github.io/goblin-mode-pro/rust-conversion/)
+  — a new documentation page covering the scope (the root helper only; the
+  daemon, GUI and CLI stay Python), the reasoning, the honest argument
+  against doing it at all, the on-disk state format's two-way compatibility
+  rules, and where each block currently stands.
+
 ### Fixed
 - `SetPowerLimits` snapshotted the machine's state *before* validating its
   arguments, so a request below the 6 W RAPL floor was correctly refused

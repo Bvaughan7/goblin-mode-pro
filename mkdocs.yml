@@ -40,6 +40,7 @@ nav:
   - Diagnostics & benchmarking: diagnostics.md
   - Command line: cli.md
   - How it works: architecture.md
+  - Rust conversion: rust-conversion.md
   - Troubleshooting: troubleshooting.md
   - Verified hardware: verified-hardware.md
   - Glossary: glossary.md
