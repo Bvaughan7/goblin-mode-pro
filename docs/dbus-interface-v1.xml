@@ -1,0 +1,96 @@
+<!--
+  FROZEN INTERFACE - v1. Do not edit to make a test pass.
+
+  This is the contract the privileged helper serves on the system bus, and it
+  is frozen for the whole Python-to-Rust conversion so that either
+  implementation can be swapped in under a caller that knows nothing about
+  which language answered.
+
+    bus name     com.goblinmode.ProHelper
+    object path  /com/goblinmode/ProHelper
+    interface    com.goblinmode.ProHelper.Manager
+
+  Every method here is authorized before it runs. Three polkit actions gate
+  them - see docs/architecture.md and data/polkit/com.goblinmode.pro.policy.
+
+  The file is stored in the canonical form produced by tests/_dbusxml.py, and
+  tests/test_dbus_interface_freeze.py asserts the helper still serves exactly
+  this. If that test fails, the interface changed: either revert the change or
+  cut a v2 and update every implementation. Regenerating this file to match new
+  behaviour silently breaks the mixed Python/Rust installs the conversion plan
+  depends on.
+-->
+<node>
+  <interface name="com.goblinmode.ProHelper.Manager">
+    <method name="ApplyAmdUndervolt">
+      <arg name="ok" type="b" direction="out"/>
+    </method>
+    <method name="ApplyUndervolt">
+      <arg name="ok" type="b" direction="out"/>
+    </method>
+    <method name="GetGovernor">
+      <arg name="governor" type="s" direction="out"/>
+    </method>
+    <method name="GetPowerLimits">
+      <arg name="pl1_uw" type="t" direction="out"/>
+      <arg name="pl2_uw" type="t" direction="out"/>
+    </method>
+    <method name="HasTDPControl">
+      <arg name="available" type="b" direction="out"/>
+    </method>
+    <method name="ReadUndervolt">
+      <arg name="text" type="s" direction="out"/>
+    </method>
+    <method name="Renice">
+      <arg name="pid" type="u" direction="in"/>
+      <arg name="nice" type="i" direction="in"/>
+      <arg name="ok" type="b" direction="out"/>
+    </method>
+    <method name="ResetFans">
+      <arg name="ok" type="b" direction="out"/>
+    </method>
+    <method name="ResetPowerLimits">
+      <arg name="ok" type="b" direction="out"/>
+    </method>
+    <method name="ResetTDP">
+      <arg name="ok" type="b" direction="out"/>
+    </method>
+    <method name="RevertAll">
+      <arg name="ok" type="b" direction="out"/>
+    </method>
+    <method name="RevertSysctl">
+      <arg name="key" type="s" direction="in"/>
+      <arg name="ok" type="b" direction="out"/>
+    </method>
+    <method name="SetEPP">
+      <arg name="epp" type="s" direction="in"/>
+      <arg name="ok" type="b" direction="out"/>
+    </method>
+    <method name="SetGovernor">
+      <arg name="governor" type="s" direction="in"/>
+      <arg name="ok" type="b" direction="out"/>
+    </method>
+    <method name="SetNvidiaModeset">
+      <arg name="enabled" type="b" direction="in"/>
+      <arg name="ok" type="b" direction="out"/>
+    </method>
+    <method name="SetPowerLimits">
+      <arg name="pl1_uw" type="t" direction="in"/>
+      <arg name="pl2_uw" type="t" direction="in"/>
+      <arg name="ok" type="b" direction="out"/>
+    </method>
+    <method name="SetSysctl">
+      <arg name="key" type="s" direction="in"/>
+      <arg name="value" type="s" direction="in"/>
+      <arg name="ok" type="b" direction="out"/>
+    </method>
+    <method name="SetTDP">
+      <arg name="watts" type="u" direction="in"/>
+      <arg name="ok" type="b" direction="out"/>
+    </method>
+    <method name="SpinUpFans">
+      <arg name="percent" type="u" direction="in"/>
+      <arg name="ok" type="b" direction="out"/>
+    </method>
+  </interface>
+</node>

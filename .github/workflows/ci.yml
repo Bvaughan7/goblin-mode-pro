@@ -95,3 +95,31 @@ jobs:
             python3-psutil xvfb dbus-x11
       - name: Construct MainWindow under Xvfb (tests/gui_smoke.py)
         run: xvfb-run -a dbus-run-session -- python3 tests/gui_smoke.py
+
+  # This job is the reason mixed Python/Rust installs are safe. The helper,
+  # the daemon and the GUI are three processes that only ever meet over D-Bus,
+  # so each one can be in either language - but ONLY for as long as every
+  # implementation serves byte-identical interfaces. If this job fails, the
+  # contract moved. Fix the implementation or cut a v2 and update all of them.
+  # Regenerating docs/dbus-interface-v1.xml to make it green is how a mixed
+  # install silently breaks on somebody else's machine.
+  interface-freeze:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install PyGObject (the helper imports Gio at module scope)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-gi gir1.2-glib-2.0
+
+      - name: The helper still serves the frozen v1 interface
+        run: python3 -m unittest tests.test_dbus_interface_freeze -v
+
+      - name: The conformance suite is runnable
+        # It needs a live system bus and a polkit agent, so CI cannot execute
+        # it - but a syntax error or a bad import in the suite would not be
+        # discovered until somebody tried to verify real hardware with it.
+        run: |
+          python3 -m compileall -q tests/conformance
+          python3 tests/conformance/helper.py --help > /dev/null
