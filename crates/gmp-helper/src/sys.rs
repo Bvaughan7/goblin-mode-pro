@@ -21,6 +21,10 @@ pub const RAPL_BASE: &str = "/sys/class/powercap/intel-rapl/intel-rapl:0";
 /// boot would restore values that are no longer meaningful.
 pub const STATE_DIR: &str = "/run/goblin-mode-pro";
 
+/// The sysctl tree. Passed to the sysctl operations explicitly so they can
+/// be tested against a fake one without root.
+pub const PROC_SYS: &str = "/proc/sys";
+
 /// The filesystem roots every operation works against.
 ///
 /// Passed in rather than reached for as globals so the operations can be

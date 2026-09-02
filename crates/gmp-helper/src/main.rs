@@ -16,6 +16,7 @@ mod polkit;
 mod power;
 mod renice;
 mod sys;
+mod sysctl;
 mod undervolt;
 // The snapshot is WRITTEN from here already; it is not read back until
 // RevertAll is ported. Getting the format right first is deliberate - it is

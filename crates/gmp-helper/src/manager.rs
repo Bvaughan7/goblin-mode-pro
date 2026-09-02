@@ -18,7 +18,9 @@ use zbus::object_server::Interface;
 use zbus::{interface, Connection};
 
 use crate::error::{HelperError, Result};
-use crate::{cpu, polkit, power, renice, sys, undervolt};
+use std::path::Path;
+
+use crate::{cpu, polkit, power, renice, sys, sysctl, undervolt};
 
 /// The frozen contract. These three strings are the whole compatibility
 /// surface between the Python and Rust helpers, and the conversion plan gets
@@ -258,8 +260,7 @@ impl Manager {
         #[zbus(header)] hdr: Header<'_>,
     ) -> Result<bool> {
         authorize(conn, &hdr).await?;
-        let _ = (key, value);
-        Err(unported("SetSysctl"))
+        sysctl::set_sysctl(&self.roots, Path::new(sys::PROC_SYS), key, value)
     }
 
     #[zbus(out_args("ok"))]
@@ -270,8 +271,7 @@ impl Manager {
         #[zbus(header)] hdr: Header<'_>,
     ) -> Result<bool> {
         authorize(conn, &hdr).await?;
-        let _ = key;
-        Err(unported("RevertSysctl"))
+        sysctl::revert_sysctl(&self.roots, Path::new(sys::PROC_SYS), key)
     }
 
     #[zbus(out_args("ok"))]
