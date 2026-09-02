@@ -1,0 +1,33 @@
+# cargo-deny: supply-chain policy for the Rust helper.
+#
+# This runs from the first Rust commit rather than being added once the tree
+# is big, because the point of auditing dependencies is to notice the one you
+# would rather not have BEFORE it is load-bearing. The helper runs as root; a
+# transitive dependency here is a transitive dependency of a privileged
+# process.
+
+[advisories]
+# A yanked crate is one the author withdrew. Building on one is not something
+# to discover during a release.
+yanked = "deny"
+
+[licenses]
+# Derived from the tree as it stands, not copied from a template: every
+# current dependency satisfies one of these. Unicode-3.0 is needed on its own
+# because one crate is "(MIT OR Apache-2.0) AND Unicode-3.0" - the AND means
+# MIT alone does not cover it.
+allow = ["MIT", "Apache-2.0", "Unicode-3.0"]
+confidence-threshold = 0.9
+
+[bans]
+# Warn rather than deny: duplicate versions are usually somebody else's
+# transitive problem and blocking CI on one helps nobody. Wildcards are ours
+# and are denied - an unpinned dependency makes a build unreproducible.
+multiple-versions = "warn"
+wildcards = "deny"
+
+[sources]
+# Everything comes from crates.io. A git dependency in a privileged binary
+# should be a deliberate, argued decision, so it fails here by default.
+unknown-registry = "deny"
+unknown-git = "deny"

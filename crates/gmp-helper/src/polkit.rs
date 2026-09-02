@@ -12,7 +12,7 @@
 
 use std::collections::HashMap;
 
-use zbus::zvariant::{OwnedValue, Value};
+use zbus::zvariant::Value;
 use zbus::Connection;
 
 /// Tune CPU governor, process priority and power limits. `allow_active=yes`
@@ -83,6 +83,12 @@ pub fn is_mutating(method: &str) -> bool {
 /// ownership check in `Renice` to anyone who could make the lookup fail. It is
 /// called out here because the obvious translation of an `Option` into a
 /// default is what reintroduces it.
+///
+/// Not called until `Renice` is ported in the next block, which is the only
+/// method that needs to know who the caller is beyond whether they are
+/// authorized. It lands here with the authorization path because getting it
+/// wrong is the same bug class, and it is tested now rather than later.
+#[allow(dead_code, reason = "consumed by Renice when hardware ops land")]
 pub async fn caller_uid(conn: &Connection, sender: &str) -> Option<u32> {
     let reply = conn
         .call_method(
@@ -173,9 +179,17 @@ mod tests {
             ("SpinUpFans", ACTION_THERMAL),
         ];
         for (method, action) in expected {
-            assert_eq!(action_for(method), *action, "{method} routes to the wrong action");
+            assert_eq!(
+                action_for(method),
+                *action,
+                "{method} routes to the wrong action"
+            );
         }
-        assert_eq!(expected.len(), MUTATING.len(), "a mutating method is unpinned");
+        assert_eq!(
+            expected.len(),
+            MUTATING.len(),
+            "a mutating method is unpinned"
+        );
     }
 
     #[test]
@@ -189,7 +203,12 @@ mod tests {
 
     #[test]
     fn read_only_methods_are_not_mutating() {
-        for method in ["GetGovernor", "GetPowerLimits", "HasTDPControl", "ReadUndervolt"] {
+        for method in [
+            "GetGovernor",
+            "GetPowerLimits",
+            "HasTDPControl",
+            "ReadUndervolt",
+        ] {
             assert!(!is_mutating(method), "{method} must not be authorized");
         }
     }

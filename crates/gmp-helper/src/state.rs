@@ -41,10 +41,18 @@ pub struct Snapshot {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub epp: Option<String>,
 
-    #[serde(default, deserialize_with = "lenient_u64", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        deserialize_with = "lenient_u64",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub pl1_uw: Option<u64>,
 
-    #[serde(default, deserialize_with = "lenient_u64", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        deserialize_with = "lenient_u64",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub pl2_uw: Option<u64>,
 
     /// Every ryzenadj limit, each to be restored to its OWN original value.
@@ -55,7 +63,11 @@ pub struct Snapshot {
 
     /// Kept for a helper upgraded under a running daemon: an older snapshot
     /// recorded only STAPM, and `ResetTDP` still falls back to it.
-    #[serde(default, deserialize_with = "lenient_i64", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        deserialize_with = "lenient_i64",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub ryzenadj_stapm_mw: Option<i64>,
 
     /// Anything this version does not know about, carried through untouched.
@@ -93,9 +105,11 @@ impl Snapshot {
 fn lenient_u64<'de, D: Deserializer<'de>>(de: D) -> Result<Option<u64>, D::Error> {
     Ok(match Option::<Value>::deserialize(de)? {
         None | Some(Value::Null) => None,
-        Some(Value::Number(n)) => n
-            .as_u64()
-            .or_else(|| n.as_f64().filter(|f| *f >= 0.0 && f.is_finite()).map(|f| f as u64)),
+        Some(Value::Number(n)) => n.as_u64().or_else(|| {
+            n.as_f64()
+                .filter(|f| *f >= 0.0 && f.is_finite())
+                .map(|f| f as u64)
+        }),
         Some(_) => None,
     })
 }
@@ -178,9 +192,12 @@ mod tests {
         // Python omits keys it has no value for; writing `"epp": null` instead
         // would be a format change the other implementation has to tolerate
         // for no reason.
-        let json = Snapshot { governor: Some("powersave".into()), ..Default::default() }
-            .to_json()
-            .unwrap();
+        let json = Snapshot {
+            governor: Some("powersave".into()),
+            ..Default::default()
+        }
+        .to_json()
+        .unwrap();
         assert!(!json.contains("null"), "{json}");
         assert!(!json.contains("epp"), "{json}");
     }

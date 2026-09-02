@@ -14,7 +14,9 @@ exists or whose reply type moved.
 
 from __future__ import annotations
 
+import os
 import re
+import subprocess
 import sys
 import unittest
 from pathlib import Path
@@ -202,3 +204,79 @@ class Canonicalizer(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def _rust_helper() -> Path | None:
+    """The built Rust helper, or None if it has not been built.
+
+    `GMP_HELPER_RS` overrides the search, so an installed binary or a
+    cross-built one can be graded without a working tree layout.
+    """
+    override = os.environ.get("GMP_HELPER_RS")
+    if override:
+        return Path(override) if Path(override).exists() else None
+    for profile in ("debug", "release"):
+        candidate = _REPO / "target" / profile / "gmp-helper"
+        if candidate.exists():
+            return candidate
+    return None
+
+
+class RustImplementation(unittest.TestCase):
+    """The Rust helper serves the same frozen interface as the Python one.
+
+    This is the check the freeze exists for. Both binaries are asked what they
+    serve and both answers go through the SAME canonicalizer in
+    `tests/_dbusxml.py` - deliberately, because a canonicalizer reimplemented
+    in Rust would be a second source of truth, and two of those drifting apart
+    is how a freeze check starts passing for the wrong reason.
+
+    The Rust binary is asked via `--introspect`, which prints its interface and
+    exits without touching the bus, so this runs in CI and on a machine where
+    the real helper already holds the bus name.
+    """
+
+    def setUp(self):
+        self.binary = _rust_helper()
+        if self.binary is None:
+            # A skip that can never fail is a check that quietly stops
+            # existing. CI sets this so the freeze is actually enforced there;
+            # locally, `cargo build` is not required to run the Python suite.
+            if os.environ.get("GMP_REQUIRE_RUST_HELPER") == "1":
+                self.fail(
+                    "GMP_REQUIRE_RUST_HELPER=1 but no Rust helper was found - "
+                    "run `cargo build` before the Python suite"
+                )
+            self.skipTest("the Rust helper is not built; run `cargo build`")
+
+    def _served(self) -> str:
+        proc = subprocess.run(
+            [str(self.binary), "--introspect"],
+            capture_output=True, text=True, timeout=30, check=False,
+        )
+        self.assertEqual(
+            proc.returncode, 0,
+            f"{self.binary} --introspect failed: {proc.stderr.strip()}",
+        )
+        return proc.stdout
+
+    def test_rust_helper_serves_exactly_the_frozen_interface(self):
+        self.assertEqual(
+            canonicalize(self._served(), gh.IFACE),
+            _frozen_body(),
+            "the Rust helper does not serve the frozen v1 interface.\n"
+            "Fix the Rust side - do NOT regenerate docs/dbus-interface-v1.xml, "
+            "that is what breaks mixed Python/Rust installs.",
+        )
+
+    def test_both_implementations_promise_identical_signatures(self):
+        """Compared as a mapping, so a mismatch names the method.
+
+        The byte comparison above already covers this, but it fails with a
+        wall of XML. This one says `SetTDP` and the two signatures, which is
+        the difference between a five-second fix and a bisect.
+        """
+        self.assertEqual(
+            signatures(self._served(), gh.IFACE),
+            signatures(gh.INTROSPECTION_XML, gh.IFACE),
+        )

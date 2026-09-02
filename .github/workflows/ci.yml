@@ -113,7 +113,19 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y python3-gi gir1.2-glib-2.0
 
-      - name: The helper still serves the frozen v1 interface
+      - uses: dtolnay/rust-toolchain@stable
+
+      # Built here so the freeze test can grade BOTH implementations against
+      # the same frozen file, using the one canonicalizer in tests/_dbusxml.py.
+      # Without the binary present that check skips itself, so
+      # GMP_REQUIRE_RUST_HELPER turns the skip into a failure - a check that
+      # can only ever skip is a check that has quietly stopped existing.
+      - name: Build the Rust helper
+        run: cargo build
+
+      - name: Both helpers still serve the frozen v1 interface
+        env:
+          GMP_REQUIRE_RUST_HELPER: "1"
         run: python3 -m unittest tests.test_dbus_interface_freeze -v
 
       - name: The conformance suite is runnable
@@ -123,3 +135,31 @@ jobs:
         run: |
           python3 -m compileall -q tests/conformance
           python3 tests/conformance/helper.py --help > /dev/null
+
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Formatting
+        run: cargo fmt --check
+
+      # -D warnings from the first commit. The helper is small enough that
+      # keeping it warning-free costs nothing now and is unpleasant to
+      # retrofit later.
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Tests
+        run: cargo test --workspace
+
+      # Advisories, licences and dependency sources. See deny.toml for why
+      # this runs before the tree is big.
+      - name: cargo-deny
+        uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check
