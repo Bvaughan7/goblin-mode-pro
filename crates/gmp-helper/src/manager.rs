@@ -31,6 +31,15 @@ pub const BUS_NAME: &str = "com.goblinmode.ProHelper";
 pub const OBJECT_PATH: &str = "/com/goblinmode/ProHelper";
 pub const INTERFACE: &str = "com.goblinmode.ProHelper.Manager";
 
+/// The frozen contract's version. Stays 1 for the whole conversion - see
+/// docs/dbus-interface-v1.xml.
+const INTERFACE_VERSION: u32 = 1;
+
+/// Which implementation is answering. For bug reports ONLY. Nothing may branch
+/// on it: the moment behaviour depends on this, the two helpers stop being
+/// interchangeable and the frozen interface is a fiction.
+const IMPLEMENTATION: &str = "rust";
+
 pub struct Manager {
     roots: sys::Roots,
 }
@@ -77,6 +86,26 @@ async fn authorize(conn: &Connection, hdr: &Header<'_>) -> Result<()> {
 /// time, and a macro would have to be unpicked before any of that can start.
 #[interface(name = "com.goblinmode.ProHelper.Manager")]
 impl Manager {
+    // ---- identity, for bug reports and skew detection ----
+
+    /// The helper's own version. Deliberately NOT read from the Python
+    /// package: the two are installed independently and may legitimately
+    /// differ mid-upgrade, which is the skew this exists to make visible.
+    #[zbus(property)]
+    async fn version(&self) -> String {
+        env!("CARGO_PKG_VERSION").to_owned()
+    }
+
+    #[zbus(property)]
+    async fn interface_version(&self) -> u32 {
+        INTERFACE_VERSION
+    }
+
+    #[zbus(property)]
+    async fn implementation(&self) -> String {
+        IMPLEMENTATION.to_owned()
+    }
+
     // ---- read-only: never authorized, because they change nothing ----
 
     #[zbus(out_args("governor"))]
@@ -342,6 +371,25 @@ mod tests {
         assert_eq!(INTERFACE, "com.goblinmode.ProHelper.Manager");
         assert_eq!(BUS_NAME, "com.goblinmode.ProHelper");
         assert_eq!(OBJECT_PATH, "/com/goblinmode/ProHelper");
+    }
+
+    #[tokio::test]
+    async fn the_identity_properties_say_what_this_binary_is() {
+        // A hybrid install has no other way to answer "which helper served
+        // this call?", which is the first question any bug report needs.
+        let manager = Manager::new(sys::Roots::system());
+        assert_eq!(manager.version().await, env!("CARGO_PKG_VERSION"));
+        assert_eq!(manager.interface_version().await, 1);
+        assert_eq!(manager.implementation().await, "rust");
+    }
+
+    #[test]
+    fn the_interface_version_is_not_a_place_to_put_the_build_version() {
+        // These are different numbers on purpose. The contract's version stays
+        // 1 for the whole conversion; the binary's changes every release. If
+        // the contract ever needs a 2, the freeze has failed.
+        assert_eq!(INTERFACE_VERSION, 1);
+        assert_ne!(env!("CARGO_PKG_VERSION"), "1");
     }
 
     #[test]

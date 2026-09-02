@@ -30,6 +30,31 @@ class HelperClient:
     def __init__(self) -> None:
         self._proxy: Gio.DBusProxy | None = None
 
+    # -- identity -------------------------------------------------------
+    def identity(self) -> dict[str, object]:
+        """Which helper is answering: version, contract version, language.
+
+        A hybrid install has two interchangeable helpers on the same bus name,
+        so a bug report otherwise has no way to say which one served the call.
+        Gio caches properties on the proxy, so this costs no round trip.
+
+        Returns {} rather than raising: this is diagnostic decoration, and a
+        helper too old to serve the properties is a fact to report, not an
+        error to propagate into a report that would then contain nothing.
+        """
+        try:
+            proxy = self._get_proxy()
+        except HelperUnavailable:
+            return {}
+        out: dict[str, object] = {}
+        for prop, key in (("Version", "version"),
+                          ("InterfaceVersion", "interface_version"),
+                          ("Implementation", "implementation")):
+            value = proxy.get_cached_property(prop)
+            if value is not None:
+                out[key] = value.unpack()
+        return out
+
     # -- connection -----------------------------------------------------
     def _get_proxy(self) -> Gio.DBusProxy:
         if self._proxy is not None:

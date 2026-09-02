@@ -10,6 +10,12 @@
     object path  /com/goblinmode/ProHelper
     interface    com.goblinmode.ProHelper.Manager
 
+  The three properties are read-only identity, for bug reports and skew
+  detection. InterfaceVersion stays 1 for the whole conversion: if it ever needs
+  bumping, the freeze has failed and that is what to fix. Nothing may branch on
+  Implementation - the moment behaviour depends on which helper answered, these
+  two stop being interchangeable and this file is a fiction.
+
   Every method here is authorized before it runs. Three polkit actions gate
   them - see docs/architecture.md and data/polkit/com.goblinmode.pro.policy.
 
@@ -92,5 +98,8 @@
       <arg name="percent" type="u" direction="in"/>
       <arg name="ok" type="b" direction="out"/>
     </method>
+    <property name="Implementation" type="s" access="read"/>
+    <property name="InterfaceVersion" type="u" access="read"/>
+    <property name="Version" type="s" access="read"/>
   </interface>
 </node>

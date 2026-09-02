@@ -43,6 +43,23 @@ import gi
 gi.require_version("Gio", "2.0")
 from gi.repository import Gio, GLib
 
+#: The helper is installed standalone and never imports the goblinmode
+#: package, so it cannot read src/goblinmode/__about__.py at runtime. This is a
+#: sixth place the release process has to bump, and
+#: tests/test_packaging_versions.py fails if it drifts.
+HELPER_VERSION = "1.3.2"
+
+#: The frozen D-Bus contract's version. This stays 1 for the whole Python-to-Rust
+#: conversion. If it ever needs bumping, the interface freeze has failed and THAT
+#: is the thing to fix - a second version would mean callers have to care which
+#: implementation answered, which is the exact property the freeze exists to deny.
+INTERFACE_VERSION = 1
+
+#: Which implementation is answering. For bug reports ONLY. Nothing may branch on
+#: it: the moment behaviour depends on this, the two helpers are no longer
+#: interchangeable and the frozen interface is a fiction.
+IMPLEMENTATION = "python"
+
 BUS_NAME = "com.goblinmode.ProHelper"
 OBJECT_PATH = "/com/goblinmode/ProHelper"
 IFACE = "com.goblinmode.ProHelper.Manager"
@@ -219,6 +236,9 @@ INTROSPECTION_XML = f"""
     <method name="ResetFans">
       <arg type="b" name="ok" direction="out"/>
     </method>
+    <property name="Implementation" type="s" access="read"/>
+    <property name="InterfaceVersion" type="u" access="read"/>
+    <property name="Version" type="s" access="read"/>
   </interface>
 </node>
 """
@@ -1108,13 +1128,25 @@ def _handle_call(
         invocation.return_dbus_error(f"{IFACE}.Failed", str(exc))
 
 
+def _handle_get_property(connection, sender, path, iface, prop, error, user_data):
+    """Read-only identity properties. NOT authorized: they change nothing and
+    reveal nothing a caller cannot already see by looking at the unit file."""
+    if prop == "Version":
+        return GLib.Variant("s", HELPER_VERSION)
+    if prop == "InterfaceVersion":
+        return GLib.Variant("u", INTERFACE_VERSION)
+    if prop == "Implementation":
+        return GLib.Variant("s", IMPLEMENTATION)
+    return None
+
+
 def _on_bus_acquired(connection, name):
     node_info = Gio.DBusNodeInfo.new_for_xml(INTROSPECTION_XML)
     connection.register_object(
         OBJECT_PATH,
         node_info.interfaces[0],
         _handle_call,
-        None,
+        _handle_get_property,
         None,
     )
     log.info("registered %s", OBJECT_PATH)

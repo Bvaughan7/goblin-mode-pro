@@ -344,3 +344,62 @@ class DropInParity(unittest.TestCase):
         code, _ = self._run([str(self.binary), "--introspect"])
         self.assertEqual(code, 0)
 
+
+class IdentityProperties(unittest.TestCase):
+    """Version, InterfaceVersion and Implementation, on both helpers.
+
+    They exist because a hybrid install has no other way to answer "which
+    helper actually served this call?" - and during a conversion that is the
+    first question any bug report needs answered. They are read-only and
+    unauthorized: they change nothing and reveal nothing a caller could not
+    read off the unit file.
+    """
+
+    _NAMES = ("Version", "InterfaceVersion", "Implementation")
+
+    def test_the_frozen_interface_declares_all_three(self):
+        body = _frozen_body()
+        for name in self._NAMES:
+            self.assertIn(f'<property name="{name}"', body)
+
+    def test_the_python_helper_serves_them(self):
+        values = {
+            name: gh._handle_get_property(None, None, None, gh.IFACE, name, None, None)
+            for name in self._NAMES
+        }
+        self.assertEqual(values["Version"].get_string(), gh.HELPER_VERSION)
+        self.assertEqual(values["InterfaceVersion"].get_uint32(), 1)
+        self.assertEqual(values["Implementation"].get_string(), "python")
+
+    def test_an_unknown_property_is_not_invented(self):
+        """Returning something for a property that does not exist would make
+        the two implementations disagree in a way introspection cannot see."""
+        self.assertIsNone(
+            gh._handle_get_property(None, None, None, gh.IFACE, "Nonsense", None, None)
+        )
+
+    def test_the_two_implementations_disagree_only_about_which_they_are(self):
+        """InterfaceVersion must match - a difference there means the freeze
+        failed. Implementation must NOT match, or the property is useless."""
+        rust = (_REPO / "crates" / "gmp-helper" / "src" / "manager.rs").read_text()
+        self.assertIn("const INTERFACE_VERSION: u32 = 1;", rust)
+        self.assertEqual(gh.INTERFACE_VERSION, 1)
+        self.assertIn('const IMPLEMENTATION: &str = "rust";', rust)
+        self.assertEqual(gh.IMPLEMENTATION, "python")
+
+    def test_nothing_branches_on_which_implementation_is_running(self):
+        """The moment behaviour depends on this, the two stop being
+        interchangeable and the frozen interface is a fiction. It is for bug
+        reports, and this is what keeps it that way."""
+        rust = (_REPO / "crates" / "gmp-helper" / "src").glob("*.rs")
+        for path in rust:
+            text = path.read_text()
+            for line in text.splitlines():
+                stripped = line.strip()
+                if stripped.startswith("//") or "const IMPLEMENTATION" in stripped:
+                    continue
+                self.assertNotIn(
+                    "IMPLEMENTATION ==", stripped,
+                    f"{path.name} branches on the implementation: {stripped}",
+                )
+

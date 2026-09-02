@@ -1,9 +1,10 @@
 """Every packaging target's version matches src/goblinmode/__about__.py.
 
-The release process bumps five files by hand (__about__, the two PKGBUILDs and
-the .SRCINFO, the RPM spec, the Debian changelog). Missing one is silent: the
-build still succeeds and ships a package labelled with the wrong version. The
-AUR placeholder had drifted a full release behind before this test existed.
+The release process bumps six places by hand (__about__, the two PKGBUILDs and
+the .SRCINFO, the RPM spec, the Debian changelog, and the helper's own
+HELPER_VERSION). Missing one is silent: the build still succeeds and ships a
+package labelled with the wrong version. The AUR placeholder had drifted a full
+release behind before this test existed.
 """
 
 from __future__ import annotations
@@ -21,6 +22,25 @@ _PKG = _REPO / "packaging"
 
 
 class PackagingVersions(unittest.TestCase):
+    def test_helper_reports_the_package_version(self):
+        """The helper is installed standalone and cannot import __about__.
+
+        It serves its version over D-Bus so a bug report can say which helper
+        answered, which is worthless if the number is stale. Hence a sixth
+        place to bump, and this test.
+        """
+        source = (_REPO / "helper" / "goblin_helper.py").read_text()
+        m = re.search(r'^HELPER_VERSION = "(\S+)"$', source, re.M)
+        self.assertIsNotNone(m, "no HELPER_VERSION in goblin_helper.py")
+        self.assertEqual(m.group(1), __version__)
+
+    def test_the_rust_helper_reports_the_same_version(self):
+        """Its version comes from the workspace Cargo.toml."""
+        cargo = (_REPO / "Cargo.toml").read_text()
+        m = re.search(r'^version = "(\S+)"$', cargo, re.M)
+        self.assertIsNotNone(m, "no workspace version in Cargo.toml")
+        self.assertEqual(m.group(1), __version__)
+
     def test_arch_pkgbuild(self):
         m = re.search(r"^pkgver=(\S+)$", (_PKG / "arch/PKGBUILD").read_text(), re.M)
         self.assertIsNotNone(m, "no pkgver= in the Arch PKGBUILD")

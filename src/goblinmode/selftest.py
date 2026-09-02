@@ -311,9 +311,25 @@ class SelfTest:
     # -- helper & authorization --------------------------------------
     def probe_helper(self) -> None:
         sec = "Helper and authorization"
-        if self.helper() is not None:
-            self._add("helper_bus", "Privileged helper", PASS,
-                      "reachable on the system bus", sec)
+        helper = self.helper()
+        if helper is not None:
+            identity = {}
+            try:
+                identity = helper.identity()
+            except Exception:                             # noqa: BLE001
+                pass
+            # Which implementation answered is the first thing a bug report
+            # needs while two of them exist, and it is invisible otherwise.
+            if identity:
+                detail = ("reachable on the system bus - "
+                          f"{identity.get('implementation', '?')} helper "
+                          f"v{identity.get('version', '?')}, "
+                          f"interface v{identity.get('interface_version', '?')}")
+            else:
+                detail = ("reachable on the system bus (it serves no identity "
+                          "properties, so it predates them)")
+            self._add("helper_bus", "Privileged helper", PASS, detail, sec,
+                      **identity)
         else:
             self._add("helper_bus", "Privileged helper", FAIL,
                       f"{self._helper_error} - start it with "
