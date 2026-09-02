@@ -6,6 +6,11 @@
 #   ./install.sh --user       skip the root helper (governor/power tuning disabled)
 #   ./install.sh --uninstall  remove everything this script installed
 #
+#   --helper=python  (default) run the Python helper
+#   --helper=rust    build and run the Rust helper instead. Needs cargo.
+#                    The Python helper is installed either way, so going
+#                    back is one symlink and a restart - see below.
+#
 # Works on any systemd Linux with polkit. It installs the Python packages for
 # your distribution when it knows how, and otherwise tells you exactly what to
 # install by hand.
@@ -16,7 +21,20 @@ REPO_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 PREFIX="/usr"
 LIB_DIR="/usr/lib/goblin-mode-pro"
 LIBEXEC_DIR="/usr/libexec/goblin-mode-pro"
-MODE="${1:-}"
+# The implementation the unit's symlink will point at. Python is the default
+# and is installed either way, so a rollback never needs a rebuild.
+HELPER_IMPL="python"
+MODE=""
+for _arg in "$@"; do
+    case "$_arg" in
+        --helper=*) HELPER_IMPL="${_arg#*=}" ;;
+        *) MODE="$_arg" ;;
+    esac
+done
+case "$HELPER_IMPL" in
+    python | rust) ;;
+    *) printf 'unknown --helper=%s (want python or rust)\n' "$HELPER_IMPL" >&2; exit 2 ;;
+esac
 
 msg()  { printf '\033[1;32m::\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m!!\033[0m %s\n' "$*" >&2; }
@@ -123,15 +141,69 @@ EOF
     sudo chmod 0755 -- "$1"
 }
 
+# Build the Rust helper and prove it serves the frozen interface before it is
+# allowed anywhere near /usr. A helper that does not serve the contract is not
+# a helper - it is a service that starts, claims the bus name and answers
+# nothing the daemon asks, which looks like a hang rather than a failure.
+build_rust_helper() {
+    need_cmd cargo || die "--helper=rust needs a Rust toolchain; cargo is not on PATH.
+   Install rustup (https://rustup.rs) or use --helper=python."
+
+    # Refuse to build as root rather than trying to drop back down. cargo run
+    # as root fills target/ and ~/.cargo with root-owned files that the user's
+    # next ordinary build cannot write, and de-escalating correctly (HOME,
+    # PATH, the cargo registry) has more ways to be subtly wrong than to be
+    # right. This script asks for sudo per command; it is meant to be started
+    # as yourself.
+    if [ "$(id -u)" -eq 0 ]; then
+        die "run ./install.sh as your normal user, not with sudo:
+   building the Rust helper as root would leave root-owned files in target/
+   and ~/.cargo. The script asks for sudo on the commands that need it."
+    fi
+
+    msg "Building the Rust helper (this takes a minute the first time)"
+    ( cd "$REPO_DIR" && cargo build --release --locked -p gmp-helper ) \
+        || die "the Rust helper did not build; nothing was installed"
+
+    local built="$REPO_DIR/target/release/gmp-helper"
+    [ -x "$built" ] || die "expected $built after a successful build"
+
+    msg "Checking it serves the frozen D-Bus interface"
+    local served; served="$(mktemp)"
+    "$built" --introspect > "$served" || die "the built helper could not describe itself"
+    python3 -c '
+import sys
+sys.path.insert(0, sys.argv[1])
+from _dbusxml import canonicalize
+served = canonicalize(open(sys.argv[2]).read(), "com.goblinmode.ProHelper.Manager")
+frozen = open(sys.argv[3]).read()
+frozen = frozen[frozen.index("<node>"):]
+sys.exit(0 if served == frozen else 1)
+' "$REPO_DIR/tests" "$served" "$REPO_DIR/docs/dbus-interface-v1.xml" || {
+        rm -f -- "$served"
+        die "the built helper does not serve docs/dbus-interface-v1.xml - refusing to install it"
+    }
+    rm -f -- "$served"
+
+    sudo install -Dm0755 "$built" "$LIBEXEC_DIR/helper-rust"
+    msg "Installed the Rust helper at $LIBEXEC_DIR/helper-rust"
+}
+
 install_helper() {
     msg "Installing the privileged helper, polkit action, D-Bus policy and system unit"
     sudo install -Dm0755 "$REPO_DIR/helper/goblin_helper.py" "$LIB_DIR/goblin_helper.py"
     # The unit runs $LIBEXEC_DIR/helper, a symlink to whichever implementation
-    # this machine should use. Python is the default and the only one any
-    # release currently ships; the Rust port is swapped in by relinking, so a
-    # rollback is one symlink and a restart rather than a reinstall.
+    # this machine should use. The Python helper is installed above no matter
+    # which is selected, so going back to it is always one relink and a
+    # restart - it never needs a toolchain or a rebuild.
     sudo install -d -m0755 -- "$LIBEXEC_DIR"
-    sudo ln -sfn "$LIB_DIR/goblin_helper.py" "$LIBEXEC_DIR/helper"
+    local helper_target="$LIB_DIR/goblin_helper.py"
+    if [ "$HELPER_IMPL" = rust ]; then
+        build_rust_helper
+        helper_target="$LIBEXEC_DIR/helper-rust"
+    fi
+    sudo ln -sfn "$helper_target" "$LIBEXEC_DIR/helper"
+    msg "Helper implementation: $HELPER_IMPL ($helper_target)"
     sudo install -Dm0644 "$REPO_DIR/data/polkit/com.goblinmode.pro.policy" \
         "$PREFIX/share/polkit-1/actions/com.goblinmode.pro.policy"
     sudo install -Dm0644 "$REPO_DIR/data/dbus/com.goblinmode.ProHelper.conf" \
@@ -218,7 +290,7 @@ uninstall() {
         "$PREFIX/share/applications/com.goblinmode.Pro.GamescopeSession.desktop" \
         "$PREFIX/share/icons/hicolor/scalable/apps/com.goblinmode.Pro.svg" \
         /usr/bin/goblin-mode-pro-daemon /usr/bin/goblin-mode-pro /usr/bin/goblin-mode-pro-cli
-    sudo rm -rf -- "$LIB_DIR" \
+    sudo rm -rf -- "$LIB_DIR" "$LIBEXEC_DIR" \
         /etc/systemd/system/goblin-mode-pro-helper.service.d
     sudo systemctl daemon-reload
     systemctl --user daemon-reload
@@ -241,6 +313,6 @@ case "$MODE" in
         msg "Installed. Open 'Goblin Mode Pro' from your application menu."
         msg "For games launched through Steam, set the launch options to:  goblin-run %command%"
         ;;
-    -h | --help) sed -n '2,13p' "$0" ;;
-    *) warn "unknown option: $MODE"; sed -n '2,13p' "$0"; exit 2 ;;
+    -h | --help) sed -n '2,17p' "$0" ;;
+    *) warn "unknown option: $MODE"; sed -n '2,17p' "$0"; exit 2 ;;
 esac

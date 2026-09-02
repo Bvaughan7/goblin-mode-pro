@@ -18,6 +18,7 @@ both files.
 from __future__ import annotations
 
 import re
+import subprocess
 import unittest
 from pathlib import Path
 
@@ -106,6 +107,68 @@ class HelperIndirection(unittest.TestCase):
             text = (_REPO / installer).read_text()
             with self.subTest(installer=installer):
                 self.assertNotIn("ln -s ", text, f"{installer} uses a non-forcing ln")
+
+
+class InstallerHelperSelection(unittest.TestCase):
+    """`install.sh --helper=` picks which implementation the symlink points at."""
+
+    _INSTALL = _REPO / "install.sh"
+
+    def test_an_unknown_implementation_is_refused_before_anything_happens(self):
+        """Runnable without sudo: the validation is argument parsing, and it
+        has to run before any install step, or a typo gets halfway through."""
+        proc = subprocess.run(
+            [str(self._INSTALL), "--helper=perl"],
+            capture_output=True, text=True, timeout=60, check=False,
+        )
+        self.assertEqual(proc.returncode, 2, proc.stderr)
+        self.assertIn("want python or rust", proc.stderr)
+
+    def test_python_is_installed_whichever_implementation_is_chosen(self):
+        """THE ROLLBACK GUARANTEE.
+
+        Going back to Python must never need a toolchain or a rebuild - it is
+        the thing you reach for when the Rust helper is misbehaving, quite
+        possibly on a machine that has no cargo at all. So the Python helper is
+        installed unconditionally, and this asserts it structurally: its
+        install line comes before anything branches on the choice.
+        """
+        lines = self._INSTALL.read_text().splitlines()
+        python_install = next(
+            i for i, line in enumerate(lines)
+            if "install -Dm0755" in line and "goblin_helper.py" in line
+        )
+        first_branch = next(
+            i for i, line in enumerate(lines) if '"$HELPER_IMPL" = rust' in line
+        )
+        self.assertLess(
+            python_install, first_branch,
+            "the Python helper is installed inside a branch - a rollback would "
+            "then depend on which implementation was chosen",
+        )
+
+    def test_the_rust_binary_is_checked_against_the_frozen_contract_first(self):
+        """A helper that does not serve the contract is worse than none.
+
+        It starts, claims the bus name, and answers nothing the daemon asks -
+        which presents as a hang, not a failure. So the freshly built binary is
+        asked what it serves and compared with the frozen file BEFORE it is
+        allowed into /usr.
+        """
+        text = self._INSTALL.read_text()
+        build = text.split("build_rust_helper()", 1)[1].split("\ninstall_helper()", 1)[0]
+        self.assertIn("dbus-interface-v1.xml", build, "the build path checks no contract")
+        self.assertIn("--introspect", build)
+        # and the check must come before the install, not after it
+        self.assertLess(
+            build.index("dbus-interface-v1.xml"), build.index("sudo install"),
+            "the contract check runs after the binary is already installed",
+        )
+
+    def test_uninstall_removes_the_libexec_directory(self):
+        text = self._INSTALL.read_text()
+        uninstall = text.split("uninstall()", 1)[1].split("\n}", 1)[0]
+        self.assertIn("$LIBEXEC_DIR", uninstall, "uninstall leaves the symlink behind")
 
 
 if __name__ == "__main__":
