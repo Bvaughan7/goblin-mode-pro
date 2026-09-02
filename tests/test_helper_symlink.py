@@ -171,5 +171,81 @@ class InstallerHelperSelection(unittest.TestCase):
         self.assertIn("$LIBEXEC_DIR", uninstall, "uninstall leaves the symlink behind")
 
 
+def _install_actions(path: Path) -> str:
+    """The part of a packaging file that actually installs things.
+
+    An rpm spec documents the relink command in its %description, which is
+    prose telling a human what to do - not the package doing it. Scanning the
+    whole file would read that as the package switching implementations by
+    itself, which is exactly what this must not do and exactly what the
+    documentation exists to explain.
+    """
+    text = path.read_text()
+    if path.suffix == ".spec":
+        return text.split("%install", 1)[1].split("\n%package", 1)[0].split("\n%files", 1)[0]
+    return text
+
+
+class PackagedRustHelper(unittest.TestCase):
+    """The Rust helper is packaged separately, and only IT is arch-specific.
+
+    Making the whole package architecture-specific because one file in it is
+    compiled would drop every non-x86 user of a package that is otherwise pure
+    Python, and would do it for no benefit at all. So the main package stays
+    architecture-independent and the compiled helper is its own package.
+    """
+
+    def test_the_main_package_stays_architecture_independent(self):
+        checks = {
+            "packaging/debian/control": "Architecture: all",
+            "packaging/rpm/goblin-mode-pro.spec": "BuildArch:      noarch",
+            "packaging/arch/PKGBUILD": "arch=('any')",
+            "packaging/aur/PKGBUILD": "arch=('any')",
+        }
+        for path, expected in checks.items():
+            with self.subTest(path=path):
+                self.assertIn(expected, (_REPO / path).read_text(),
+                              f"{path} no longer keeps the main package arch-independent")
+
+    def test_each_target_packages_the_rust_helper_separately(self):
+        """One extra package per target, carrying the one compiled file."""
+        checks = {
+            "packaging/debian/control": "Package: goblin-mode-pro-helper-rust",
+            "packaging/rpm/goblin-mode-pro.spec": "%package helper-rust",
+            "packaging/arch/PKGBUILD": "package_goblin-mode-pro-helper-rust()",
+            "packaging/aur/PKGBUILD": "package_goblin-mode-pro-helper-rust-git()",
+        }
+        for path, expected in checks.items():
+            with self.subTest(path=path):
+                text = (_REPO / path).read_text()
+                self.assertIn(expected, text, f"{path} has no separate Rust package")
+                self.assertIn("helper-rust", text)
+
+    def test_installing_the_rust_package_does_not_switch_to_it(self):
+        """It ships the binary; it must not touch the symlink.
+
+        Installing a package should never silently change which implementation
+        runs as root. Switching is the user relinking, deliberately.
+        """
+        for path in ("packaging/debian/rules", "packaging/rpm/goblin-mode-pro.spec",
+                     "packaging/arch/PKGBUILD", "packaging/aur/PKGBUILD"):
+            with self.subTest(path=path):
+                for line in _install_actions(_REPO / path).splitlines():
+                    if "ln -sfn" in line and "helper-rust" in line:
+                        self.fail(f"{path} points the symlink at the Rust helper: {line}")
+
+    def test_the_targets_that_build_rust_declare_a_toolchain(self):
+        checks = {
+            "packaging/debian/control": "cargo",
+            "packaging/rpm/goblin-mode-pro.spec": "BuildRequires:  cargo",
+            "packaging/arch/PKGBUILD": "makedepends=('cargo')",
+            "packaging/aur/PKGBUILD": "'cargo'",
+        }
+        for path, expected in checks.items():
+            with self.subTest(path=path):
+                self.assertIn(expected, (_REPO / path).read_text(),
+                              f"{path} builds Rust without declaring a toolchain")
+
+
 if __name__ == "__main__":
     unittest.main()

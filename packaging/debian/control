@@ -3,6 +3,7 @@ Section: utils
 Priority: optional
 Maintainer: Bryan Vaughan <bryanvaughan07@gmail.com>
 Build-Depends: debhelper-compat (= 13), python3
+Build-Depends-Arch: cargo, rustc (>= 1.82)
 Standards-Version: 4.6.2
 Homepage: https://github.com/Bvaughan7/goblin-mode-pro
 Rules-Requires-Root: no
@@ -26,3 +27,25 @@ Description: One-switch performance helper for Linux gaming
  .
  An unprivileged systemd --user daemon does the work; a small polkit-gated
  root helper performs the handful of privileged sysfs writes.
+
+Package: goblin-mode-pro-helper-rust
+Architecture: amd64
+Depends: ${shlibs:Depends}, ${misc:Depends}, goblin-mode-pro (= ${binary:Version})
+Description: Goblin Mode Pro privileged helper, Rust implementation
+ The privileged helper rewritten in Rust, serving the same frozen D-Bus
+ interface as the Python one. It is the only compiled component, which is why
+ it is packaged separately: the main package stays Architecture: all and
+ installable everywhere, including on machines this binary is not built for.
+ .
+ Installing this does NOT switch to it. The unit runs
+ /usr/libexec/goblin-mode-pro/helper, a symlink that still points at the
+ Python helper. To switch:
+ .
+   sudo ln -sfn /usr/libexec/goblin-mode-pro/helper-rust \
+                /usr/libexec/goblin-mode-pro/helper
+   sudo systemctl restart goblin-mode-pro-helper
+ .
+ Roll back by pointing the symlink at
+ /usr/lib/goblin-mode-pro/goblin_helper.py and restarting. The Python helper
+ ships in the main package and is always present, so a rollback never needs a
+ toolchain.

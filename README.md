@@ -179,6 +179,15 @@ sudo apt install ./goblin-mode-pro_*_all.deb      # Debian / Ubuntu
 sudo dnf install ./goblin-mode-pro-*.noarch.rpm   # Fedora / openSUSE
 ```
 
+These stay architecture-independent — everything in them is Python, so they
+install anywhere, aarch64 handhelds and ARM boards included. The privileged
+helper is being [ported to Rust](docs/rust-conversion.md), and that binary is
+the one compiled component; it ships as a **separate, optional, x86_64-only**
+package (`goblin-mode-pro-helper-rust`) so that the main package does not have
+to drop everyone else. Installing it does not switch to it — the unit runs a
+symlink that still points at the Python helper. On a non-x86 machine nothing is
+missing: the Python helper is the shipped implementation everywhere.
+
 **Arch / CachyOS / Manjaro** — build the PKGBUILD (an AUR package is coming; AUR
 account registration is closed at the time of writing):
 

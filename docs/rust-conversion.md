@@ -197,7 +197,7 @@ Block by block, tracked in [issue #1](https://github.com/Bvaughan7/goblin-mode-p
 | **R2** | Cargo workspace, the polkit authorization path, the state snapshot, and all 19 methods as refusing stubs | **Done.** The binary serves the frozen contract; `--introspect` is graded byte for byte by the same canonicalizer the Python helper goes through |
 | **R3** | Port the hardware operations, group by group | **Done, and verified on hardware.** The Rust helper served the conformance suite live and scored identically to the Python one - 39/0 root, 19/0 unprivileged. See [verified hardware](verified-hardware.md) |
 | **H1** | One unit, symlinked implementation, rollback as a drop-in | **Done.** The unit runs `/usr/libexec/goblin-mode-pro/helper`, a symlink, verified on hardware. `install.sh --helper=rust` builds, contract-checks and installs the Rust binary; Python is installed either way so rolling back needs no toolchain |
-| **H5** | `.deb` / `.rpm` become architecture-specific | Not started |
+| **H5** | `.deb` / `.rpm` become architecture-specific | **Done, differently.** Making the whole package architecture-specific would drop every non-x86 user of a package that is otherwise pure Python. The compiled helper is a separate optional x86_64 package instead; the main package stays `all`/`noarch` |
 
 The Rust sources live in `crates/gmp-helper/`. `cargo test` covers the polkit
 routing table method by method (a privilege boundary is pinned explicitly, not

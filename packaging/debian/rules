@@ -3,6 +3,7 @@
 # Mirrors the FHS layout used by install.sh and the Arch PKGBUILD.
 
 DESTDIR = $(CURDIR)/debian/goblin-mode-pro
+RUSTDIR = $(CURDIR)/debian/goblin-mode-pro-helper-rust
 LIBDIR  = /usr/lib/goblin-mode-pro
 
 %:
@@ -10,6 +11,11 @@ LIBDIR  = /usr/lib/goblin-mode-pro
 
 override_dh_auto_build:
 	python3 -m compileall -q src/goblinmode || true
+	# Only when the arch-dependent package is being built; -A builds skip it.
+	if [ -n "$(filter goblin-mode-pro-helper-rust,$(shell dh_listpackages))" ]; then \
+		cargo build --release --locked -p gmp-helper --offline || \
+		cargo build --release --locked -p gmp-helper; \
+	fi
 
 override_dh_auto_test:
 
@@ -39,3 +45,9 @@ override_dh_auto_install:
 	install -Dm0644 data/systemd/helper-amd-tdp.conf $(DESTDIR)/usr/share/goblin-mode-pro/helper-amd-tdp.conf
 	install -Dm0644 data/systemd/helper-undervolt.conf $(DESTDIR)/usr/share/goblin-mode-pro/helper-undervolt.conf
 	install -Dm0644 LICENSE $(DESTDIR)/usr/share/doc/goblin-mode-pro/copyright
+
+# The Rust helper goes in its own package so the main one can stay
+# Architecture: all. Installing it does not switch to it - the unit runs a
+# symlink, which the main package still points at the Python helper.
+override_dh_auto_install-arch:
+	install -Dm0755 target/release/gmp-helper $(RUSTDIR)/usr/libexec/goblin-mode-pro/helper-rust

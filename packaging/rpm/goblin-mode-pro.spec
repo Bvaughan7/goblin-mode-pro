@@ -7,8 +7,9 @@ License:        MIT
 URL:            https://github.com/Bvaughan7/goblin-mode-pro
 Source0:        %{url}/archive/refs/tags/v%{version}.tar.gz#/%{name}-%{version}.tar.gz
 
-BuildArch:      noarch
 BuildRequires:  python3
+BuildRequires:  cargo
+BuildRequires:  rust >= 1.82
 BuildRequires:  systemd-rpm-macros
 
 Requires:       python3 >= 3.11
@@ -28,6 +29,11 @@ Recommends:     python3-pillow
 Recommends:     python3-pystray
 Recommends:     python3-cairo
 Suggests:       ryzenadj
+
+# The main package is pure Python and stays installable anywhere. Only the
+# Rust helper below is compiled, which is why it is a separate subpackage
+# rather than a reason to make everything architecture-specific.
+BuildArch:      noarch
 Suggests:       intel-undervolt
 Suggests:       gpu-screen-recorder
 
@@ -54,6 +60,9 @@ install -Dm0755 helper/goblin_helper.py %{buildroot}%{libdir}/goblin_helper.py
 # the unit runs this symlink, not the file directly - see install.sh
 install -d %{buildroot}/usr/libexec/%{name}
 ln -sfn %{libdir}/goblin_helper.py %{buildroot}/usr/libexec/%{name}/helper
+# the Rust helper - its own subpackage, see %%package helper-rust
+cargo build --release --locked -p gmp-helper
+install -Dm0755 target/release/gmp-helper %{buildroot}/usr/libexec/%{name}/helper-rust
 
 install -d %{buildroot}%{_bindir}
 for spec in daemon:goblinmode.daemon gui:goblinmode.gui.app cli:goblinmode.cli; do
@@ -92,6 +101,28 @@ install -Dm0644 data/systemd/helper-undervolt.conf         %{buildroot}%{_datadi
 
 %postun
 %systemd_postun_with_restart goblin-mode-pro-helper.service
+
+%package helper-rust
+Summary:        Privileged helper, Rust implementation
+BuildArch:      x86_64
+Requires:       %{name} = %{version}-%{release}
+
+%description helper-rust
+The privileged helper rewritten in Rust, serving the same frozen D-Bus
+interface as the Python one. Installing it does NOT switch to it: the unit runs
+%{_prefix}/libexec/%{name}/helper, a symlink that still points at the Python
+helper. Switch with
+
+  sudo ln -sfn %{_prefix}/libexec/%{name}/helper-rust \
+               %{_prefix}/libexec/%{name}/helper
+  sudo systemctl restart goblin-mode-pro-helper
+
+and roll back by pointing it back at %{libdir}/goblin_helper.py. The Python
+helper is in the main package and always present, so a rollback never needs a
+toolchain.
+
+%files helper-rust
+%{_prefix}/libexec/%{name}/helper-rust
 
 %files
 %license LICENSE
