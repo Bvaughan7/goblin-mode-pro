@@ -13,11 +13,14 @@
 //! before it can change a single sysfs file. Wiring the security path first
 //! and the hardware second is the point of doing the port in this order.
 
+use std::path::Path;
+
 use zbus::message::Header;
 use zbus::object_server::Interface;
 use zbus::{interface, Connection};
 
-use crate::polkit;
+use crate::error::{HelperError, Result};
+use crate::{cpu, polkit, power, sys, undervolt};
 
 /// The frozen contract. These three strings are the whole compatibility
 /// surface between the Python and Rust helpers, and the conversion plan gets
@@ -36,8 +39,8 @@ pub struct Manager;
 /// Python helper already has to handle standard D-Bus errors, and inventing a
 /// new error name would be a change to the interface the freeze exists to
 /// prevent.
-fn unported(method: &str) -> zbus::fdo::Error {
-    zbus::fdo::Error::NotSupported(format!(
+fn unported(method: &str) -> HelperError {
+    HelperError::NotImplemented(format!(
         "{method} is not implemented in the Rust helper yet; \
          install the Python helper for this operation"
     ))
@@ -49,7 +52,7 @@ fn unported(method: &str) -> zbus::fdo::Error {
 /// resolved, an unreachable polkit - none of them are permission to proceed.
 /// Read-only methods are not authorized at all, matching the Python helper:
 /// they are gated by nothing because they change nothing.
-async fn authorize(conn: &Connection, hdr: &Header<'_>) -> zbus::fdo::Result<()> {
+async fn authorize(conn: &Connection, hdr: &Header<'_>) -> Result<()> {
     let method = hdr.member().map(|m| m.as_str()).unwrap_or_default();
     if !polkit::is_mutating(method) {
         return Ok(());
@@ -58,8 +61,8 @@ async fn authorize(conn: &Connection, hdr: &Header<'_>) -> zbus::fdo::Result<()>
     // identity, so there is nobody to authorize. Deny.
     let Some(sender) = hdr.sender().map(|s| s.as_str().to_owned()) else {
         tracing::warn!("denying {method}: the message carries no sender");
-        return Err(zbus::fdo::Error::AccessDenied(
-            "the caller could not be identified".into(),
+        return Err(HelperError::NotAuthorized(
+            "could not determine the calling user - refusing".into(),
         ));
     };
     let action = polkit::action_for(method);
@@ -68,8 +71,8 @@ async fn authorize(conn: &Connection, hdr: &Header<'_>) -> zbus::fdo::Result<()>
         Ok(())
     } else {
         tracing::warn!("{sender} refused {method} ({action})");
-        Err(zbus::fdo::Error::AccessDenied(format!(
-            "not authorized for {action}"
+        Err(HelperError::NotAuthorized(format!(
+            "polkit authorization denied for {action}"
         )))
     }
 }
@@ -82,23 +85,25 @@ impl Manager {
     // ---- read-only: never authorized, because they change nothing ----
 
     #[zbus(out_args("governor"))]
-    async fn get_governor(&self) -> zbus::fdo::Result<String> {
-        Err(unported("GetGovernor"))
+    async fn get_governor(&self) -> Result<String> {
+        cpu::get_governor(Path::new(sys::CPU_BASE))
+            .map_err(|err| HelperError::Failed(format!("could not read the governor: {err}")))
     }
 
     #[zbus(out_args("pl1_uw", "pl2_uw"))]
-    async fn get_power_limits(&self) -> zbus::fdo::Result<(u64, u64)> {
-        Err(unported("GetPowerLimits"))
+    async fn get_power_limits(&self) -> Result<(u64, u64)> {
+        power::get_power_limits(Path::new(sys::RAPL_BASE))
+            .map_err(|err| HelperError::Failed(format!("could not read the power limits: {err}")))
     }
 
     #[zbus(name = "HasTDPControl", out_args("available"))]
-    async fn has_tdp_control(&self) -> zbus::fdo::Result<bool> {
-        Err(unported("HasTDPControl"))
+    async fn has_tdp_control(&self) -> Result<bool> {
+        Ok(power::has_tdp_control())
     }
 
     #[zbus(out_args("text"))]
-    async fn read_undervolt(&self) -> zbus::fdo::Result<String> {
-        Err(unported("ReadUndervolt"))
+    async fn read_undervolt(&self) -> Result<String> {
+        Ok(undervolt::read_undervolt().await)
     }
 
     // ---- manage-performance ----
@@ -109,7 +114,7 @@ impl Manager {
         governor: &str,
         #[zbus(connection)] conn: &Connection,
         #[zbus(header)] hdr: Header<'_>,
-    ) -> zbus::fdo::Result<bool> {
+    ) -> Result<bool> {
         authorize(conn, &hdr).await?;
         let _ = governor;
         Err(unported("SetGovernor"))
@@ -121,7 +126,7 @@ impl Manager {
         epp: &str,
         #[zbus(connection)] conn: &Connection,
         #[zbus(header)] hdr: Header<'_>,
-    ) -> zbus::fdo::Result<bool> {
+    ) -> Result<bool> {
         authorize(conn, &hdr).await?;
         let _ = epp;
         Err(unported("SetEPP"))
@@ -134,7 +139,7 @@ impl Manager {
         nice: i32,
         #[zbus(connection)] conn: &Connection,
         #[zbus(header)] hdr: Header<'_>,
-    ) -> zbus::fdo::Result<bool> {
+    ) -> Result<bool> {
         authorize(conn, &hdr).await?;
         let _ = (pid, nice);
         Err(unported("Renice"))
@@ -147,7 +152,7 @@ impl Manager {
         pl2_uw: u64,
         #[zbus(connection)] conn: &Connection,
         #[zbus(header)] hdr: Header<'_>,
-    ) -> zbus::fdo::Result<bool> {
+    ) -> Result<bool> {
         authorize(conn, &hdr).await?;
         let _ = (pl1_uw, pl2_uw);
         Err(unported("SetPowerLimits"))
@@ -158,7 +163,7 @@ impl Manager {
         &self,
         #[zbus(connection)] conn: &Connection,
         #[zbus(header)] hdr: Header<'_>,
-    ) -> zbus::fdo::Result<bool> {
+    ) -> Result<bool> {
         authorize(conn, &hdr).await?;
         Err(unported("ResetPowerLimits"))
     }
@@ -169,7 +174,7 @@ impl Manager {
         watts: u32,
         #[zbus(connection)] conn: &Connection,
         #[zbus(header)] hdr: Header<'_>,
-    ) -> zbus::fdo::Result<bool> {
+    ) -> Result<bool> {
         authorize(conn, &hdr).await?;
         let _ = watts;
         Err(unported("SetTDP"))
@@ -180,7 +185,7 @@ impl Manager {
         &self,
         #[zbus(connection)] conn: &Connection,
         #[zbus(header)] hdr: Header<'_>,
-    ) -> zbus::fdo::Result<bool> {
+    ) -> Result<bool> {
         authorize(conn, &hdr).await?;
         Err(unported("ResetTDP"))
     }
@@ -190,7 +195,7 @@ impl Manager {
         &self,
         #[zbus(connection)] conn: &Connection,
         #[zbus(header)] hdr: Header<'_>,
-    ) -> zbus::fdo::Result<bool> {
+    ) -> Result<bool> {
         authorize(conn, &hdr).await?;
         Err(unported("RevertAll"))
     }
@@ -200,7 +205,7 @@ impl Manager {
         &self,
         #[zbus(connection)] conn: &Connection,
         #[zbus(header)] hdr: Header<'_>,
-    ) -> zbus::fdo::Result<bool> {
+    ) -> Result<bool> {
         authorize(conn, &hdr).await?;
         Err(unported("ApplyUndervolt"))
     }
@@ -210,7 +215,7 @@ impl Manager {
         &self,
         #[zbus(connection)] conn: &Connection,
         #[zbus(header)] hdr: Header<'_>,
-    ) -> zbus::fdo::Result<bool> {
+    ) -> Result<bool> {
         authorize(conn, &hdr).await?;
         Err(unported("ApplyAmdUndervolt"))
     }
@@ -222,7 +227,7 @@ impl Manager {
         &self,
         #[zbus(connection)] conn: &Connection,
         #[zbus(header)] hdr: Header<'_>,
-    ) -> zbus::fdo::Result<bool> {
+    ) -> Result<bool> {
         authorize(conn, &hdr).await?;
         Err(unported("ResetFans"))
     }
@@ -236,7 +241,7 @@ impl Manager {
         value: &str,
         #[zbus(connection)] conn: &Connection,
         #[zbus(header)] hdr: Header<'_>,
-    ) -> zbus::fdo::Result<bool> {
+    ) -> Result<bool> {
         authorize(conn, &hdr).await?;
         let _ = (key, value);
         Err(unported("SetSysctl"))
@@ -248,7 +253,7 @@ impl Manager {
         key: &str,
         #[zbus(connection)] conn: &Connection,
         #[zbus(header)] hdr: Header<'_>,
-    ) -> zbus::fdo::Result<bool> {
+    ) -> Result<bool> {
         authorize(conn, &hdr).await?;
         let _ = key;
         Err(unported("RevertSysctl"))
@@ -260,7 +265,7 @@ impl Manager {
         enabled: bool,
         #[zbus(connection)] conn: &Connection,
         #[zbus(header)] hdr: Header<'_>,
-    ) -> zbus::fdo::Result<bool> {
+    ) -> Result<bool> {
         authorize(conn, &hdr).await?;
         let _ = enabled;
         Err(unported("SetNvidiaModeset"))
@@ -274,7 +279,7 @@ impl Manager {
         percent: u32,
         #[zbus(connection)] conn: &Connection,
         #[zbus(header)] hdr: Header<'_>,
-    ) -> zbus::fdo::Result<bool> {
+    ) -> Result<bool> {
         authorize(conn, &hdr).await?;
         let _ = percent;
         Err(unported("SpinUpFans"))

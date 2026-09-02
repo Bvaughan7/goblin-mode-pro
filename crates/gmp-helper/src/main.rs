@@ -9,8 +9,13 @@
 //!
 //! Nothing here touches hardware yet. See `manager`.
 
+mod cpu;
+mod error;
 mod manager;
 mod polkit;
+mod power;
+mod sys;
+mod undervolt;
 // Every field and helper here is exercised by its own tests, but nothing in
 // the binary reads a snapshot until RevertAll and the power-limit methods are
 // ported. Porting the format first is deliberate: it is the compatibility
