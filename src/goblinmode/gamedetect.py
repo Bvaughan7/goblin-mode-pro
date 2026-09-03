@@ -108,10 +108,35 @@ def _steam_appid_from_cmd(cmd: str) -> str | None:
     return m.group(1) if m and "steam" in cmd.lower() else None
 
 
+#: What a RUNNING Lutris game looks like. lutris-wrapper calls
+#: `setproctitle("lutris-wrapper: " + proc_title)`, which replaces the whole
+#: command line - so once the game is up, the title is everything after the
+#: colon and there is nothing else left to parse.
+_LUTRIS_TITLE_RE = re.compile(r"lutris-wrapper:\s*(.+)$")
+
+#: The wrapper's own argv, before setproctitle runs:
+#:     lutris-wrapper <title> <n_include> <n_exclude> [procs...] <command...>
+#: The title may be two words, so a second one is allowed - but only if it does
+#: not start with a digit, because the counts follow the title and would
+#: otherwise be swallowed into the name.
+_LUTRIS_ARGV_RE = re.compile(
+    r"lutris-wrapper[\"']?\s+[\"']?([^\"'\s]+(?:\s+[^\"'\s0-9][^\"'\s]*)?)"
+)
+
+
 def _lutris_name_from_cmd(cmd: str) -> str | None:
-    m = re.search(r"lutris-wrapper[\"']?\s+[\"']?([^\"'\s]+(?:\s+[^\"'\s0-9][^\"'\s]*)?)", cmd)
-    if m:
-        return m.group(1).strip().strip('"').strip("'")
+    """The game's name from a Lutris wrapper command line, or None.
+
+    The colon form is tried FIRST and matters most: it is what a game actually
+    looks like while it is running. Missing it meant every Lutris game lost its
+    launcher score and fell back to generic detection.
+    """
+    for pattern in (_LUTRIS_TITLE_RE, _LUTRIS_ARGV_RE):
+        m = pattern.search(cmd)
+        if m:
+            name = m.group(1).strip().strip('"').strip("'")
+            if name:
+                return name
     return None
 
 
