@@ -12,3 +12,4 @@
 
 pub mod incidents;
 pub mod logrules;
+pub mod sessions;

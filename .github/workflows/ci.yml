@@ -171,7 +171,9 @@ jobs:
           GMP_REQUIRE_RUST_HELPER: "1"
         run: |
           cargo build -p gmp-core --examples
-          python3 -m unittest tests.test_logrules_parity tests.test_incidents_parity -v
+          python3 -m unittest tests.test_logrules_parity \
+                                tests.test_incidents_parity \
+                                tests.test_sessions_parity -v
 
       # Advisories, licences and dependency sources. See deny.toml for why
       # this runs before the tree is big.
