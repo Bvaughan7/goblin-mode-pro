@@ -25,6 +25,7 @@ from goblinmode import __version__, preflight
 from goblinmode.incidents import _system_info
 from goblinmode.logrules import analyze_text, redact as _redact
 from goblinmode.runner import latest_log_files
+from goblinmode.textfmt import fields as _f, name as _fname, text as _t
 
 _LLM_PROMPT = (
     "You are a Linux gaming support engineer. Below is an automatically collected "
@@ -136,75 +137,106 @@ def build_report(
     }
 
 
+#: The tweaks named in the report's "Active tweaks" section. Deliberately the
+#: same list, in the same order, as the CLI's status line - separate constants
+#: because they are separate surfaces that could legitimately diverge.
+TWEAK_KEYS = ("governor", "epp_boosted", "tearing", "adaptive_sync",
+              "power_limited", "focus_mode")
+
+
 # --------------------------------------------------------------------------
 # renderers
 # --------------------------------------------------------------------------
 def as_markdown(rep: dict) -> str:
-    s = rep["system"]
+    s = _f(rep.get("system"))
     L: list[str] = []
-    L.append(f"## Goblin Mode Pro report — {rep['generated'][:19]}Z")
+    L.append(f"## Goblin Mode Pro report — {_t(rep.get('generated'), '')[:19]}Z")
     if rep.get("user_note"):
-        L.append(f"\n> {rep['user_note']}\n")
+        L.append(f"\n> {_t(rep['user_note'], '')}\n")
     L.append("\n### System")
-    L.append(f"- **CPU** {s.get('cpu','?')}")
-    L.append(f"- **GPU** {s.get('gpu','?')}  ·  driver {s.get('nvidia_driver', s.get('mesa_gl','?'))}")
-    L.append(f"- **Kernel** {s.get('kernel','?')}  ·  {s.get('distro','?')}  ·  {s.get('desktop','?')} / {s.get('session_type','?')}")
-    L.append(f"- **RAM** {s.get('ram_gb','?')} GB  ·  GMP {s.get('gmp_version','?')}")
+    L.append(f"- **CPU** {_t(s.get('cpu','?'))}")
+    # The driver falls back to the Mesa version when there is no NVIDIA one,
+    # and both can be *present and None* - `mesa_gl` is set to None on any
+    # machine without glxinfo, which is what stopped the default applying and
+    # made this line read "driver None" in a real bug report.
+    L.append(f"- **GPU** {_t(s.get('gpu','?'))}  ·  "
+             f"driver {_t(s.get('nvidia_driver'), _t(s.get('mesa_gl','?')))}")
+    L.append(f"- **Kernel** {_t(s.get('kernel','?'))}  ·  {_t(s.get('distro','?'))}  ·  "
+             f"{_t(s.get('desktop','?'))} / {_t(s.get('session_type','?'))}")
+    L.append(f"- **RAM** {_t(s.get('ram_gb','?'))} GB  ·  GMP {_t(s.get('gmp_version','?'))}")
     if rep.get("game"):
-        L.append(f"- **Game** {rep['game']}")
+        L.append(f"- **Game** {_t(rep['game'], '')}")
 
-    n = rep["preflight_summary"]
-    L.append(f"\n### Pre-flight  ({n.get('ok',0)} ok · {n.get('warn',0)} warn · {n.get('fail',0)} fail)")
-    if rep["preflight_flags"]:
-        for r in rep["preflight_flags"]:
-            L.append(f"- **{r['status'].upper()}** {r['title']} = `{r['value']}` — {r['detail'] or r['why']}")
+    n = _f(rep.get("preflight_summary"))
+    L.append(f"\n### Pre-flight  ({_t(n.get('ok'), '0')} ok · {_t(n.get('warn'), '0')} warn"
+             f" · {_t(n.get('fail'), '0')} fail)")
+    # Coerced BEFORE the emptiness test, the same order the rest of this
+    # renderer uses: a field of the wrong type is no flags, not a section
+    # header with nothing under it.
+    _flags = rep.get("preflight_flags")
+    _flags = _flags if isinstance(_flags, list) else []
+    if _flags:
+        for r in _flags:
+            r = _f(r)
+            detail = _t(r.get("detail"), "") or _t(r.get("why"), "None")
+            L.append(f"- **{_t(r.get('status'), 'None').upper()}** {_t(r.get('title'), 'None')}"
+                     f" = `{_t(r.get('value'), 'None')}` — {detail}")
     else:
         L.append("- all clear")
 
-    L.append("\n### Wine/Proton log" + (f"  (`{rep['log_file']}`)" if rep["log_file"] else ""))
-    if rep["log_findings"]:
-        for f in rep["log_findings"]:
-            L.append(f"- **{f['label']}** ×{f['count']} ({f['category']}) — {f['cause']}")
-            L.append(f"  - fix: {f['fix']}")
-            L.append(f"  - `{str(f['sample']).replace('`', '')[:200]}`")
-    elif rep["log_file"]:
+    L.append("\n### Wine/Proton log"
+             + (f"  (`{_t(rep.get('log_file'), '')}`)" if rep.get("log_file") else ""))
+    _finds = rep.get("log_findings")
+    _finds = _finds if isinstance(_finds, list) else []
+    if _finds:
+        for f in _finds:
+            f = _f(f)
+            L.append(f"- **{_t(f.get('label'), 'None')}** ×{_t(f.get('count'), 'None')}"
+                     f" ({_t(f.get('category'), 'None')}) — {_t(f.get('cause'), 'None')}")
+            L.append(f"  - fix: {_t(f.get('fix'), 'None')}")
+            L.append(f"  - `{_t(f.get('sample'), 'None').replace('`', '')[:200]}`")
+    elif rep.get("log_file"):
         L.append("- no known failure patterns matched")
     else:
         L.append("- no captured log (set the launch option / command prefix to `goblin-run %command%`)")
 
     if rep.get("incident"):
-        inc = rep["incident"]
-        L.append(f"\n### Last incident — {inc.get('kind','?')}")
-        L.append(f"- {inc.get('detail','')}")
-        gs = inc.get("gpu_state") or {}
+        inc = _f(rep["incident"])
+        L.append(f"\n### Last incident — {_t(inc.get('kind','?'))}")
+        L.append(f"- {_t(inc.get('detail',''), '')}")
+        gs = _f(inc.get("gpu_state"))
         if gs:
-            L.append(f"- GPU: {gs.get('vram_used_mb')}/{gs.get('vram_total_mb')} MB VRAM · "
-                     f"PCIe Gen{gs.get('pcie_gen')}×{gs.get('pcie_width')} · pstate {gs.get('pstate')} · "
-                     f"clock {gs.get('clock_gfx_mhz')}/{gs.get('clock_gfx_max_mhz')} MHz")
+            def g(k):
+                return _t(gs.get(k), "None")
+            L.append(f"- GPU: {g('vram_used_mb')}/{g('vram_total_mb')} MB VRAM · "
+                     f"PCIe Gen{g('pcie_gen')}×{g('pcie_width')} · pstate {g('pstate')} · "
+                     f"clock {g('clock_gfx_mhz')}/{g('clock_gfx_max_mhz')} MHz")
 
-    st = rep.get("capability_selftest") or {}
+    st = _f(rep.get("capability_selftest"))
     if st.get("results"):
-        counts = st.get("summary", {})
+        counts = _f(st.get("summary"))
         L.append("\n### Capabilities  ("
-                 + " · ".join(f"{v} {k.lower()}" for k, v in sorted(counts.items()))
+                 + " · ".join(f"{_t(v, 'None')} {k.lower()}" for k, v in sorted(counts.items()))
                  + ")")
         # Only the things that aren't fine: a FAIL is a broken privileged path
         # and a SKIP is a capability this machine doesn't have - between them
         # that is almost always the answer to "why didn't it work for me".
-        notable = [r for r in st["results"]
-                   if r.get("status") in ("FAIL", "SKIP")]
+        _results = st["results"] if isinstance(st["results"], list) else []
+        notable = [_f(r) for r in _results if _f(r).get("status") in ("FAIL", "SKIP")]
         for r in notable:
-            L.append(f"- **{r['status']}** {r['title']} — {r['detail']}")
+            L.append(f"- **{_t(r.get('status'), 'None')}** {_t(r.get('title'), 'None')}"
+                     f" — {_t(r.get('detail'), 'None')}")
         if not notable:
             L.append("- every privileged path this machine has is reachable")
 
-    tw = rep.get("active_tweaks") or {}
+    tw = _f(rep.get("active_tweaks"))
     if tw:
-        on = [k for k in ("governor", "epp_boosted", "tearing", "adaptive_sync",
-                          "power_limited", "focus_mode") if tw.get(k)]
+        on = [k for k in TWEAK_KEYS if tw.get(k)]
         if tw.get("scx_scheduler"):
-            on.append(f"scx_{tw['scx_scheduler']}")
-        reniced = ", ".join((tw.get("reniced") or {}).keys()) or "none"
+            on.append(f"scx_{_fname(tw['scx_scheduler'])}")
+        _reniced = tw.get("reniced")
+        reniced = ", ".join(_reniced.keys()) if isinstance(_reniced, dict) else ""
+        reniced = reniced or "none"
         L.append(f"\n### Active tweaks\n- {', '.join(on) or 'none'}  ·  reniced: {reniced}")
     return "\n".join(L) + "\n"
 
@@ -296,19 +328,19 @@ def build_works_for_me(profile: dict, note: str = "") -> dict[str, Any]:
 
 
 def works_for_me_markdown(rep: dict) -> str:
-    s = rep.get("system", {})
-    lines = [f"## Works for me — {rep.get('game', '?')}", ""]
+    s = _f(rep.get("system"))
+    lines = [f"## Works for me — {_t(rep.get('game', '?'))}", ""]
     if rep.get("note"):
-        lines += [f"> {rep['note']}", ""]
+        lines += [f"> {_t(rep['note'], '')}", ""]
     lines += [
-        f"- **CPU** {s.get('cpu', '?')}",
-        f"- **GPU** {s.get('gpu', '?')}",
-        f"- **Kernel** {s.get('kernel', '?')}  ·  {s.get('distro', '?')}  ·  "
-        f"{s.get('desktop', '?')} / {s.get('session_type', '?')}",
-        f"- **GMP** {s.get('gmp_version', '?')}",
+        f"- **CPU** {_t(s.get('cpu', '?'))}",
+        f"- **GPU** {_t(s.get('gpu', '?'))}",
+        f"- **Kernel** {_t(s.get('kernel', '?'))}  ·  {_t(s.get('distro', '?'))}  ·  "
+        f"{_t(s.get('desktop', '?'))} / {_t(s.get('session_type', '?'))}",
+        f"- **GMP** {_t(s.get('gmp_version', '?'))}",
     ]
     if rep.get("steam_app_id"):
-        lines.append(f"- **Steam AppID** {rep['steam_app_id']}")
+        lines.append(f"- **Steam AppID** {_t(rep['steam_app_id'], '')}")
     lines += ["", "### Profile settings", "```json",
              json.dumps(rep.get("profile", {}), indent=2), "```"]
     return "\n".join(lines) + "\n"
@@ -321,7 +353,7 @@ def works_for_me_issue_url(rep: dict, repo: str = "Bvaughan7/goblin-mode-pro") -
     project's own infrastructure."""
     body = works_for_me_markdown(rep)
     query = urllib.parse.urlencode({
-        "title": f"[works for me] {rep.get('game') or 'game'}",
+        "title": f"[works for me] {_t(rep.get('game'), '') or 'game'}",
         "body": body,
         "labels": "works-for-me",
     })
@@ -333,7 +365,7 @@ def github_issue_url(rep: dict, repo: str = "Bvaughan7/goblin-mode-pro") -> str:
     if len(body) > 6000:
         body = body[:6000] + "\n\n*(truncated - full report is on the clipboard)*\n"
     query = urllib.parse.urlencode({
-        "title": f"[{rep.get('game') or 'game'}] ",
+        "title": f"[{_t(rep.get('game'), '') or 'game'}] ",
         "body": body,
         "labels": "triage",
     })

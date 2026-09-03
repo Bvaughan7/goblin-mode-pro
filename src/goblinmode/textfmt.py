@@ -18,6 +18,16 @@ from __future__ import annotations
 _CONTAINERS = (list, tuple, set, dict)
 
 
+def fields(value) -> dict:
+    """A record that is supposed to be a mapping, when it may not be.
+
+    Callers index into these with ``.get``, and a value of the wrong type
+    turns that into an ``AttributeError`` out of a reporting path. An empty
+    mapping renders as the absences it is.
+    """
+    return value if isinstance(value, dict) else {}
+
+
 def names(value) -> list[str]:
     """The entries of a field meant to hold a list of names.
 

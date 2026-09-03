@@ -22,6 +22,12 @@ All notable changes to Goblin Mode Pro. Format loosely follows
   A wrong-typed field is now an absence, which is what the loader always meant.
   `--revert --dry-run` also no longer fails on a field holding a number where
   it expected a list of names.
+- **A bug report from a machine without `glxinfo` said "driver None", and one
+  without `psutil` said "RAM None GB".** Both fields are recorded as null on
+  exactly those machines, and because the key was present the placeholder never
+  applied — so the two lines a maintainer reads first were wrong on the setups
+  whose reports matter most. They now read `?`, and the driver falls back to
+  the Mesa version whenever there is no NVIDIA one.
 - **The CLI could fail instead of printing.** `status`, `health`, `sessions`,
   `preflight` and `games` each assumed the daemon's reply held exactly the
   types they expected. The replies cross the frozen session-bus interface as

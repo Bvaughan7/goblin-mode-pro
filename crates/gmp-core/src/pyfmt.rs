@@ -19,6 +19,20 @@ use serde_json::Value;
 use crate::config::truthy;
 use crate::round::py_str;
 
+/// A record that is supposed to be a mapping, when it may not be.
+///
+/// Callers index into these, and a value of the wrong type turns that into an
+/// error out of a reporting path. An empty mapping renders as the absences it
+/// is. Mirrors `textfmt.fields`.
+pub fn fields(value: Option<&Value>) -> &serde_json::Map<String, Value> {
+    static EMPTY: std::sync::LazyLock<serde_json::Map<String, Value>> =
+        std::sync::LazyLock::new(serde_json::Map::new);
+    match value {
+        Some(Value::Object(map)) => map,
+        _ => &EMPTY,
+    }
+}
+
 /// The entries of a field meant to hold a list of names.
 ///
 /// A scalar reads as a single entry rather than as nothing, so a caller that
