@@ -207,7 +207,8 @@ jobs:
                                 tests.test_applied_parity \
                                 tests.test_cli_report_parity \
                                 tests.test_report_parity \
-                                tests.test_status_parity -v
+                                tests.test_status_parity \
+                                tests.test_paths_parity -v
 
       # Advisories, licences and dependency sources. See deny.toml for why
       # this runs before the tree is big.
