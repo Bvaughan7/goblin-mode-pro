@@ -53,6 +53,22 @@ class Blocklist(unittest.TestCase):
         self.assertTrue(gamedetect._blocked("goblin-mode-pro", "goblin-mode-pro"))
         self.assertTrue(gamedetect._blocked("goblin-mode-pro-daemon", "x"))
 
+    def test_every_blocklist_entry_actually_blocks(self):
+        """`Xorg` and `Xwayland` were written with capitals while the lookup
+        lowercases its input, so both were dead entries and the display server
+        was not on the effective blocklist at all. Nothing noticed, because a
+        test that spells the name the same way the table does passes either
+        way. This spells it both ways."""
+        for entry in sorted(gamedetect._BLOCKLIST):
+            with self.subTest(entry=entry):
+                self.assertTrue(gamedetect._blocked(entry, entry), entry)
+                self.assertTrue(gamedetect._blocked(entry.lower(), entry.lower()), entry)
+
+    def test_every_block_stem_actually_blocks(self):
+        for stem in sorted(gamedetect._BLOCK_STEMS):
+            with self.subTest(stem=stem):
+                self.assertTrue(gamedetect._blocked(f"{stem}x", f"{stem}x"), stem)
+
     def test_a_real_game_is_not_blocked(self):
         for name in ("Wow.exe", "hl2_linux", "factorio", "cyberpunk2077.exe"):
             self.assertFalse(gamedetect._blocked(name, name), name)

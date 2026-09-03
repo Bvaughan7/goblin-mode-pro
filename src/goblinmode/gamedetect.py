@@ -188,11 +188,20 @@ def _links_game_libs(pid: int) -> bool:
 # --------------------------------------------------------------------------
 # main entry
 # --------------------------------------------------------------------------
+#: the blocklist, lowercased once for comparison. The literal set above is
+#: written the way the processes actually spell themselves - "Xorg",
+#: "Xwayland" - which is more readable and was silently useless: the names
+#: below are lowercased before the lookup, so those two entries could never
+#: match and the display server was not on the effective blocklist at all.
+_BLOCKLIST_LOWER = {n.lower() for n in _BLOCKLIST}
+_BLOCK_STEMS_LOWER = tuple(s.lower() for s in _BLOCK_STEMS)
+
+
 def _blocked(name: str, base: str) -> bool:
     n, b = name.lower(), base.lower()
-    if n in _BLOCKLIST or b in _BLOCKLIST:
+    if n in _BLOCKLIST_LOWER or b in _BLOCKLIST_LOWER:
         return True
-    return any(s in n or s in b for s in _BLOCK_STEMS)
+    return any(s in n or s in b for s in _BLOCK_STEMS_LOWER)
 
 
 def _score(name: str, exe: str, cmd: str, cmd_list: list[str], pid: int):
