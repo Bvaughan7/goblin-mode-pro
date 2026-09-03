@@ -68,6 +68,18 @@ class GamesPage(Adw.PreferencesPage):
         auto.add(self._auto_row)
         self.add(auto)
 
+        # Ignoring a game used to be a one-way door: the row vanished and
+        # nothing anywhere could bring it back, so a mis-click meant editing
+        # config.json by hand. This group is the way back.
+        self._ignored_group = Adw.PreferencesGroup(
+            title=_("Ignored games"),
+            description=_("GMP leaves these alone. Restore one to start "
+                          "optimizing it again."),
+        )
+        self._ignored_group.set_visible(False)
+        self._ignored_rows: list[Gtk.Widget] = []
+        self._ignored: list[str] = []
+
         self._group = Adw.PreferencesGroup(title=_("Game profiles"))
         hdr = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
         community_btn = Gtk.Button(icon_name="folder-download-symbolic", valign=Gtk.Align.CENTER)
@@ -87,6 +99,7 @@ class GamesPage(Adw.PreferencesPage):
         hdr.append(add_btn)
         self._group.set_header_suffix(hdr)
         self.add(self._group)
+        self.add(self._ignored_group)
 
         self._rows: list[Gtk.Widget] = []
         self._editors: dict[str, ProfileEditor] = {}
@@ -134,6 +147,7 @@ class GamesPage(Adw.PreferencesPage):
         self._building = True
         self._auto_row.set_active(status.get("auto_detect", True))
         self._building = False
+        self.load_ignored(status.get("ignored_games") or [])
         if status.get("profiles"):
             self.load_profiles(status["profiles"])
 
@@ -143,6 +157,35 @@ class GamesPage(Adw.PreferencesPage):
             return
         self._profiles = new
         self._rebuild()
+
+    def load_ignored(self, ignored: list[str]) -> None:
+        if list(ignored) == self._ignored:
+            return
+        self._ignored = list(ignored)
+        self._rebuild_ignored()
+
+    def _rebuild_ignored(self) -> None:
+        for row in self._ignored_rows:
+            self._ignored_group.remove(row)
+        self._ignored_rows.clear()
+        for exe in sorted(self._ignored):
+            row = Adw.ActionRow(title=exe)
+            restore = Gtk.Button(label=_("Restore"), valign=Gtk.Align.CENTER)
+            restore.add_css_class("flat")
+            restore.connect("clicked", lambda _b, e=exe: self._unignore(e))
+            row.add_suffix(restore)
+            self._ignored_group.add(row)
+            self._ignored_rows.append(row)
+        self._ignored_group.set_visible(bool(self._ignored))
+
+    def _unignore(self, exe: str) -> None:
+        try:
+            self.bridge.unignore_game(exe)
+        except Exception as exc:                             # noqa: BLE001
+            log.warning("unignore_game failed: %s", exc)
+            return
+        self._ignored = [g for g in self._ignored if g != exe]
+        self._rebuild_ignored()
 
     # -- rebuild ---------------------------------------------------
     def _rebuild(self) -> None:

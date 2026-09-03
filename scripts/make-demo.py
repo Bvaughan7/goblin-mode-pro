@@ -170,6 +170,7 @@ class FakeBridge:
     def set_master_enabled(self, v): return True
     def set_auto_detect(self, v): return True
     def force_boost(self, v): return True
+    def unignore_game(self, e): return True
     def keep_game(self, e): return True
     def ignore_game(self, e): return True
     def remove_profile(self, e): return True

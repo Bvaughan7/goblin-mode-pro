@@ -83,16 +83,11 @@ NEVER = {
     "SetNvidiaModeset": "it writes boot configuration and needs a reboot to take effect",
     "ApplyPreflightFixes": "it changes kernel tunables; graded at the helper seam instead",
     "RevertPreflightFix": "it changes kernel tunables; graded at the helper seam instead",
-    "IgnoreGame": (
-        "it is IRREVERSIBLE over this interface - nothing removes an entry from "
-        "ignored_games, so a probe would be permanent. KeepGame is not its "
-        "inverse: it clears auto_created on a profile and never touches that list"
-    ),
 }
 
 #: Reversible, and only with --apply. Each is restored to what it was.
-ROUND_TRIP = {"SetMasterEnabled", "SetAutoDetect", "ForceBoost",
-              "KeepGame", "ArmBenchmark", "WriteWrapper"}
+ROUND_TRIP = {"SetMasterEnabled", "SetAutoDetect", "ForceBoost", "IgnoreGame",
+              "UnignoreGame", "KeepGame", "ArmBenchmark", "WriteWrapper"}
 
 #: An executable name no real game will have, for the methods that take one.
 SENTINEL_EXE = "__gmp_conformance_probe__"
@@ -255,6 +250,7 @@ class Conformance:
                           "changes daemon state; pass --apply to round-trip it", sec)
             return
 
+        self._ignore_round_trip(sec)
         self._round_trip_toggle("SetMasterEnabled", "master_enabled", sec)
         self._round_trip_toggle("SetAutoDetect", "auto_detect", sec)
         self._force_boost(sec)
@@ -307,6 +303,58 @@ class Conformance:
             self._add("rt_forceboost", "ForceBoost", FAIL,
                       f"GetStatus reported forced_boost={on} then {off}; the "
                       "machine may still be boosted", sec)
+
+    def _ignore_round_trip(self, sec: str) -> None:
+        """Ignore a name no game has, then take it back.
+
+        This check is why UnignoreGame exists. The first version of this suite
+        assumed KeepGame was the inverse of IgnoreGame, called them as a pair,
+        and left a sentinel permanently in the settings of the machine it was
+        grading - because nothing anywhere removed an entry from ignored_games.
+        A method with no inverse is a one-way door for the user too.
+        """
+        def ignored() -> list:
+            value = self._status().get("ignored_games")
+            return value if isinstance(value, list) else []
+
+        if SENTINEL_EXE in ignored():
+            self._add("rt_ignore", "IgnoreGame / UnignoreGame", FAIL,
+                      f"{SENTINEL_EXE!r} is already ignored - a previous run left "
+                      "it behind, which is exactly the failure this checks for", sec)
+            return
+
+        # PROBE THE INVERSE FIRST. On a daemon older than UnignoreGame, calling
+        # IgnoreGame and only then discovering there is no way back would leave
+        # the sentinel in the user's settings permanently - the precise mistake
+        # that prompted this method. UnignoreGame on an unignored name is a
+        # no-op returning False, so it is safe to try.
+        try:
+            self.daemon.call("UnignoreGame", GLib.Variant("(s)", (SENTINEL_EXE,)))
+        except GLib.Error as exc:
+            self._add("rt_ignore", "IgnoreGame / UnignoreGame", SKIP,
+                      f"this daemon has no UnignoreGame ({dbus_error_name(exc)}), "
+                      "so ignoring anything here would be permanent. Not probing "
+                      "it - upgrade the daemon to grade this", sec)
+            return
+
+        try:
+            self.daemon.call("IgnoreGame", GLib.Variant("(s)", (SENTINEL_EXE,)))
+            added = SENTINEL_EXE in ignored()
+            undone = self.daemon.call(
+                "UnignoreGame", GLib.Variant("(s)", (SENTINEL_EXE,))).unpack()[0]
+            gone = SENTINEL_EXE not in ignored()
+        except GLib.Error as exc:
+            self._add("rt_ignore", "IgnoreGame / UnignoreGame", FAIL,
+                      f"{dbus_error_name(exc)}: {dbus_error_message(exc)}", sec)
+            return
+        if added and undone and gone:
+            self._add("rt_ignore", "IgnoreGame / UnignoreGame", PASS,
+                      "ignored a game that does not exist and took it back; "
+                      "ignored_games is as it was", sec)
+        else:
+            self._add("rt_ignore", "IgnoreGame / UnignoreGame", FAIL,
+                      f"added={added} undone={undone} gone={gone} - "
+                      f"{SENTINEL_EXE!r} may still be in the user's settings", sec)
 
     def _sentinel_pair(self, sec: str) -> None:
         """KeepGame on a name no real game has, and the asymmetry beside it.
@@ -373,16 +421,6 @@ class Conformance:
                   f"{len(active) if isinstance(active, list) else active} - the "
                   "checks above ran against this state", sec,
                   games=active if isinstance(active, list) else None)
-        ignored = status.get("ignored_games")
-        if isinstance(ignored, list):
-            self._add("ignore_is_one_way", "Ignoring a game can be undone", FAIL,
-                      f"it cannot. ignored_games has {len(ignored)} entr"
-                      f"{'y' if len(ignored) == 1 else 'ies'} and nothing on this "
-                      "interface removes one - IgnoreGame only appends, and "
-                      "KeepGame clears auto_created on a profile instead. A user "
-                      "who ignores a game by mistake has to hand-edit "
-                      "~/.config/goblin-mode-pro/config.json to get it back", sec,
-                      ignored_games=ignored)
         self._add("two_games", "Behaviour with two games at once", SKIP,
                   "needs two real game processes running. This is where the "
                   "refcounted global tweaks and the power-leak fix live, so it is "

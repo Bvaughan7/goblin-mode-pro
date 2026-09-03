@@ -220,5 +220,8 @@ class DaemonApi:
     def ignore_game(self, exe: str) -> bool:
         return self._d.ignore_game(exe)
 
+    def unignore_game(self, exe: str) -> bool:
+        return self._d.unignore_game(exe)
+
     def keep_game(self, exe: str) -> bool:
         return self._d.keep_game(exe)

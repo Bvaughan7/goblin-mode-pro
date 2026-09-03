@@ -364,6 +364,29 @@ class Daemon:
         self._broadcast_status()
         return True
 
+    def unignore_game(self, exe: str) -> bool:
+        """The inverse of ignore_game, which until now did not exist.
+
+        `ignored_games` was append-only: nothing in the daemon, the interface
+        or the GUI removed an entry, so ignoring a game by mistake meant
+        hand-editing config.json. Found by tests/conformance/daemon.py.
+
+        Deliberately NOT folded into keep_game. That method means something
+        else here - it clears `auto_created` on a profile so the daemon stops
+        treating it as disposable - and overloading it would trade one
+        confusing asymmetry for another.
+        """
+        before = len(self.settings.ignored_games)
+        self.settings.ignored_games = [
+            g for g in self.settings.ignored_games if g.lower() != exe.lower()
+        ]
+        if len(self.settings.ignored_games) == before:
+            return False
+        config.save(self.settings)
+        self.observer.update_settings(self.settings)
+        self._broadcast_status()
+        return True
+
     def keep_game(self, exe: str) -> bool:
         p = self.settings.profile_for_exe(exe)
         if p is not None:

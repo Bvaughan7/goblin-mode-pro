@@ -32,6 +32,12 @@
   The three properties are read-only identity, matching the helper's. Nothing
   may branch on Implementation - it is for bug reports.
 
+  ADDING a method is the only change to this file that does not need a v2:
+  no existing caller breaks. It still has to be deliberate, landed in one
+  commit with the implementation and this file together, and said out loud in
+  the commit message. UnignoreGame was added that way - the conformance suite
+  found that IgnoreGame had no inverse anywhere in the project.
+
   The file is stored in the canonical form produced by tests/_dbusxml.py, and
   tests/test_daemon_interface_freeze.py asserts the daemon still serves exactly
   this. If that test fails, the interface changed: either revert the change or
@@ -134,6 +140,10 @@
     </method>
     <method name="SetProfile">
       <arg name="json" type="s" direction="in"/>
+      <arg name="ok" type="b" direction="out"/>
+    </method>
+    <method name="UnignoreGame">
+      <arg name="exe" type="s" direction="in"/>
       <arg name="ok" type="b" direction="out"/>
     </method>
     <method name="WriteWrapper">

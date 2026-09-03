@@ -278,3 +278,71 @@ class Benchmark(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class IgnoreIsReversible(unittest.TestCase):
+    """`ignored_games` was append-only until `unignore_game` existed.
+
+    Nothing in the daemon, the D-Bus interface or the GUI removed an entry, so
+    a user who ignored a game by mistake had to hand-edit config.json. Found by
+    tests/conformance/daemon.py, which noticed it had no way to undo its own
+    probe.
+    """
+
+    class _Observer:
+        def __init__(self):
+            self.updates = 0
+
+        def update_settings(self, _settings):
+            self.updates += 1
+
+    def _daemon(self, ignored):
+        return _bare_daemon(
+            settings=config.Settings(profiles=[], ignored_games=list(ignored)),
+            observer=self._Observer(),
+            _broadcast_status=lambda: None,
+            # ignore_game consults these; unignore_game does not, which is
+            # itself the asymmetry worth noticing.
+            _active_pids={},
+            payload=None,
+        )
+
+    def test_ignoring_then_unignoring_leaves_the_list_as_it_was(self):
+        d = self._daemon([])
+        with patch.object(config, "save"):
+            d.ignore_game("Wow.exe")
+            self.assertEqual(d.settings.ignored_games, ["Wow.exe"])
+            self.assertTrue(d.unignore_game("Wow.exe"))
+        self.assertEqual(d.settings.ignored_games, [])
+
+    def test_unignoring_is_case_insensitive(self):
+        """ignore_game stores the name as given, and the observer matches
+        case-insensitively - so the inverse has to as well, or an entry becomes
+        unreachable through the one method meant to remove it."""
+        d = self._daemon(["Wow.exe"])
+        with patch.object(config, "save"):
+            self.assertTrue(d.unignore_game("wow.EXE"))
+        self.assertEqual(d.settings.ignored_games, [])
+
+    def test_unignoring_something_absent_reports_false_and_saves_nothing(self):
+        d = self._daemon(["Wow.exe"])
+        with patch.object(config, "save") as save:
+            self.assertFalse(d.unignore_game("NotThere.exe"))
+            save.assert_not_called()
+        self.assertEqual(d.settings.ignored_games, ["Wow.exe"])
+
+    def test_the_observer_is_told_so_the_game_is_detected_again(self):
+        """Without this the entry leaves the file and the running observer
+        keeps filtering the game out until the daemon restarts."""
+        d = self._daemon(["Wow.exe"])
+        with patch.object(config, "save"):
+            d.unignore_game("Wow.exe")
+        self.assertEqual(d.observer.updates, 1)
+
+    def test_keep_game_is_not_the_inverse(self):
+        """It clears auto_created on a profile. Overloading it to also
+        un-ignore would trade one confusing asymmetry for another."""
+        d = self._daemon(["Wow.exe"])
+        with patch.object(config, "save"):
+            d.keep_game("Wow.exe")
+        self.assertEqual(d.settings.ignored_games, ["Wow.exe"])

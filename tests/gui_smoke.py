@@ -244,6 +244,7 @@ class _FakeBridge:
     def set_profile(self, profile) -> bool: return True
     def remove_profile(self, exe: str) -> bool: return True
     def set_auto_detect(self, on: bool) -> bool: return True
+    def unignore_game(self, exe: str) -> bool: return True
     def keep_game(self, exe: str) -> bool: return True
     def ignore_game(self, exe: str) -> bool: return True
     def arm_benchmark(self, exe: str) -> bool: return True
@@ -375,6 +376,18 @@ def main() -> int:
                     f"Games page built {built} profile rows from 2 profiles - "
                     "the per-game editor was skipped")
             print(f"  Games page built {built} per-game profile rows")
+
+            # The way back from "Ignore". It was a one-way door until
+            # UnignoreGame existed, so an empty or hidden group here means a
+            # user who mis-clicked has no route back short of editing JSON.
+            ignored_rows = len(getattr(win.games, "_ignored_rows", []) or [])
+            group = getattr(win.games, "_ignored_group", None)
+            if ignored_rows != 1 or group is None or not group.get_visible():
+                raise AssertionError(
+                    f"Games page built {ignored_rows} ignored rows from 1 ignored "
+                    f"game, visible={group and group.get_visible()} - there is no "
+                    "way to un-ignore a game")
+            print(f"  Ignored games group built {ignored_rows} restorable row")
 
             # The dialogs are only reachable through the primary menu, so
             # nothing else covers them. Both are opened for real.

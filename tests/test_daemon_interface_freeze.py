@@ -33,7 +33,7 @@ _FROZEN = _REPO / "docs" / "dbus-daemon-interface-v1.xml"
 
 #: what v1 promises. Spelled out so that ADDING one fails here too - a new
 #: method is an interface change even though it breaks no existing caller.
-_V1_METHODS = 28
+_V1_METHODS = 29
 _V1_SIGNALS = 5
 _V1_PROPERTIES = 3
 

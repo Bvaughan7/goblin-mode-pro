@@ -74,6 +74,9 @@ INTROSPECTION_XML = f"""
     <method name="IgnoreGame">
       <arg type="s" name="exe" direction="in"/><arg type="b" name="ok" direction="out"/>
     </method>
+    <method name="UnignoreGame">
+      <arg type="s" name="exe" direction="in"/><arg type="b" name="ok" direction="out"/>
+    </method>
     <method name="KeepGame">
       <arg type="s" name="exe" direction="in"/><arg type="b" name="ok" direction="out"/>
     </method>
@@ -133,6 +136,7 @@ class DaemonHandler(Protocol):
     def export_last_incident(self) -> str: ...
     def write_wrapper(self) -> str: ...
     def ignore_game(self, exe: str) -> bool: ...
+    def unignore_game(self, exe: str) -> bool: ...
     def keep_game(self, exe: str) -> bool: ...
     def run_preflight(self) -> list[dict[str, Any]]: ...
     def apply_preflight_fixes(self) -> dict[str, Any]: ...
@@ -239,6 +243,10 @@ class DaemonBridge:
             elif method == "IgnoreGame":
                 invocation.return_value(
                     GLib.Variant("(b)", (self._handler.ignore_game(params.unpack()[0]),))
+                )
+            elif method == "UnignoreGame":
+                invocation.return_value(
+                    GLib.Variant("(b)", (self._handler.unignore_game(params.unpack()[0]),))
                 )
             elif method == "KeepGame":
                 invocation.return_value(
@@ -443,6 +451,9 @@ class BridgeClient:
 
     def ignore_game(self, exe: str) -> bool:
         return bool(self._call("IgnoreGame", GLib.Variant("(s)", (exe,)))[0])
+
+    def unignore_game(self, exe: str) -> bool:
+        return bool(self._call("UnignoreGame", GLib.Variant("(s)", (exe,)))[0])
 
     def keep_game(self, exe: str) -> bool:
         return bool(self._call("KeepGame", GLib.Variant("(s)", (exe,)))[0])
