@@ -10,7 +10,7 @@
 # handhelds and ARM boards in this audience - so the compiled half moves out
 # into its own build instead of dragging the whole package to x86_64.
 Name:           goblin-mode-pro-helper-rust
-Version:        1.4.0
+Version:        1.5.0
 Release:        1%{?dist}
 Summary:        Privileged helper for Goblin Mode Pro, Rust implementation
 
@@ -55,5 +55,7 @@ install -Dm0755 target/release/gmp-helper \
 %{_prefix}/libexec/goblin-mode-pro/helper-rust
 
 %changelog
+* Thu Sep 03 2026 Bryan Vaughan <bryanvaughan07@gmail.com> - 1.5.0-1
+- See CHANGELOG.md for the full list of changes.
 * Wed Sep 02 2026 Bryan Vaughan <bryanvaughan07@gmail.com> - 1.4.0-1
 - First release. See CHANGELOG.md.

@@ -1,5 +1,5 @@
 Name:           goblin-mode-pro
-Version:        1.4.0
+Version:        1.5.0
 Release:        1%{?dist}
 Summary:        One-switch performance helper for Linux gaming
 
@@ -120,6 +120,8 @@ install -Dm0644 data/systemd/helper-undervolt.conf         %{buildroot}%{_datadi
 %{_datadir}/%{name}/
 
 %changelog
+* Thu Sep 03 2026 Bryan Vaughan <bryanvaughan07@gmail.com> - 1.5.0-1
+- See CHANGELOG.md for the full list of changes.
 * Wed Sep 02 2026 Bryan Vaughan <bryanvaughan07@gmail.com> - 1.4.0-1
 - See CHANGELOG.md for the full list of changes.
 * Wed Sep 02 2026 Bryan Vaughan <bryanvaughan07@gmail.com> - 1.3.2-1

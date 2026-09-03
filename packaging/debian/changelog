@@ -1,3 +1,11 @@
+goblin-mode-pro (1.5.0-1) unstable; urgency=medium
+
+  * Lutris games are recognised as Lutris games again, ignoring a game can
+    be undone, and the daemon's own D-Bus interface is now a frozen contract
+    with a conformance suite of its own. See CHANGELOG.md.
+
+ -- Bryan Vaughan <bryanvaughan07@gmail.com>  Thu, 03 Sep 2026 03:00:00 +0000
+
 goblin-mode-pro (1.4.0-1) unstable; urgency=medium
 
   * The privileged helper now has a second implementation, in Rust, serving

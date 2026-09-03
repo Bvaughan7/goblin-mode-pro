@@ -6,6 +6,8 @@ All notable changes to Goblin Mode Pro. Format loosely follows
 
 ## [Unreleased]
 
+## [1.5.0] — 2026-09-03
+
 ### Added
 - The daemon's session-bus interface is now a frozen contract too
   (`docs/dbus-daemon-interface-v1.xml`, 29 methods and 5 signals), checked on
@@ -18,6 +20,12 @@ All notable changes to Goblin Mode Pro. Format loosely follows
   section, shown only when there is one, with a Restore button per row.
 
 ### Fixed
+- **Lutris games were not being recognised as Lutris games.** `lutris-wrapper`
+  renames its own process to `lutris-wrapper: <title>` once the game is
+  running, and the detector's pattern could not match the colon — so every
+  Lutris game lost its launcher score and its proper display name, and fell
+  back to generic detection that needs two independent signals to fire at all.
+  Both the running form and the wrapper's own command line are matched now.
 - Ignoring a game was permanent. `IgnoreGame` added to the ignore list and
   nothing — not the daemon, not its D-Bus interface, not the GUI — ever took an
   entry back out, so the Ignore button was a one-way door and the only way back

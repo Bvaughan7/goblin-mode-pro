@@ -1,6 +1,6 @@
 pkgbase = goblin-mode-pro-git
 	pkgdesc = One-switch performance helper for Linux gaming: auto-detects a game, tunes CPU/compositor/Proton, reverts on exit, diagnoses crashes and FPS drops
-	pkgver = 1.4.0.r0.g0000000
+	pkgver = 1.5.0.r0.g0000000
 	pkgrel = 1
 	url = https://github.com/Bvaughan7/goblin-mode-pro
 	install = goblin-mode-pro.install
