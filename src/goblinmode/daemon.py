@@ -24,7 +24,7 @@ import gi
 gi.require_version("Gio", "2.0")
 from gi.repository import GLib
 
-from goblinmode import capabilities, config, gpu, runner
+from goblinmode import capabilities, config, gpu, runner, textfmt
 from goblinmode.diagnostics import DiagnosticEngine
 from goblinmode.fpswatch import FpsEvent, FpsWatcher
 from goblinmode.sessions import SessionTracker
@@ -249,25 +249,7 @@ class Daemon:
             log.exception("shader pre-warm failed for AppID %s", steam_app_id)
 
     def _tweaks_fingerprint(self) -> list[str]:
-        """A short, human-readable list of what's currently applied, stored with
-        the session so a regression can be read against what changed."""
-        t = self.payload.status().as_dict()
-        out: list[str] = []
-        if t.get("governor") == "performance" or t.get("epp_boosted"):
-            out.append("governor")
-        if t.get("tearing"):
-            out.append("tearing")
-        if t.get("adaptive_sync"):
-            out.append("vrr")
-        if t.get("reniced"):
-            out.append("renice")
-        for _exe, mode in (t.get("pinned") or {}).items():
-            out.append(f"pin:{mode}")
-            break
-        plw = t.get("power_limits_w")
-        if t.get("power_limited") and plw:
-            out.append(f"pl:{plw[0]}/{plw[1]}")
-        return out
+        return tweaks_fingerprint(self.payload.status().as_dict())
 
     def _finish_session(self, exe: str, game: str) -> bool:
         from goblinmode import housekeeping
@@ -596,18 +578,7 @@ class Daemon:
         return results
 
     def _cache_health(self, results: list[dict]) -> None:
-        n = {"ok": 0, "warn": 0, "fail": 0, "info": 0, "unknown": 0}
-        for r in results:
-            n[r["status"]] = n.get(r["status"], 0) + 1
-        total = sum(n.values()) or 1
-        # score: fails hurt most, warns a little; info/unknown are neutral
-        penalty = n["fail"] * 2.0 + n["warn"] * 0.6
-        score = max(0, round(10 * (1 - penalty / (total * 1.4)), 1))
-        self._health = {
-            "score": score, "counts": n,
-            "worst": [r["title"] for r in results if r["status"] == "fail"][:3],
-            "checked_at": time.time(),
-        }
+        self._health = {**health_summary(results), "checked_at": time.time()}
 
     def get_health(self) -> dict[str, Any]:
         """A cached 0-10 'is this box game-ready?' score for the dashboard.
@@ -781,7 +752,64 @@ def _profile_dict(p: config.GameProfile) -> dict[str, Any]:
     return asdict(p)
 
 
+#: The statuses the readiness count starts from, in the order they are shown.
+#: Seeded rather than discovered so a run with no warnings still reports
+#: "0 warn" instead of leaving the key out.
+HEALTH_STATUSES = ("ok", "warn", "fail", "info", "unknown")
+
+
+def health_summary(results: list[dict]) -> dict[str, Any]:
+    """The 0-10 "is this box game-ready?" answer, without the clock reading.
+
+    Fails hurt most, warns a little, info and unknown are neutral. The 1.4 in
+    the denominator is slack: at 1.0 a single failure among two checks would
+    zero the score, which reads as broken rather than as degraded.
+    """
+    n = dict.fromkeys(HEALTH_STATUSES, 0)
+    for r in results:
+        # A status outside the five ADDS a key rather than folding into
+        # "unknown", and it counts towards the total - so an unfamiliar status
+        # from a newer check dilutes the penalty rather than inflating it.
+        status = textfmt.text(textfmt.fields(r).get("status"), "None")
+        n[status] = n.get(status, 0) + 1
+    total = sum(n.values()) or 1
+    penalty = n["fail"] * 2.0 + n["warn"] * 0.6
+    # `max` hands back whichever ARGUMENT won, so a clamped score is the int 0
+    # and every other score is a float - a difference the CLI prints.
+    score = max(0, round(10 * (1 - penalty / (total * 1.4)), 1))
+    worst = [textfmt.text(textfmt.fields(r).get("title"), "None")
+             for r in results if textfmt.fields(r).get("status") == "fail"]
+    return {"score": score, "counts": n, "worst": worst[:3]}
+
+
+def tweaks_fingerprint(t: dict) -> list[str]:
+    """A short, human-readable list of what's currently applied, stored with
+    the session so a regression can be read against what changed."""
+    t = textfmt.fields(t)
+    out: list[str] = []
+    # The governor counts as applied when it is pinned OR when only the finer
+    # EPP knob moved - on intel_pstate the second happens without the first.
+    if t.get("governor") == "performance" or t.get("epp_boosted"):
+        out.append("governor")
+    if t.get("tearing"):
+        out.append("tearing")
+    if t.get("adaptive_sync"):
+        out.append("vrr")
+    if t.get("reniced"):
+        out.append("renice")
+    for _exe, mode in textfmt.fields(t.get("pinned")).items():
+        out.append(f"pin:{textfmt.text(mode, 'None')}")
+        break
+    plw = t.get("power_limits_w")
+    # Both ends or neither: indexing [0] and [1] behind a truthiness test that
+    # a one-element list passes raised where it should have said nothing.
+    if t.get("power_limited") and isinstance(plw, list) and len(plw) >= 2:
+        out.append(f"pl:{textfmt.text(plw[0], 'None')}/{textfmt.text(plw[1], 'None')}")
+    return out
+
+
 def _gpu_summary(state: dict) -> dict:
+    state = textfmt.fields(state)
     if not state:
         return {}
     return {

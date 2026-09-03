@@ -29,3 +29,4 @@ pub(crate) mod round;
 pub mod runner;
 pub mod scx;
 pub mod sessions;
+pub mod status;
