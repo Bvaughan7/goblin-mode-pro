@@ -83,8 +83,14 @@ class BothImplementationsAgree(unittest.TestCase):
             counts[r["status"]] = counts.get(r["status"], 0) + 1
         out["capped"] = capped
         out["summary"] = dict(sorted(counts.items()))
-        out["pending_sysctls"] = [list(s) for s in preflight.pending_sysctls(rows)]
-        out["dropin"] = preflight.sysctl_dropin_text(rows)
+        # `pending_sysctls(results)` does `results or run_all()`, so an EMPTY
+        # list is falsy and silently probes the real machine instead. That made
+        # this test pass on a tuned development box and fail on a CI runner.
+        # Patching run_all makes the fallback inert without changing the code
+        # under test.
+        with patch.object(preflight, "run_all", lambda: rows):
+            out["pending_sysctls"] = [list(x) for x in preflight.pending_sysctls(rows)]
+            out["dropin"] = preflight.sysctl_dropin_text(rows)
         return out
 
     def _same(self, p: dict) -> dict:
