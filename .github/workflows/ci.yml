@@ -149,6 +149,16 @@ jobs:
         with:
           components: clippy, rustfmt
 
+      # The parity tests below import the Python modules they are diffing
+      # against. Most of gmp-core's targets are pure stdlib, but gamedetect
+      # imports psutil at module scope - so this job needs it too. Assuming
+      # the pure-stdlib property would hold for every module is what broke
+      # this job the first time.
+      - name: Install what the parity tests import
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-psutil
+
       - name: Formatting
         run: cargo fmt --check
 
