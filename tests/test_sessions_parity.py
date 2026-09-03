@@ -123,6 +123,16 @@ class BothImplementationsAgree(unittest.TestCase):
             "120,72,66,8.3",
         ]), "q": 0.5})
 
+    def test_cells_with_surrounding_whitespace(self):
+        """Python's float() accepts " 60 " and Rust's parse() does not.
+
+        Found by auditing capabilities.py for the same trap after its cpu-list
+        parser hit it. MangoHud does not usually pad its columns, but a CSV
+        that has been through anything else might.
+        """
+        self._same({"csv": _csv(["60 , 70 , 65 , 16.6", " 90,71,66,11", "120,72,66,8.3 "]),
+                    "q": 0.5})
+
     def test_a_csv_with_no_temperature_columns(self):
         self._same({"csv": _csv(["60", "90", "120"], cols="fps"), "q": 0.5})
 

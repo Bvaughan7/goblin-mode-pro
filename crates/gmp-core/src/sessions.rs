@@ -70,7 +70,10 @@ pub fn parse_csv(text: &str) -> Series {
         if cells.len() <= fps_col {
             continue;
         }
-        let Ok(v) = cells[fps_col].parse::<f64>() else {
+        // Trimmed because Python's float() accepts surrounding whitespace and
+        // Rust's parse() does not - " 60 " is a reading there and an error
+        // here. The same trap caught the cpu-list parser in capabilities.
+        let Ok(v) = cells[fps_col].trim().parse::<f64>() else {
             continue;
         };
         if !(v > 0.0 && v < 1000.0) {
@@ -86,7 +89,7 @@ pub fn parse_csv(text: &str) -> Series {
             if cells.len() <= col {
                 continue;
             }
-            if let Ok(x) = cells[col].parse::<f64>() {
+            if let Ok(x) = cells[col].trim().parse::<f64>() {
                 if x > lo && x < hi {
                     sink.push(x);
                 }
