@@ -25,6 +25,32 @@ is just as useful as one saying it does.
 
 ## Machines
 
+### The Rust helper, under a real game
+
+The thing a conformance suite cannot do. Observed 2026-09-02 during an ordinary
+World of Warcraft session on the Dell G7 below, with the Rust helper installed
+as the implementation the unit runs:
+
+| | |
+|---|---|
+| `Renice` on the game process | **applied** — `WoW.exe` at nice **-5** |
+| `SetGovernor` / `SetEPP` / `RevertAll` | 4 / 4 / 4 calls, each authorized through polkit |
+| Warnings, errors or panics | **none**, across two hours |
+| Service restarts | **0** |
+| Package temperature under load | 94–98 °C, CPU sustained at 4.2 GHz |
+| Thermal detection | fired correctly — "5 throttle events in the last 20 s" |
+
+`Renice` matters most here. It is the only operation that acts on a target the
+caller names, its pidfd sequence is the most intricate thing in the port, and
+until this session it had only ever been run against a `sleep` process in a
+test. A real game, launched by Steam through Proton, is a different shape of
+target entirely.
+
+Two incidents were logged during the session and both were the diagnostics
+working: the thermal throttle above, and one `fps_dip` at launch reported as
+"dipped to 0 FPS (baseline ~0) … the frames were withheld, not starved", which
+is a game that has not started rendering yet rather than a problem.
+
 ### The daemon's own interface
 
 Measured 2026-09-02 on the Dell G7 below with
