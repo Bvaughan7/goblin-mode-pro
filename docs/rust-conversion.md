@@ -249,7 +249,7 @@ Block by block, tracked in [issue #1](https://github.com/Bvaughan7/goblin-mode-p
 | **P2** | Freeze the daemon's session-bus interface, and grade it from outside | **Done.** `docs/dbus-daemon-interface-v1.xml` (29 methods, 5 signals, 3 properties) + `tests/conformance/daemon.py`. Baseline on real hardware: **23 PASS / 0 FAIL / 9 SKIP** — it was 1 FAIL on the first run, and that bug is fixed |
 | **P0** | State the widened scope publicly, and say plainly that the original justification does not extend to it | **Done.** This page, the README and the ROADMAP |
 | **P3** | `gmp-core` — the domain logic, tests translated first, module by module | **Done. All 12 modules**, each with a parity harness that asks both implementations the same questions and diffs the answers. 602 Python tests, 263 Rust |
-| **P4** | `gmp-daemon` and `gmp-cli` | Next. ~3,350 lines; port `selftest` early, it is what verifies the rest on hardware |
+| **P4** | `gmp-daemon` and `gmp-cli` | **In progress.** Three slices in: the `selftest` reporting layer, launch resolution, and the observer's process matching. The probing, the poll loop and everything holding a file descriptor are still Python |
 | **P5** | `gmp-gui` — gtk4-rs, `ksni` for the tray, and the i18n msgids preserved character for character | Not started. ~3,300 lines |
 | **P6** | Cutover: delete the Python, repackage, re-verify every capability under Rust | Not started |
 | **H5** | `.deb` / `.rpm` become architecture-specific | **Done, differently.** Making the whole package architecture-specific would drop every non-x86 user of a package that is otherwise pure Python. The compiled helper is a separate optional x86_64 package instead; the main package stays `all`/`noarch` |
