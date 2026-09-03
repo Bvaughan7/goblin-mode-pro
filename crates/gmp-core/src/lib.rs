@@ -11,6 +11,7 @@
 //! so that a disagreement shows up as a failure rather than as an opinion.
 
 pub mod capabilities;
+pub mod compositor;
 pub mod gamedetect;
 pub mod gpu;
 pub mod incidents;
