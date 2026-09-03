@@ -26,6 +26,13 @@ SCHEMA_VERSION = 1
 #: NUL or a control character, and length is bounded (regex ReDoS guard).
 #: Callers must pass a plain name; ``\`` / ``/`` paths are the caller's job to
 #: split (see ``_win_basename`` in observer/gamedetect).
+#:
+#: One consequence worth knowing, because it is not obvious from the rule: since
+#: a backslash is rejected, a ``match_mode="regex"`` pattern can contain no
+#: escape sequence at all - no ``\.``, no ``\d``, no backreference. So a regex
+#: cannot express "a literal dot", and the pattern ``Wow.exe`` also matches
+#: ``WowXexe``. That is a real limit of the regex mode, not an oversight in the
+#: pattern: allowing backslashes here would let a profile name a path.
 _EXE_BAD = re.compile(r"[/\\\x00-\x1f\x7f]|\.\.")
 
 

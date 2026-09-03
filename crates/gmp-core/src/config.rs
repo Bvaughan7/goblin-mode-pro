@@ -122,8 +122,12 @@ fn py_float(value: &serde_json::Value) -> Option<f64> {
     }
 }
 
-/// Python's truthiness for the values that reach `bool(v)` here.
-fn py_bool(value: &serde_json::Value) -> bool {
+/// Python's truthiness: `if x:` is false for zero, an empty string, an empty
+/// list or dict, and None.
+///
+/// Public because the runner asks the same question of the same fields, and a
+/// second copy of this is exactly how the two would drift.
+pub fn truthy(value: &serde_json::Value) -> bool {
     match value {
         serde_json::Value::Null => false,
         serde_json::Value::Bool(b) => *b,
@@ -167,7 +171,7 @@ fn py_iter(value: &serde_json::Value) -> Option<Vec<serde_json::Value>> {
 /// `str(value or "")` - a falsy value becomes the empty string rather than
 /// the word "None", which is what a bare `str(None)` would give.
 fn py_str_or_empty(value: &serde_json::Value) -> String {
-    if py_bool(value) {
+    if truthy(value) {
         py_str(value)
     } else {
         String::new()
@@ -179,7 +183,7 @@ type Pairs = Vec<(String, serde_json::Value)>;
 
 /// `dict(value or {})` for the shapes that reach it.
 fn py_dict(value: &serde_json::Value) -> Option<Pairs> {
-    if !py_bool(value) {
+    if !truthy(value) {
         return Some(Vec::new());
     }
     match value {
@@ -376,7 +380,7 @@ impl GameProfile {
         if !in_choices(&self.core_pin, CORE_PIN_MODES) {
             self.core_pin = serde_json::json!("off");
         }
-        if py_bool(&self.scx_scheduler) {
+        if truthy(&self.scx_scheduler) {
             // `if self.scx_scheduler:` then `.strip()`, so a truthy non-string
             // raises in the Python and takes the profile with it.
             let raw = self
@@ -443,7 +447,7 @@ impl GameProfile {
             // `int(x or 0)` - a falsy value becomes 0 before conversion, which
             // is what lets a null or an empty string through where a bare
             // int() would raise.
-            let value = if py_bool(&raw) {
+            let value = if truthy(&raw) {
                 py_int(&raw).ok_or_else(|| format!("gamescope.{key} is not a number"))?
             } else {
                 0
@@ -479,7 +483,7 @@ impl GameProfile {
         self.gpu_tuning = pairs
             .into_iter()
             .filter(|(k, _)| k.chars().count() < 40)
-            .map(|(k, v)| (k, serde_json::json!(py_bool(&v))))
+            .map(|(k, v)| (k, serde_json::json!(truthy(&v))))
             .collect();
         Ok(())
     }
@@ -492,7 +496,7 @@ impl GameProfile {
             None => out.push((name.to_string(), value.to_string())),
         };
         for (key, value) in &self.runner_vars {
-            if !py_bool(value) {
+            if !truthy(value) {
                 continue;
             }
             if let Some((_, env)) = RUNNER_VARS.iter().find(|(name, _)| name == key) {
@@ -505,7 +509,7 @@ impl GameProfile {
         // joined rather than overwriting each other.
         let mut radv: Vec<&str> = Vec::new();
         for (_vendor, key, env) in GPU_TUNING_VARS {
-            if !self.gpu_tuning.get(*key).is_some_and(py_bool) {
+            if !self.gpu_tuning.get(*key).is_some_and(truthy) {
                 continue;
             }
             for (var, val) in *env {
@@ -594,12 +598,12 @@ impl Settings {
     }
 
     pub fn enabled_profiles(&self) -> Vec<&GameProfile> {
-        if !py_bool(&self.master_enabled) {
+        if !truthy(&self.master_enabled) {
             return Vec::new();
         }
         self.profiles
             .iter()
-            .filter(|p| py_bool(&p.enabled))
+            .filter(|p| truthy(&p.enabled))
             .collect()
     }
 }
@@ -693,7 +697,7 @@ mod tests {
     fn a_profile_needs_only_an_exe() {
         let p = profile(serde_json::json!({"exe": "Wow.exe"})).expect("valid");
         assert_eq!(p.display_name, "Wow.exe", "the name defaults to the exe");
-        assert!(py_bool(&p.enabled));
+        assert!(truthy(&p.enabled));
         assert_eq!(p.match_mode, "exact");
         assert_eq!(p.nice_value, serde_json::json!(-5));
     }
