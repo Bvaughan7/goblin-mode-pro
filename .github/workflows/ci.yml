@@ -161,6 +161,18 @@ jobs:
       - name: Tests
         run: cargo test --workspace
 
+      # The domain-logic port is only safe while both implementations answer
+      # the same way, so the Python side is asked the same questions and the
+      # answers are diffed. `logrules` imports nothing but the standard
+      # library, so this needs no PyGObject and belongs here with the
+      # toolchain rather than in the Python job.
+      - name: Rust and Python agree about the log rules
+        env:
+          GMP_REQUIRE_RUST_HELPER: "1"
+        run: |
+          cargo build -p gmp-core --example analyze
+          python3 -m unittest tests.test_logrules_parity -v
+
       # Advisories, licences and dependency sources. See deny.toml for why
       # this runs before the tree is big.
       - name: cargo-deny

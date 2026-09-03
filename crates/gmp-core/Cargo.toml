@@ -1,0 +1,20 @@
+[package]
+name = "gmp-core"
+description = "Domain logic for Goblin Mode Pro: no D-Bus, no sysfs policy, no GUI"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+regex.workspace = true
+
+[dev-dependencies]
+# Only for the `analyze` example, which exists so the Python side can
+# diff this crate's answers against its own. Not shipped.
+serde_json.workspace = true
+
+[lints.rust]
+unsafe_code = "forbid"

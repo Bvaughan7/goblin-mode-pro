@@ -10,7 +10,7 @@
 # language independently. docs/dbus-interface-v1.xml is what makes that safe.
 [workspace]
 resolver = "2"
-members = ["crates/gmp-helper"]
+members = ["crates/gmp-core", "crates/gmp-helper"]
 
 [workspace.package]
 version = "1.5.0"
@@ -28,6 +28,9 @@ serde_json = "1"
 # pidfd_open / pidfd_send_signal / setpriority, without writing unsafe. The
 # crate forbids unsafe_code, so raw syscalls are not an option, and Renice
 # needs all three to pin a pid against reuse.
+# gmp-core: the log rules are regex-driven. No backreferences or
+# lookaround anywhere in the rule base, so the regex crate covers it.
+regex = "1"
 rustix = { version = "1", features = ["process"] }
 thiserror = "2"
 anyhow = "1"
