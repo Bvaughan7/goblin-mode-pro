@@ -9,6 +9,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::round::{half_even as round_half_even, one_dp as round1};
+
 /// How many recent prior sessions form the comparison baseline.
 pub const BASELINE_SESSIONS: usize = 6;
 /// Need at least this many priors (with FPS stats) before flagging anything.
@@ -19,33 +21,6 @@ pub const REGRESSION_FRAC: f64 = 0.10;
 pub const CSV_GRACE_BEFORE: f64 = 15.0;
 /// Minimum FPS samples before the stats are considered meaningful.
 pub const MIN_SAMPLES: usize = 30;
-
-/// Round half to EVEN, which is what Python's `round()` does.
-///
-/// This is not pedantry. `percentile` indexes with `round(q * (n - 1))`, and
-/// for six samples at the median that is `round(2.5)` - which is 2 in Python
-/// and 3 under the obvious `f64::round`. The two implementations would then
-/// report different percentiles for the same frame log.
-fn round_half_even(x: f64) -> f64 {
-    // Same reasoning as round1 below: format, do not arithmetic. Rust's float
-    // formatting rounds the exact binary value half-to-even, which is what
-    // Python's round() does.
-    format!("{x:.0}").parse().unwrap_or(x)
-}
-
-/// `round(x, 1)`, matching Python exactly.
-///
-/// NOT `round_half_even(x * 10.0) / 10.0`. That looks equivalent and is not:
-/// multiplying by ten introduces its own error. `51.15` is really
-/// `51.1499999...` as a double, so Python rounds it DOWN to 51.1, while
-/// `51.15 * 10.0` lands on or above 511.5 and rounds UP to 51.2. The parity
-/// test against the Python implementation is what caught it.
-///
-/// Formatting to one decimal place rounds the exact binary value half-to-even,
-/// which is the same thing Python's `round(x, 1)` does.
-fn round1(x: f64) -> f64 {
-    format!("{x:.1}").parse().unwrap_or(x)
-}
 
 /// Nearest-rank percentile of a *sorted* slice; `q` in [0, 1].
 pub fn percentile(values: &[f64], q: f64) -> f64 {
