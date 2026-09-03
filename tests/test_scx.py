@@ -16,7 +16,7 @@ import unittest
 from tests._support import _SRC  # noqa: F401
 
 from goblinmode import scx
-from goblinmode.config import GameProfile
+from goblinmode.config import SCX_NAME_RE, GameProfile
 
 
 class FakeScx:
@@ -72,6 +72,14 @@ class NameHandling(unittest.TestCase):
         for bad in ("x; rm -rf /", "../../etc/passwd", "LAVD", "a" * 40):
             self.assertEqual(_profile("a.exe", bad).scx_scheduler, "",
                              f"{bad!r} should not survive validation")
+
+    def test_the_name_pattern_is_anchored_at_the_real_end(self):
+        # Python's `$` also matches just before a trailing newline. GameProfile
+        # strips the name first, so nothing reachable depends on this - but the
+        # pattern is exported and read as "these characters, this length", and
+        # it should mean that for the next caller too.
+        self.assertIsNone(SCX_NAME_RE.match("lavd\n"))
+        self.assertIsNotNone(SCX_NAME_RE.match("lavd"))
 
     def test_an_unknown_mode_falls_back_to_gaming(self):
         self.assertEqual(_profile("a.exe", "lavd", "bogus").scx_mode, "gaming")

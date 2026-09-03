@@ -28,8 +28,14 @@ LAUNCH_OPTION = "goblin-run %command%"
 # environment names the wrapper is permitted to set from the daemon's output.
 # Plain identifier characters only (a few Mesa vars are lowercase, e.g.
 # mesa_glthread) - still no shell metacharacters, so word-splitting is safe.
-_ENV_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
-_ENV_VALUE_RE = re.compile(r"^[^\x00-\x1f\x7f]{0,4096}$")
+#
+# \Z, not $: in Python `$` also matches just before a trailing newline, so `$`
+# accepts "FOO\n" - which _print_env emits as "FOO\n=1", and the wrapper's read
+# loop splits that into `FOO` with an empty value, silently dropping the
+# setting. Found by diffing against the Rust port, whose check has no anchor to
+# get wrong.
+_ENV_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*\Z")
+_ENV_VALUE_RE = re.compile(r"^[^\x00-\x1f\x7f]{0,4096}\Z")
 
 _WRAPPER_TEMPLATE = f"""\
 #!/usr/bin/env bash

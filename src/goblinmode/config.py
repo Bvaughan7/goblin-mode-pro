@@ -131,7 +131,7 @@ CORE_PIN_MODES = ("off", "performance", "cache0")
 #: appear. Whether the name is a scheduler this machine actually has is
 #: settled at switch time, against scx_loader's own SupportedSchedulers, and a
 #: name that isn't raises a visible incident instead of failing quietly.
-SCX_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9_]{0,31}$")
+SCX_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9_]{0,31}\Z")
 #: scx_loader's tuning modes - see goblinmode.scx.SCHED_MODES
 SCX_MODES = ("auto", "gaming", "lowlatency", "powersave", "server")
 

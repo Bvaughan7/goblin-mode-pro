@@ -52,6 +52,16 @@ class EnvPrinting(unittest.TestCase):
         self.assertFalse(runner._ENV_NAME_RE.match("2FOO"))
         self.assertFalse(runner._ENV_VALUE_RE.match("has\nnewline"))
 
+    def test_a_trailing_newline_is_not_a_valid_name_or_value(self):
+        # Python's `$` also matches just before a trailing newline, so the
+        # obvious ^...$ spelling accepts "FOO\n" - which print_env_for emits as
+        # "FOO\n=1" and the wrapper reads back as `FOO` with an empty value,
+        # dropping the setting with nothing logged. The anchor is \Z for that
+        # reason and this is the test that says so.
+        self.assertFalse(runner._ENV_NAME_RE.match("PROTON_LOG\n"))
+        self.assertFalse(runner._ENV_VALUE_RE.match("1\n"))
+        self.assertTrue(runner._ENV_VALUE_RE.match("1"))
+
 
 class GamescopeArgs(unittest.TestCase):
     def test_disabled_returns_empty(self):
