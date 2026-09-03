@@ -16,7 +16,9 @@ different and narrower: that the declaration itself has not moved.
 
 from __future__ import annotations
 
+import os
 import re
+import subprocess
 import sys
 import unittest
 from pathlib import Path
@@ -120,6 +122,86 @@ class DaemonIdentityProperties(unittest.TestCase):
         """A v2 would mean callers have to care which implementation answered,
         which is the property the freeze exists to deny."""
         self.assertEqual(bridge.INTERFACE_VERSION, 1)
+
+
+def _rust_daemon():
+    """The built Rust daemon, or None if it has not been built.
+
+    `GMP_DAEMON_RS` overrides the search, so an installed or cross-built binary
+    can be graded without a working-tree layout.
+    """
+    override = os.environ.get("GMP_DAEMON_RS")
+    if override:
+        return Path(override) if Path(override).exists() else None
+    for profile in ("debug", "release"):
+        candidate = _REPO / "target" / profile / "gmp-daemon"
+        if candidate.exists():
+            return candidate
+    return None
+
+
+class RustImplementation(unittest.TestCase):
+    """The Rust daemon serves the same frozen interface as the Python one.
+
+    Both answers go through the SAME canonicalizer in `tests/_dbusxml.py`,
+    deliberately: one reimplemented in Rust would be a second source of truth,
+    and two of those drifting apart is how a freeze check starts passing for
+    the wrong reason. It is the same rule the helper's freeze test follows.
+
+    The binary is asked via `--introspect`, which prints its interface and
+    exits without touching a bus - so this runs in CI, in a container, and on
+    a machine where the Python daemon already holds the bus name.
+    """
+
+    def setUp(self):
+        self.binary = _rust_daemon()
+        if self.binary is None:
+            # A skip that can never fail is a check that quietly stops
+            # existing, so CI makes it fatal.
+            if os.environ.get("GMP_REQUIRE_RUST_HELPER") == "1":
+                self.fail(
+                    "GMP_REQUIRE_RUST_HELPER=1 but no Rust daemon was found - "
+                    "run `cargo build` before the Python suite"
+                )
+            self.skipTest("the Rust daemon is not built; run `cargo build`")
+
+    def _served(self) -> str:
+        proc = subprocess.run(
+            [str(self.binary), "--introspect"],
+            capture_output=True, text=True, timeout=30, check=False,
+        )
+        self.assertEqual(
+            proc.returncode, 0,
+            f"{self.binary} --introspect failed: {proc.stderr.strip()}",
+        )
+        return proc.stdout
+
+    def test_the_rust_daemon_serves_exactly_the_frozen_interface(self):
+        self.assertEqual(
+            canonicalize(self._served(), bridge.IFACE),
+            _frozen_body(),
+            "the Rust daemon does not serve the frozen v1 interface.\n"
+            "Fix the Rust side - do NOT regenerate "
+            "docs/dbus-daemon-interface-v1.xml.",
+        )
+
+    def test_both_implementations_promise_identical_signatures(self):
+        """Compared as a mapping, so a mismatch names the method.
+
+        The byte comparison above covers this already, but it fails with a
+        wall of XML. This one says which method and both signatures, which is
+        the difference between a five-second fix and a bisect.
+        """
+        self.assertEqual(
+            signatures(self._served(), bridge.IFACE),
+            signatures(bridge.INTROSPECTION_XML, bridge.IFACE),
+        )
+
+    def test_the_rust_daemon_says_which_implementation_it_is(self):
+        """`Implementation` is for bug reports; nothing may branch on it."""
+        served = canonicalize(self._served(), bridge.IFACE)
+        self.assertIn('<property name="Implementation" type="s" access="read"/>',
+                      served)
 
 
 if __name__ == "__main__":

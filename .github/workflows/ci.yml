@@ -128,8 +128,13 @@ jobs:
           GMP_REQUIRE_RUST_HELPER: "1"
         run: python3 -m unittest tests.test_dbus_interface_freeze -v
 
-      # The second seam: GUI/CLI to daemon. Same canonicalizer, same rules.
-      - name: The daemon still serves its frozen v1 interface
+      # The second seam: GUI/CLI to daemon. Same canonicalizer, same rules,
+      # and now two implementations to grade rather than one - `cargo build`
+      # above produces the Rust daemon, and GMP_REQUIRE_RUST_HELPER turns a
+      # missing binary into a failure instead of a silent skip.
+      - name: Both daemons still serve the frozen v1 interface
+        env:
+          GMP_REQUIRE_RUST_HELPER: "1"
         run: python3 -m unittest tests.test_daemon_interface_freeze -v
 
       - name: The conformance suite is runnable
@@ -197,7 +202,12 @@ jobs:
                                 tests.test_fpswatch_parity \
                                 tests.test_config_parity \
                                 tests.test_selftest_report_parity \
-                                tests.test_runner_parity -v
+                                tests.test_runner_parity \
+                                tests.test_observer_parity \
+                                tests.test_applied_parity \
+                                tests.test_cli_report_parity \
+                                tests.test_report_parity \
+                                tests.test_status_parity -v
 
       # Advisories, licences and dependency sources. See deny.toml for why
       # this runs before the tree is big.

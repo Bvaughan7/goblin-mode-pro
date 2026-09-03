@@ -1,0 +1,32 @@
+[package]
+name = "gmp-daemon"
+description = "Session-bus daemon for Goblin Mode Pro: the interface the GUI and CLI talk to"
+publish.workspace = true
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[lib]
+name = "gmp_daemon"
+path = "src/lib.rs"
+
+[[bin]]
+name = "gmp-daemon"
+path = "src/main.rs"
+
+[dependencies]
+gmp-core = { path = "../gmp-core" }
+zbus.workspace = true
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[lints.rust]
+unsafe_code = "forbid"

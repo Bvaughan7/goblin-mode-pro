@@ -10,7 +10,7 @@
 # language independently. docs/dbus-interface-v1.xml is what makes that safe.
 [workspace]
 resolver = "2"
-members = ["crates/gmp-cli", "crates/gmp-core", "crates/gmp-helper"]
+members = ["crates/gmp-cli", "crates/gmp-core", "crates/gmp-daemon", "crates/gmp-helper"]
 
 [workspace.package]
 # Never published to crates.io: these crates ship inside the distro packages,
