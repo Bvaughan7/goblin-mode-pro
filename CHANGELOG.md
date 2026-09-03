@@ -22,6 +22,26 @@ All notable changes to Goblin Mode Pro. Format loosely follows
   A wrong-typed field is now an absence, which is what the loader always meant.
   `--revert --dry-run` also no longer fails on a field holding a number where
   it expected a list of names.
+- **A single damaged line could break the session list and the incident
+  export.** Both history files are read a line at a time, and a line that
+  fails to parse has always been skipped — but a line that parsed into
+  something that was *not an object* was kept, and listing one game's sessions
+  or exporting the last incident then failed on it. Such a line is now skipped
+  like any other unusable one.
+- **An empty `XDG_CONFIG_HOME` sent the MangoHud overlay config to the wrong
+  place.** Setting a variable to the empty string is how the XDG spec says
+  "unset", and how several launchers clear one. Every other location handled
+  that; MangoHud's was derived by a separate line that did not, so it became
+  the *relative* path `MangoHud`. The overlay config was written there, and
+  `MANGOHUD_CONFIGFILE` was exported into the game's environment as a relative
+  path — which the game resolved against its own working directory, so
+  per-game overlay settings silently never applied. A stray `MangoHud/`
+  directory was created wherever the daemon happened to be running from, too.
+- **An unusable `~` in an XDG variable stopped everything starting.** A value
+  like `~someuser` naming an account that does not exist makes `pathlib` raise,
+  and the paths module is imported by the daemon, the GUI, the CLI and the
+  launch wrapper — so one odd variable stopped all four. A `~` that is not this
+  user's own home is now refused and the default used instead.
 - **A bug report from a machine without `glxinfo` said "driver None", and one
   without `psutil` said "RAM None GB".** Both fields are recorded as null on
   exactly those machines, and because the key was present the placeholder never
