@@ -189,7 +189,8 @@ jobs:
                                 tests.test_capabilities_parity \
                                 tests.test_preflight_parity \
                                 tests.test_scx_parity \
-                                tests.test_compositor_parity -v
+                                tests.test_compositor_parity \
+                                tests.test_diagnostics_parity -v
 
       # Advisories, licences and dependency sources. See deny.toml for why
       # this runs before the tree is big.

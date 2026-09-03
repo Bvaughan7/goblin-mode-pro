@@ -12,6 +12,7 @@
 
 pub mod capabilities;
 pub mod compositor;
+pub mod diagnostics;
 pub mod gamedetect;
 pub mod gpu;
 pub mod incidents;
