@@ -7,6 +7,21 @@ All notable changes to Goblin Mode Pro. Format loosely follows
 ## [Unreleased]
 
 ### Fixed
+- **A damaged `applied.json` could stop the daemon starting, and break
+  `--revert`.** The file records what the last run applied so that a *different*
+  process can undo it — the `--revert` hook systemd runs on stop, and the
+  stale-state check a fresh daemon does at startup. Its loader was written to
+  treat a bad file as no file, and did that correctly for a file that will not
+  parse; but a file that parses into something other than an object, or one
+  whose `compositor` record holds something that is not a mapping, raised
+  instead — out of both callers, neither of which catches anything. The effect
+  was the worst kind: the daemon refused to start, `--revert` stopped partway,
+  the file was never cleared, and so it happened again on every subsequent
+  start. What the helper restores was unaffected, but the compositor, focus
+  mode and any loaded `sched_ext` scheduler stayed as the dead run left them.
+  A wrong-typed field is now an absence, which is what the loader always meant.
+  `--revert --dry-run` also no longer fails on a field holding a number where
+  it expected a list of names.
 - **A hand-broken config file could stop the daemon starting.** The loader
   turned a corrupt profile into a dropped profile, which is the intended
   behaviour — but only for two of the three ways a wrong-typed value fails.

@@ -517,11 +517,81 @@ class PerformancePayload:
 # records. The privileged half needs no such record: the helper keeps its own
 # root-owned snapshot in ``/run`` and ``RevertAll`` is idempotent.
 
+#: The compositor tweaks that survive the daemon, and so have to be undone
+#: from the state file rather than from memory. Named once because both the
+#: "is there anything to undo" check and the revert itself ask for it, and a
+#: drift between those two means a revert that reports work it does not do.
+_COMPOSITOR_KEYS = ("tearing_active", "vrr_active", "refresh_active", "x11_suspended")
+
+
 def _read_applied_state() -> dict | None:
+    """The recorded state, or None when there is nothing usable to read.
+
+    A file that parses as JSON but is not an object is as unusable as one that
+    does not parse at all, and both mean the same thing to every caller here:
+    no usable record. Neither is a reason to raise - this is the crash-recovery
+    path, and the one thing it must not do is need recovering itself.
+    """
     try:
-        return json.loads(APPLIED_STATE_FILE.read_text())
+        data = json.loads(APPLIED_STATE_FILE.read_text())
     except (OSError, json.JSONDecodeError):
         return None
+    return data if isinstance(data, dict) else None
+
+
+def _compositor_state(data: dict) -> dict:
+    """The compositor sub-record, which a hand-edited file may have replaced
+    with something that is not a mapping."""
+    comp = data.get("compositor")
+    return comp if isinstance(comp, dict) else {}
+
+
+def _compositor_needs_restore(comp: dict) -> bool:
+    return any(comp.get(key) for key in _COMPOSITOR_KEYS)
+
+
+def _names(value) -> list[str]:
+    """The entries of a field that is meant to hold a list of names.
+
+    A hand-edited file can put anything here, and every caller wants strings.
+    A scalar reads as a single entry rather than as nothing, so that what
+    ``--revert --dry-run`` prints stays consistent with what
+    ``applied_state_dirty`` already decided about the same field: something
+    present is something named.
+    """
+    if not value:
+        return []
+    if isinstance(value, (str, bytes)):
+        return [str(value)]
+    try:
+        return [_scalar(item) for item in value]
+    except TypeError:
+        # Not iterable at all - a number or a bool. One entry, not none.
+        return [str(value)]
+
+
+def _scalar(value) -> str:
+    """One entry as display text.
+
+    A container renders as its own entries rather than as Python's repr, which
+    would put brackets and quotes in front of somebody reading a bug report.
+    Nothing should ever nest here; the point is that a file which does still
+    reads as something.
+    """
+    if isinstance(value, (list, tuple, set, dict)):
+        return _name(value)
+    return str(value)
+
+
+def _name(value) -> str:
+    """One field of the state file as a single piece of display text.
+
+    Goes through :func:`_names` rather than a bare ``str()`` so that a field
+    holding a list renders as its entries and not as Python's repr of a list,
+    complete with brackets and quotes. Nothing should ever put a list here; the
+    point is that a file which does still reads as something.
+    """
+    return ", ".join(_names(value))
 
 
 def _clear_applied_state() -> None:
@@ -546,10 +616,7 @@ def applied_state_dirty() -> bool:
         "scx_applied",
     )):
         return True
-    comp = data.get("compositor") or {}
-    return any(comp.get(k) for k in (
-        "tearing_active", "vrr_active", "refresh_active", "x11_suspended",
-    ))
+    return _compositor_needs_restore(_compositor_state(data))
 
 
 def describe_applied_state() -> list[str]:
@@ -571,10 +638,10 @@ def describe_applied_state() -> list[str]:
                      "(the last daemon shut down properly) - nothing to undo")
     else:
         if data.get("active"):
-            lines.append(f"active games: {', '.join(data['active'])}")
+            lines.append(f"active games: {', '.join(_names(data['active']))}")
         if data.get("reniced"):
             lines.append("restore priority for pid(s): "
-                         + ", ".join(str(k) for k in data["reniced"]))
+                         + ", ".join(_names(data["reniced"])))
         for key, text in (
             ("governor_applied", "restore the CPU governor / EPP"),
             ("power_applied", "reset the CPU power limits"),
@@ -588,10 +655,10 @@ def describe_applied_state() -> list[str]:
         if data.get("scx_applied"):
             prev = data.get("scx_previous")
             lines.append(
-                f"CPU scheduler: stop scx_{data['scx_applied']} and "
-                + (f"switch back to scx_{prev}" if prev
+                f"CPU scheduler: stop scx_{_name(data['scx_applied'])} and "
+                + (f"switch back to scx_{_name(prev)}" if prev
                    else "return to the kernel's own scheduler"))
-        comp = data.get("compositor") or {}
+        comp = _compositor_state(data)
         for key, text in (
             ("tearing_active", "compositor: tearing"),
             ("vrr_active", "compositor: VRR"),
@@ -601,10 +668,41 @@ def describe_applied_state() -> list[str]:
             if comp.get(key):
                 lines.append(f"{text} -> restore recorded value")
         if data.get("power_backend"):
-            lines.append(f"power backend in use: {data['power_backend']}")
+            lines.append(f"power backend in use: {_name(data['power_backend'])}")
     lines.append("always: helper RevertAll (governor/EPP/RAPL/TDP/fans from "
                  "the helper's own /run snapshot - idempotent)")
     return lines
+
+
+@dataclass(frozen=True)
+class RevertPlan:
+    """Which cold-restore steps the recorded state calls for.
+
+    Separated from the doing so that the decisions can be checked without a
+    compositor, a session bus or a scheduler - this is the path that runs when
+    the machine is already in a bad way, and it is the one that has been wrong
+    before. The helper's own ``RevertAll`` is not here because it is not a
+    decision: it runs unconditionally, off a root-owned snapshot this process
+    cannot read, and it is idempotent.
+    """
+
+    compositor: bool
+    compositor_state: dict
+    focus_mode: bool
+    scx: bool
+    scx_previous: object = None
+
+
+def revert_plan(data: dict | None) -> RevertPlan:
+    data = data or {}
+    comp_state = _compositor_state(data)
+    return RevertPlan(
+        compositor=_compositor_needs_restore(comp_state),
+        compositor_state=comp_state,
+        focus_mode=bool(data.get("focus_mode")),
+        scx=bool(data.get("scx_applied")),
+        scx_previous=data.get("scx_previous"),
+    )
 
 
 def revert_from_state(helper: HelperClient | None = None) -> bool:
@@ -621,12 +719,10 @@ def revert_from_state(helper: HelperClient | None = None) -> bool:
     except HelperUnavailable as exc:
         log.warning("helper unavailable during --revert: %s", exc)
 
-    data = _read_applied_state() or {}
-    comp_state = data.get("compositor") or {}
-    if any(comp_state.get(k) for k in
-           ("tearing_active", "vrr_active", "refresh_active", "x11_suspended")):
+    plan = revert_plan(_read_applied_state())
+    if plan.compositor:
         comp = Compositor()
-        comp.load_restore_state(comp_state)
+        comp.load_restore_state(plan.compositor_state)
         for restore in (comp.restore_tearing, comp.restore_adaptive_sync,
                         comp.restore_refresh_cap):
             try:
@@ -635,19 +731,19 @@ def revert_from_state(helper: HelperClient | None = None) -> bool:
                 log.warning("compositor cold-restore step failed: %s", exc)
                 ok = False
 
-    if data.get("focus_mode"):
+    if plan.focus_mode:
         try:
             FocusMode().force_restore()
         except Exception as exc:  # noqa: BLE001
             log.warning("focus-mode cold-restore failed: %s", exc)
             ok = False
 
-    if data.get("scx_applied"):
+    if plan.scx:
         # A game that died with a sched_ext scheduler loaded leaves the whole
         # machine on it, so this matters more than the rest of the cold
         # restore: it is system-wide and survives the daemon.
         try:
-            if not ScxManager().restore(data.get("scx_previous")):
+            if not ScxManager().restore(plan.scx_previous):
                 ok = False
         except Exception as exc:  # noqa: BLE001
             log.warning("sched_ext cold-restore failed: %s", exc)
