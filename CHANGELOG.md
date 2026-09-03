@@ -22,6 +22,16 @@ All notable changes to Goblin Mode Pro. Format loosely follows
   A wrong-typed field is now an absence, which is what the loader always meant.
   `--revert --dry-run` also no longer fails on a field holding a number where
   it expected a list of names.
+- **The CLI could fail instead of printing.** `status`, `health`, `sessions`,
+  `preflight` and `games` each assumed the daemon's reply held exactly the
+  types they expected. The replies cross the frozen session-bus interface as
+  JSON strings, so nothing checks that on the way — and the freeze exists
+  because the daemon may be a newer or older build than the CLI asking it. An
+  unexpected type raised out of the command rather than printing what was
+  there. `sessions` had the same fault without any version skew: it checked
+  that a record had an average frame rate and then printed both the average
+  and the 1% low, so a history containing a record with one and not the other
+  ended the listing with an error.
 - **A hand-broken config file could stop the daemon starting.** The loader
   turned a corrupt profile into a dropped profile, which is the intended
   behaviour — but only for two of the three ways a wrong-typed value fails.

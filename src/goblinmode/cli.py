@@ -24,6 +24,8 @@ import json
 import sys
 from typing import TYPE_CHECKING
 
+from goblinmode import textfmt
+
 if TYPE_CHECKING:  # keeps `import gi` (via daemon_bridge) out of the import path
     from goblinmode.ipc.daemon_bridge import BridgeClient
 
@@ -42,25 +44,54 @@ def _p(*a) -> None:
     print(*a)
 
 
+#: The tweaks named on the status line, in the order they are named. Fixed
+#: rather than read off the reply, so a newer daemon reporting a tweak this
+#: build has never heard of does not print a key the user cannot interpret,
+#: and so the order does not shift between runs.
+TWEAK_KEYS = ("governor", "epp_boosted", "tearing", "adaptive_sync",
+              "power_limited", "focus_mode")
+
+
+def _fields(value) -> dict:
+    """A reply sub-object, which may not be an object.
+
+    Every one of these replies crosses the frozen interface as a JSON *string*
+    - `GetStatus`, `GetHealth`, `GetSessions` and `RunPreflight` all declare
+    `s` - so the signature guarantees nothing about what is inside, and the
+    freeze exists because the daemon may be a different build from the CLI
+    asking it. A field of an unexpected type is a thing that happens.
+    """
+    return value if isinstance(value, dict) else {}
+
+
+def status_lines(s) -> list[str]:
+    s = _fields(s)
+    caps = _fields(s.get("capabilities"))
+    t = _fields(s.get("tweaks"))
+
+    on = [k for k in TWEAK_KEYS if t.get(k)]
+    if t.get("scx_scheduler"):
+        on.append(f"scx_{textfmt.name(t['scx_scheduler'])}")
+
+    return [
+        f"master      : {'on' if s.get('master_enabled') else 'off'}",
+        f"active game  : {textfmt.name(s.get('active_games')) or '—'}",
+        f"governor     : {textfmt.text(s.get('governor', '?'))}",
+        f"active tweaks : {', '.join(on) or 'none'}",
+        f"helper       : {'connected' if s.get('helper_available') else 'limited mode'}",
+        f"machine      : {textfmt.text(caps.get('cpu_model', '?'))}"
+        f" · {textfmt.name(caps.get('gpu_vendors'))}"
+        f" · kernel {textfmt.text(caps.get('kernel_release', '?'))}",
+    ]
+
+
 def cmd_status(b: BridgeClient, args) -> int:
     s = b.get_status()
     if args.json:
         _p(json.dumps(s, indent=2))
         return 0
-    games = s.get("active_games") or []
-    _p(f"master      : {'on' if s.get('master_enabled') else 'off'}")
-    _p(f"active game  : {', '.join(games) or '—'}")
-    _p(f"governor     : {s.get('governor', '?')}")
-    t = s.get("tweaks") or {}
-    on = [k for k in ("governor", "epp_boosted", "tearing", "adaptive_sync",
-                      "power_limited", "focus_mode") if t.get(k)]
-    if t.get("scx_scheduler"):
-        on.append(f"scx_{t['scx_scheduler']}")
-    _p(f"active tweaks : {', '.join(on) or 'none'}")
-    _p(f"helper       : {'connected' if s.get('helper_available') else 'limited mode'}")
-    caps = s.get("capabilities") or {}
-    _p(f"machine      : {caps.get('cpu_model', '?')} · {', '.join(caps.get('gpu_vendors') or [])}"
-       f" · kernel {caps.get('kernel_release', '?')}")
+    for line in status_lines(s):
+        _p(line)
     return 0
 
 
@@ -76,28 +107,49 @@ def cmd_unboost(b: BridgeClient, _args) -> int:
     return 0
 
 
+def health_lines(h) -> list[str]:
+    h = _fields(h)
+    n = _fields(h.get("counts"))
+    lines = [
+        f"system readiness: {textfmt.text(h.get('score'))} / 10",
+        f"  {textfmt.text(n.get('ok'), '0')} ok"
+        f" · {textfmt.text(n.get('warn'), '0')} warn"
+        f" · {textfmt.text(n.get('fail'), '0')} fail",
+    ]
+    lines += [f"  ✗ {w}" for w in textfmt.names(h.get("worst"))]
+    return lines
+
+
 def cmd_health(b: BridgeClient, _args) -> int:
-    h = b.get_health()
-    score = h.get("score")
-    _p(f"system readiness: {score if score is not None else '?'} / 10")
-    n = h.get("counts") or {}
-    _p(f"  {n.get('ok', 0)} ok · {n.get('warn', 0)} warn · {n.get('fail', 0)} fail")
-    for w in h.get("worst") or []:
-        _p(f"  ✗ {w}")
+    for line in health_lines(b.get_health()):
+        _p(line)
     return 0
 
 
-def cmd_sessions(b: BridgeClient, args) -> int:
-    rows = (b.get_session_history(args.game) if args.game else b.get_sessions())[-args.limit:]
+def sessions_lines(rows, limit: int) -> list[str]:
     if not rows:
-        _p("no sessions recorded yet")
-        return 0
-    for s in rows:
+        return ["no sessions recorded yet"]
+    lines = []
+    for s in rows[-limit:] if limit else rows:
+        s = _fields(s)
         tag = " [benchmark]" if s.get("benchmark") else ""
-        avg = s.get("fps_avg")
-        low = s.get("fps_1low")
-        _p(f"{s.get('started','')[:16]}  {s.get('game','?'):24}{tag}"
-           + (f"  avg {avg:.0f}  1% {low:.0f}" if avg else "  (no fps log)"))
+        avg = textfmt.number(s.get("fps_avg"))
+        low = textfmt.number(s.get("fps_1low"))
+        # Both numbers or neither. Guarding on the average alone and then
+        # formatting both is what this did before, so a record carrying an
+        # average without a 1% low - which no run this program writes produces,
+        # but an older or hand-edited history can - raised instead of printing.
+        fps = f"  avg {avg:.0f}  1% {low:.0f}" if avg and low else "  (no fps log)"
+        started = textfmt.text(s.get("started", ""), "")[:16]
+        _game = textfmt.text(s.get("game", "?"))
+        lines.append(f"{started}  {_game:24}{tag}{fps}")
+    return lines
+
+
+def cmd_sessions(b: BridgeClient, args) -> int:
+    rows = b.get_session_history(args.game) if args.game else b.get_sessions()
+    for line in sessions_lines(rows, args.limit):
+        _p(line)
     return 0
 
 
@@ -110,16 +162,31 @@ def cmd_benchmark(b: BridgeClient, args) -> int:
     return 1
 
 
+def preflight_lines(checks) -> list[str]:
+    lines = []
+    for c in checks or []:
+        c = _fields(c)
+        mark = {"ok": "✓", "warn": "!", "fail": "✗", "info": "i"}.get(
+            textfmt.text(c.get("status"), ""), "?")
+        _title = textfmt.text(c.get("title", "?"))
+        lines.append(f"{mark} {_title:34} {textfmt.text(c.get('value', ''), '')}")
+    return lines
+
+
+def preflight_fix_lines(res) -> list[str]:
+    res = _fields(res)
+    lines = ["\napplied: " + (textfmt.name(res.get("applied")) or "nothing")]
+    if res.get("failed"):
+        lines.append("failed : " + textfmt.name(res["failed"]))
+    return lines
+
+
 def cmd_preflight(b: BridgeClient, args) -> int:
-    checks = b.run_preflight()
-    for c in checks:
-        mark = {"ok": "✓", "warn": "!", "fail": "✗", "info": "i"}.get(c["status"], "?")
-        _p(f"{mark} {c['title']:34} {c['value']}")
+    for line in preflight_lines(b.run_preflight()):
+        _p(line)
     if args.fix:
-        res = b.apply_preflight_fixes()
-        _p("\napplied: " + (", ".join(res.get("applied") or []) or "nothing"))
-        if res.get("failed"):
-            _p("failed : " + ", ".join(res["failed"]))
+        for line in preflight_fix_lines(b.apply_preflight_fixes()):
+            _p(line)
     return 0
 
 
@@ -129,12 +196,23 @@ def cmd_report(b: BridgeClient, args) -> int:
     return 0
 
 
-def cmd_games(b: BridgeClient, _args) -> int:
-    for p in b.get_status().get("profiles") or []:
+def games_lines(status) -> list[str]:
+    lines = []
+    profiles = _fields(status).get("profiles")
+    for p in profiles if isinstance(profiles, list) else []:
+        p = _fields(p)
         if p.get("exe") == "__forced__":
             continue
-        _p(f"{'●' if p.get('enabled') else '○'} {p.get('display_name','?'):28} "
-           f"({p.get('exe')}, {p.get('match_mode')})")
+        _display = textfmt.text(p.get("display_name", "?"))
+        lines.append(f"{'●' if p.get('enabled') else '○'} {_display:28} "
+                     f"({textfmt.text(p.get('exe'), 'None')}, "
+                     f"{textfmt.text(p.get('match_mode'), 'None')})")
+    return lines
+
+
+def cmd_games(b: BridgeClient, _args) -> int:
+    for line in games_lines(b.get_status()):
+        _p(line)
     return 0
 
 

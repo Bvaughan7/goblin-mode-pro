@@ -23,6 +23,7 @@ pub mod incidents;
 pub mod logrules;
 pub mod observer;
 pub mod preflight;
+pub mod pyfmt;
 pub(crate) mod round;
 pub mod runner;
 pub mod scx;

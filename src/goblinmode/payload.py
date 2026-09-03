@@ -23,6 +23,7 @@ from goblinmode.focus import FocusMode
 from goblinmode.ipc.helper_client import HelperClient, HelperUnavailable
 from goblinmode.paths import APPLIED_STATE_FILE, ensure_user_dirs
 from goblinmode.scx import ScxManager
+from goblinmode.textfmt import name as _name, names as _names
 
 log = logging.getLogger(__name__)
 
@@ -548,50 +549,6 @@ def _compositor_state(data: dict) -> dict:
 
 def _compositor_needs_restore(comp: dict) -> bool:
     return any(comp.get(key) for key in _COMPOSITOR_KEYS)
-
-
-def _names(value) -> list[str]:
-    """The entries of a field that is meant to hold a list of names.
-
-    A hand-edited file can put anything here, and every caller wants strings.
-    A scalar reads as a single entry rather than as nothing, so that what
-    ``--revert --dry-run`` prints stays consistent with what
-    ``applied_state_dirty`` already decided about the same field: something
-    present is something named.
-    """
-    if not value:
-        return []
-    if isinstance(value, (str, bytes)):
-        return [str(value)]
-    try:
-        return [_scalar(item) for item in value]
-    except TypeError:
-        # Not iterable at all - a number or a bool. One entry, not none.
-        return [str(value)]
-
-
-def _scalar(value) -> str:
-    """One entry as display text.
-
-    A container renders as its own entries rather than as Python's repr, which
-    would put brackets and quotes in front of somebody reading a bug report.
-    Nothing should ever nest here; the point is that a file which does still
-    reads as something.
-    """
-    if isinstance(value, (list, tuple, set, dict)):
-        return _name(value)
-    return str(value)
-
-
-def _name(value) -> str:
-    """One field of the state file as a single piece of display text.
-
-    Goes through :func:`_names` rather than a bare ``str()`` so that a field
-    holding a list renders as its entries and not as Python's repr of a list,
-    complete with brackets and quotes. Nothing should ever put a list here; the
-    point is that a file which does still reads as something.
-    """
-    return ", ".join(_names(value))
 
 
 def _clear_applied_state() -> None:

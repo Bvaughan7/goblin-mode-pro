@@ -12,4 +12,5 @@
 //! it is the text somebody sees at the exact moment the tool is not working,
 //! and it has to say the same thing whichever implementation produced it.
 
+pub mod report;
 pub mod selftest;

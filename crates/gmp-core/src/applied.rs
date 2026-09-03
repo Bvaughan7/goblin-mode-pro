@@ -19,7 +19,7 @@
 use serde_json::{Map, Value};
 
 use crate::config::truthy;
-use crate::round::py_str;
+pub use crate::pyfmt::{name, names};
 
 /// The state a `--revert` would look at. `None` is "nothing usable to read".
 pub type State = Map<String, Value>;
@@ -73,62 +73,6 @@ pub fn compositor_needs_restore(comp: &Map<String, Value>) -> bool {
     COMPOSITOR_KEYS
         .iter()
         .any(|key| comp.get(*key).is_some_and(truthy))
-}
-
-/// The entries of a field meant to hold a list of names.
-///
-/// A hand-edited file can put anything here and every caller wants strings. A
-/// scalar reads as a single entry rather than as nothing, so that what
-/// `--revert --dry-run` prints stays consistent with what the dirty check
-/// already decided about the same field: something present is something named.
-pub fn names(value: &Value) -> Vec<String> {
-    if !truthy(value) {
-        return Vec::new();
-    }
-    match value {
-        // Python iterates a string character by character, so a bare string
-        // has to be caught before the sequence arm or "Wow" becomes three
-        // entries. Both implementations read it as one name.
-        Value::String(s) => vec![s.clone()],
-        Value::Array(items) => items.iter().map(scalar).collect(),
-        // A mapping iterates its keys, which is what `reniced` relies on: it
-        // is stored as pid -> nice value and the pids are what get listed.
-        Value::Object(map) => map.keys().cloned().collect(),
-        other => vec![scalar(other)],
-    }
-}
-
-/// One field as a single piece of display text.
-///
-/// Goes through [`names`] rather than a bare conversion so a field holding a
-/// list renders as its entries and not as Python's repr of a list, brackets
-/// and quotes included. Nothing should ever put a list here; the point is that
-/// a file which does still reads as something.
-pub fn name(value: &Value) -> String {
-    names(value).join(", ")
-}
-
-/// `str(x)` for one JSON scalar, matching Python's.
-fn scalar(value: &Value) -> String {
-    match value {
-        Value::Null => "None".to_string(),
-        // Python capitalises these, and a state file rendered by the two
-        // implementations should not differ on the word "true".
-        Value::Bool(true) => "True".to_string(),
-        Value::Bool(false) => "False".to_string(),
-        Value::Number(n) => match (n.as_i64(), n.as_u64()) {
-            (Some(i), _) => i.to_string(),
-            (_, Some(u)) => u.to_string(),
-            _ => py_str(n.as_f64().unwrap_or(f64::NAN)),
-        },
-        Value::String(s) => s.clone(),
-        // Reachable only from a nested container in a hand-edited file. Both
-        // implementations render the entries rather than the container, which
-        // is a rule Python had to be changed to follow: a bare `str()` there
-        // prints a list's repr, brackets and quotes included, into text a
-        // person is reading to find out what went wrong.
-        other => name(other),
-    }
 }
 
 /// True when the file records anything actually applied - meaning a previous
