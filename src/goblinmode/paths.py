@@ -13,10 +13,33 @@ from pathlib import Path
 APP_DIRNAME = "goblin-mode-pro"
 
 
-def _xdg(env: str, default: Path) -> Path:
+def _xdg_base(env: str, default: Path) -> Path:
+    """The XDG base directory `env` names, or `default`.
+
+    A variable that is set but empty counts as unset, which is what the spec
+    says and what an environment that clears a variable rather than unsetting
+    it produces. Whitespace-only is treated the same way: it is not a path
+    anybody meant, and the alternative is a directory literally named " ".
+    """
     raw = os.environ.get(env, "").strip()
-    base = Path(raw).expanduser() if raw else default
-    return base / APP_DIRNAME
+    if not raw:
+        return default
+    # Only this user's own home expands. `~someone` is refused rather than
+    # honoured for two reasons: pathlib RAISES for a user that does not exist,
+    # and this module is imported by the daemon, the GUI, the CLI and the
+    # launch wrapper - so an exotic variable would stop all four from starting
+    # rather than being ignored. And pointing an XDG base at another account's
+    # home is not something to obey even when the account is real.
+    if raw.startswith("~") and raw != "~" and not raw.startswith("~/"):
+        return default
+    try:
+        return Path(raw).expanduser()
+    except RuntimeError:
+        return default
+
+
+def _xdg(env: str, default: Path) -> Path:
+    return _xdg_base(env, default) / APP_DIRNAME
 
 
 HOME = Path.home()
@@ -46,10 +69,15 @@ APPLIED_STATE_FILE = STATE_DIR / "applied.json"
 ONBOARDED_MARKER = STATE_DIR / "onboarded"
 
 # MangoHud (not namespaced under APP_DIRNAME - it is MangoHud's own location).
-MANGOHUD_DIR = (
-    Path(os.environ.get("XDG_CONFIG_HOME", HOME / ".config")).expanduser()
-    / "MangoHud"
-)
+#
+# Goes through the same base resolution as everything above. It used to read
+# XDG_CONFIG_HOME directly, which meant a variable that was set but EMPTY -
+# the spec's way of saying "unset", and what several launchers produce - gave
+# `Path("")`, so this became the relative path `MangoHud`. The visible effect
+# was that MANGOHUD_CONFIGFILE was exported to the game as a relative path and
+# the per-game overlay config silently never applied, plus a stray MangoHud/
+# directory created in whatever the daemon's working directory happened to be.
+MANGOHUD_DIR = _xdg_base("XDG_CONFIG_HOME", HOME / ".config") / "MangoHud"
 MANGOHUD_CONF = MANGOHUD_DIR / "MangoHud.conf"
 
 # Generated launch wrapper.
