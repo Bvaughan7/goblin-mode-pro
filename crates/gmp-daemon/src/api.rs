@@ -28,8 +28,9 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use zbus::interface;
 
-use crate::error::{not_implemented, Result};
+use crate::error::{not_implemented, DaemonError, Result};
 use crate::state::DaemonState;
+use crate::store::Store;
 
 /// The frozen contract's identity. These three strings are the whole
 /// compatibility surface between the Python and Rust daemons.
@@ -46,12 +47,26 @@ const IMPLEMENTATION: &str = "rust";
 pub struct Api {
     #[allow(dead_code)] // the loop that mutates it arrives with the next block
     state: Arc<Mutex<DaemonState>>,
+    store: Store,
 }
 
 impl Api {
     pub fn new(state: Arc<Mutex<DaemonState>>) -> Self {
-        Self { state }
+        Self {
+            state,
+            store: Store::from_env(),
+        }
     }
+
+    /// For tests, which need a tree that is not this machine's.
+    pub fn with_store(state: Arc<Mutex<DaemonState>>, store: Store) -> Self {
+        Self { state, store }
+    }
+}
+
+/// A reply body, or the error the bridge would have turned an exception into.
+fn as_json(rows: &[serde_json::Value]) -> Result<String> {
+    serde_json::to_string(rows).map_err(|err| DaemonError::Failed(err.to_string()))
 }
 
 // The stub bodies ignore their arguments, but the NAMES are contract - they
@@ -71,19 +86,27 @@ impl Api {
         Err(not_implemented("GetMetrics"))
     }
 
+    /// The live incidents this run has raised, or the history from disk when
+    /// it has raised none. A daemon that has just started always answers from
+    /// disk, which is why this one can be served before the loop exists.
     #[zbus(out_args("json"))]
     async fn get_incidents(&self) -> Result<String> {
-        Err(not_implemented("GetIncidents"))
+        let live = self.state.lock().await.incidents.clone();
+        if !live.is_empty() {
+            return as_json(&live);
+        }
+        as_json(&self.store.incidents()?)
     }
 
     #[zbus(out_args("json"))]
     async fn get_sessions(&self) -> Result<String> {
-        Err(not_implemented("GetSessions"))
+        as_json(&self.store.sessions("")?)
     }
 
+    /// An empty `exe` means every game, which is what the GUI sends for "all".
     #[zbus(out_args("json"))]
     async fn get_session_history(&self, exe: &str) -> Result<String> {
-        Err(not_implemented("GetSessionHistory"))
+        as_json(&self.store.sessions(exe)?)
     }
 
     #[zbus(out_args("json"))]
@@ -345,6 +368,87 @@ mod tests {
     fn the_interface_version_never_moves() {
         // A v2 is a new file and a new bus name, not a bumped integer here.
         assert_eq!(INTERFACE_VERSION, 1);
+    }
+
+    fn api_over(dir: &std::path::Path) -> Api {
+        use gmp_core::paths;
+        let mut resolved = paths::resolve(&paths::Env {
+            home: dir.to_string_lossy().into_owned(),
+            ..Default::default()
+        });
+        resolved.session_file = dir.join("sessions.jsonl").to_string_lossy().into_owned();
+        resolved.incident_file = dir.join("incidents.jsonl").to_string_lossy().into_owned();
+        Api::with_store(
+            Arc::new(Mutex::new(DaemonState::default())),
+            Store::at(resolved),
+        )
+    }
+
+    fn tempdir() -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "gmp-api-{}-{:?}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[tokio::test]
+    async fn the_disk_backed_methods_answer_rather_than_refusing() {
+        let dir = tempdir();
+        let api = api_over(&dir);
+        std::fs::write(
+            &api.store.paths().session_file,
+            "{\"exe\":\"a\"}\n{\"exe\":\"b\"}\n",
+        )
+        .unwrap();
+        std::fs::write(&api.store.paths().incident_file, "{\"kind\":\"thermal\"}\n").unwrap();
+
+        assert_eq!(
+            api.get_sessions().await.unwrap(),
+            r#"[{"exe":"a"},{"exe":"b"}]"#
+        );
+        assert_eq!(
+            api.get_session_history("a").await.unwrap(),
+            r#"[{"exe":"a"}]"#
+        );
+        // An empty exe is "every game", which is what the GUI sends for all.
+        assert_eq!(
+            api.get_session_history("").await.unwrap(),
+            r#"[{"exe":"a"},{"exe":"b"}]"#
+        );
+        assert_eq!(
+            api.get_incidents().await.unwrap(),
+            r#"[{"kind":"thermal"}]"#
+        );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[tokio::test]
+    async fn a_fresh_install_answers_with_empty_lists() {
+        let dir = tempdir();
+        let api = api_over(&dir);
+        assert_eq!(api.get_sessions().await.unwrap(), "[]");
+        assert_eq!(api.get_incidents().await.unwrap(), "[]");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[tokio::test]
+    async fn this_runs_incidents_win_over_the_ones_on_disk() {
+        let dir = tempdir();
+        let api = api_over(&dir);
+        std::fs::write(&api.store.paths().incident_file, "{\"kind\":\"old\"}\n").unwrap();
+        api.state
+            .lock()
+            .await
+            .incidents
+            .push(serde_json::json!({"kind": "live"}));
+        assert_eq!(api.get_incidents().await.unwrap(), r#"[{"kind":"live"}]"#);
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]

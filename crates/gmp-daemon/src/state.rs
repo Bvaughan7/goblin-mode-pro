@@ -36,6 +36,11 @@ pub struct DaemonState {
     /// Profiles changed since the last save. The write is debounced, so this
     /// is what a pending flush would cover.
     pub dirty_profiles: BTreeSet<String>,
+
+    /// Incidents this run has raised, newest last. They are also appended to
+    /// the log on disk; this is what makes the current run's answer immediate
+    /// rather than a re-read, and it is why an empty one falls back to disk.
+    pub incidents: Vec<Value>,
 }
 
 /// A readiness answer with the clock reading `gmp_core::status::health`
