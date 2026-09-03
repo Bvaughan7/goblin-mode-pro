@@ -400,13 +400,30 @@ def load() -> Settings:
     return _from_dict(raw)
 
 
+#: What a hand-broken config throws. AttributeError belongs here as much as
+#: the other two: a profile whose ``exe`` is a number, or whose ``mangohud``
+#: is a list, reaches ``.strip()`` / ``.setdefault()`` on the wrong type. It
+#: used to escape _from_dict entirely and take down whatever was loading the
+#: file - daemon, GUI and the launch wrapper alike - which is the opposite of
+#: what the loop below is for.
+_CORRUPT = (ValueError, TypeError, AttributeError)
+
+
 def _from_dict(raw: dict[str, Any]) -> Settings:
     if not isinstance(raw, dict):
         return default_settings()
     raw = dict(raw)
     raw.pop("schema_version", None)
     raw_profiles = raw.pop("profiles", []) or []
-    settings = Settings(**{k: v for k, v in raw.items() if k in _SETTINGS_FIELDS})
+    if not isinstance(raw_profiles, list):
+        raw_profiles = []
+    try:
+        settings = Settings(**{k: v for k, v in raw.items() if k in _SETTINGS_FIELDS})
+    except _CORRUPT:
+        # A settings value of the wrong shape entirely (poll_interval as a
+        # list, say). Losing the global settings is bad; refusing to start is
+        # worse, and the profiles below are the part users actually curate.
+        settings = Settings()
 
     profiles: list[GameProfile] = []
     for p in raw_profiles:
@@ -414,10 +431,13 @@ def _from_dict(raw: dict[str, Any]) -> Settings:
             continue
         try:
             profiles.append(GameProfile(**{k: v for k, v in p.items() if k in _PROFILE_FIELDS}))
-        except (ValueError, TypeError):
+        except _CORRUPT:
             continue  # drop a corrupt / hand-broken entry rather than fail to start
     settings.profiles = profiles
-    settings.__post_init__()
+    try:
+        settings.__post_init__()
+    except _CORRUPT:
+        settings = Settings(profiles=profiles)
     return settings
 
 

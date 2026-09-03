@@ -102,6 +102,41 @@ class SettingsRoundTrip(unittest.TestCase):
         settings = config._from_dict(raw)
         self.assertEqual([p.exe for p in settings.profiles], ["Good.exe"])
 
+    def test_a_wrong_typed_field_never_takes_the_daemon_down(self):
+        """A hand-broken config must cost settings, not startup.
+
+        These three shapes reach ``.strip()`` or ``.setdefault()`` on the
+        wrong type, which raises AttributeError - and AttributeError used to
+        escape ``_from_dict`` entirely, taking down whatever was loading the
+        file: the daemon, the GUI and the launch wrapper alike. Found by
+        diffing the loader against the Rust port.
+        """
+        raw = {
+            "profiles": [
+                {"exe": 5},                            # int.strip()
+                {"exe": "a", "mangohud": []},           # list.setdefault()
+                {"exe": "b", "gamescope": "x"},         # str.setdefault()
+                {"exe": "Good.exe"},
+            ],
+        }
+        settings = config._from_dict(raw)
+        self.assertEqual([p.exe for p in settings.profiles], ["Good.exe"])
+
+    def test_a_wrong_typed_setting_keeps_the_profiles(self):
+        # Losing the global settings is bad; losing the game list with them
+        # is worse, and refusing to start is worse still.
+        settings = config._from_dict({
+            "poll_interval": [],
+            "profiles": [{"exe": "Good.exe"}],
+        })
+        self.assertEqual(settings.poll_interval, 7)
+        self.assertEqual([p.exe for p in settings.profiles], ["Good.exe"])
+
+    def test_profiles_that_are_not_a_list_are_ignored(self):
+        for junk in ("abc", {"a": 1}, 5):
+            with self.subTest(junk=junk):
+                self.assertEqual(config._from_dict({"profiles": junk}).profiles, [])
+
     def test_save_then_load(self):
         with TemporaryDirectory() as d:
             path = Path(d) / "config.json"

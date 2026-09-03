@@ -180,6 +180,8 @@ jobs:
         env:
           GMP_REQUIRE_RUST_HELPER: "1"
         run: |
+          # The generated tables must still match the Python they came from.
+          python3 tools/gen_config_tables.py | diff - crates/gmp-core/src/config_tables.rs
           cargo build -p gmp-core --examples
           python3 -m unittest tests.test_logrules_parity \
                                 tests.test_incidents_parity \
@@ -191,7 +193,8 @@ jobs:
                                 tests.test_scx_parity \
                                 tests.test_compositor_parity \
                                 tests.test_diagnostics_parity \
-                                tests.test_fpswatch_parity -v
+                                tests.test_fpswatch_parity \
+                                tests.test_config_parity -v
 
       # Advisories, licences and dependency sources. See deny.toml for why
       # this runs before the tree is big.
