@@ -1,15 +1,39 @@
 # The Rust conversion
 
-The privileged helper is being rewritten in Rust. This page is the decision,
-the reasoning, the argument against it, and the current state — written down
-because a migration that spans releases needs to survive the memory of the
-person doing it.
+Goblin Mode Pro is being rewritten in Rust, component by component. This page
+is the decision, the reasoning, the argument against it, and the current state
+— written down because a migration that spans releases needs to survive the
+memory of the person doing it.
 
-!!! note "Scope, because this is the part people misread"
+!!! note "Scope"
 
-    This is the **helper only**. The daemon, the GUI and the CLI stay Python,
-    and there is no plan to change that. Goblin Mode Pro is three processes;
-    exactly one of them runs as root, and that is the one being converted.
+    **The privileged helper is done and shipped.** It serves the frozen D-Bus
+    contract, scores identically to the Python one on the same conformance
+    suite, and has run a real game start to finish. It ships as an optional
+    package and is enabled by pointing one symlink at it.
+
+    **The conversion continues** through the domain logic, the daemon, the CLI
+    and the GUI. At every stage the Python implementation stays installable and
+    supported; the two meet only over frozen D-Bus interfaces, so neither side
+    has to move before the other is ready.
+
+    This page said the opposite until 2026-09-03 — "helper only… no plan to
+    change that". That was true when it was written and the scope changed
+    deliberately, so the old wording is recorded here rather than quietly
+    replaced.
+
+!!! warning "The justification changed too, and it got weaker"
+
+    The helper port had a specific, defensible reason: **no interpreter running
+    as root.** That argument is now spent. It does not extend to the daemon, the
+    CLI or the GUI — none of them are privileged, and converting them buys
+    nothing on that axis.
+
+    The reason for continuing is a different one and is worth stating as itself
+    rather than inheriting credit from the first: **one language, one toolchain,
+    no Python runtime dependency, and one set of binaries to package.** Those
+    are real benefits. They are maintenance and packaging benefits, not security
+    ones, and this page will not describe them as security ones.
 
 ## What makes the swap possible at all
 
@@ -127,6 +151,31 @@ rather than dressed up as engineering necessity. The condition attached to it
 is that it **must not stall the distribution work**. A design document that
 only argues one side ages badly.
 
+**Extending that argument to the rest of the conversion, honestly.** Everything
+above applies more strongly now, not less. The remaining work is roughly 10,700
+lines of Python; the one block already done expanded 1,202 Python lines into
+3,886 of Rust, so the rest is plausibly 35,000 lines. That is a great deal of
+effort for benefits that are real but modest, on a project whose actual
+constraint is still that very few people have run it.
+
+Three things make it defensible anyway, and they should be weighed rather than
+assumed:
+
+- **The seams are proven, not hoped for.** Both D-Bus interfaces are frozen and
+  graded from outside by suites that never import what they test. Each one found
+  a real bug on its first run — `SetPowerLimits` writing state before validating,
+  and `IgnoreGame` having no inverse anywhere in the project.
+- **The method is proven.** Port a group, diff it against the Python answers on
+  real hardware, keep both implementations passing at every commit. It has now
+  survived one full component including the riskiest operation in the codebase.
+- **Nothing is forced.** The Python implementation stays installable at every
+  stage. If the conversion stalls, what exists still works and still ships.
+
+What would make stopping the right call: if the port starts displacing
+distribution work again, or if feedback from actual users turns out to be about
+hardware compatibility rather than anything a language change touches. Neither
+is true today. Both are worth re-checking at each block rather than at the end.
+
 ## Corrections to the migration plans
 
 The conversion is being worked from three external plan documents. All three
@@ -198,6 +247,11 @@ Block by block, tracked in [issue #1](https://github.com/Bvaughan7/goblin-mode-p
 | **R3** | Port the hardware operations, group by group | **Done, and verified on hardware.** The Rust helper served the conformance suite live and scored identically to the Python one - 39/0 root, 19/0 unprivileged. See [verified hardware](verified-hardware.md) |
 | **H1** | One unit, symlinked implementation, rollback as a drop-in | **Done.** The unit runs `/usr/libexec/goblin-mode-pro/helper`, a symlink, verified on hardware. `install.sh --helper=rust` builds, contract-checks and installs the Rust binary; Python is installed either way so rolling back needs no toolchain |
 | **P2** | Freeze the daemon's session-bus interface, and grade it from outside | **Done.** `docs/dbus-daemon-interface-v1.xml` (29 methods, 5 signals, 3 properties) + `tests/conformance/daemon.py`. Baseline on real hardware: **23 PASS / 0 FAIL / 9 SKIP** — it was 1 FAIL on the first run, and that bug is fixed |
+| **P0** | State the widened scope publicly, and say plainly that the original justification does not extend to it | **Done.** This page, the README and the ROADMAP |
+| **P3** | `gmp-core` — the domain logic, tests translated first, module by module | Next. ~4,100 lines across 12 modules |
+| **P4** | `gmp-daemon` and `gmp-cli` | Not started. ~3,350 lines; port `selftest` early, it is what verifies the rest on hardware |
+| **P5** | `gmp-gui` — gtk4-rs, `ksni` for the tray, and the i18n msgids preserved character for character | Not started. ~3,300 lines |
+| **P6** | Cutover: delete the Python, repackage, re-verify every capability under Rust | Not started |
 | **H5** | `.deb` / `.rpm` become architecture-specific | **Done, differently.** Making the whole package architecture-specific would drop every non-x86 user of a package that is otherwise pure Python. The compiled helper is a separate optional x86_64 package instead; the main package stays `all`/`noarch` |
 
 The Rust sources live in `crates/gmp-helper/`. `cargo test` covers the polkit

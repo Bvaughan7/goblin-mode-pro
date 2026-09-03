@@ -300,11 +300,14 @@ See **[How it works](https://bvaughan7.github.io/goblin-mode-pro/architecture/)*
 for the architecture, the module map, the privilege model, the runner variables
 it injects and the compositor calls it makes.
 
-That helper is being rewritten in Rust — the daemon, GUI and CLI stay Python.
+That helper has been rewritten in Rust and ships as an optional package; the
+rest of the application is being converted after it, component by component,
+with the Python implementation installable and supported at every stage.
 **[The Rust conversion](https://github.com/Bvaughan7/goblin-mode-pro/blob/main/docs/rust-conversion.md)**
-explains why, what the argument against it is, and how the frozen D-Bus
-contract makes swapping one implementation for the other something you can
-verify rather than hope for.
+explains why, why the reason for continuing is weaker than the reason for
+starting, what the argument against it is, and how the frozen D-Bus contracts
+make swapping one implementation for the other something you can verify rather
+than hope for.
 
 ## Contributing & what's next
 

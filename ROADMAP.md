@@ -13,11 +13,18 @@ for the details and the couple of places scope was narrowed from the
 original wording (mostly: no live upload server, nothing that would need
 a new "run arbitrary command as root" helper method).
 
-One piece of work is in flight and it is not a feature: the privileged
-helper is being ported to Rust, tracked in [#1](https://github.com/Bvaughan7/goblin-mode-pro/issues/1). It changes nothing a
-user sees — the daemon, GUI and CLI stay Python — and the reasoning, along
-with the argument against doing it at all, is in
-[`docs/rust-conversion.md`](docs/rust-conversion.md).
+One piece of work is in flight and it is not a feature: Goblin Mode Pro is
+being converted to Rust, tracked in [#1](https://github.com/Bvaughan7/goblin-mode-pro/issues/1).
+The privileged helper is done and shipping; the domain logic, daemon, CLI and
+GUI follow. It changes nothing a user sees, and the Python implementation stays
+installable and supported at every stage.
+
+Worth reading before assuming it is a security project: the helper port had a
+specific reason — no interpreter running as root — and **that reason does not
+extend to the rest.** Continuing buys one language, one toolchain, no Python
+runtime dependency and one set of binaries to package. Real benefits, but
+maintenance and packaging ones. The reasoning, and the argument against doing
+it at all, are in [`docs/rust-conversion.md`](docs/rust-conversion.md).
 
 Beyond that, nothing is currently proposed — this is a menu, not
 a backlog. 👍 an item on the
