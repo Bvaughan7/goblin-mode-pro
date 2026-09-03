@@ -10,4 +10,5 @@
 //! translated from the Python module's own tests rather than written afresh,
 //! so that a disagreement shows up as a failure rather than as an opinion.
 
+pub mod incidents;
 pub mod logrules;

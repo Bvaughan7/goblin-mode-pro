@@ -24,7 +24,11 @@ authors = ["Bryan Vaughan <bryanvaughan07@gmail.com>"]
 zbus = { version = "5", default-features = false, features = ["tokio"] }
 tokio = { version = "1", features = ["macros", "process", "rt-multi-thread", "signal", "time"] }
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+# preserve_order: the LLM payload is text a user pastes somewhere, so its
+# key order has to match the Python's insertion order rather than being
+# sorted. Without this the two implementations produce different bytes
+# for the same incident.
+serde_json = { version = "1", features = ["preserve_order"] }
 # pidfd_open / pidfd_send_signal / setpriority, without writing unsafe. The
 # crate forbids unsafe_code, so raw syscalls are not an option, and Renice
 # needs all three to pin a pid against reuse.

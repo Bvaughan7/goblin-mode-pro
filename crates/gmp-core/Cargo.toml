@@ -10,11 +10,9 @@ authors.workspace = true
 
 [dependencies]
 regex.workspace = true
-
-[dev-dependencies]
-# Only for the `analyze` example, which exists so the Python side can
-# diff this crate's answers against its own. Not shipped.
+serde.workspace = true
 serde_json.workspace = true
+
 
 [lints.rust]
 unsafe_code = "forbid"
