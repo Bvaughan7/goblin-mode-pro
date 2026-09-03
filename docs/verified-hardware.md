@@ -40,6 +40,26 @@ as the implementation the unit runs:
 | Package temperature under load | 94–98 °C, CPU sustained at 4.2 GHz |
 | Thermal detection | fired correctly — "5 throttle events in the last 20 s" |
 
+And the whole cycle closes. When the game exited, the helper reverted on its
+own and the machine went back to what it was:
+
+| | before | during | after |
+|---|---|---|---|
+| governor | `powersave` | `performance` | `powersave` |
+| EPP | `balance_performance` | `performance` | `balance_performance` |
+| game process | — | nice `-5` | — |
+
+```
+23:00:56  authorized for RevertAll via com.goblinmode.pro.manage-performance
+23:00:56  reverted (ok=true)
+```
+
+The snapshot in `/run` was cleared with it. That matters more than it reads:
+every previous `RevertAll` in testing had been triggered by a test run or a
+daemon restart, never by a real game ending — which is the only moment a
+failure would actually cost anything, because it would leave the governor
+pinned to `performance` on a machine that had just been at 98 °C.
+
 `Renice` matters most here. It is the only operation that acts on a target the
 caller names, its pidfd sequence is the most intricate thing in the port, and
 until this session it had only ever been run against a `sleep` process in a
