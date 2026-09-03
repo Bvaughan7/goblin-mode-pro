@@ -6,6 +6,31 @@ All notable changes to Goblin Mode Pro. Format loosely follows
 
 ## [Unreleased]
 
+### Fixed
+- **A hand-broken config file could stop the daemon starting.** The loader
+  turned a corrupt profile into a dropped profile, which is the intended
+  behaviour — but only for two of the three ways a wrong-typed value fails.
+  An `exe` holding a number, a `mangohud` holding a list or a `gamescope`
+  holding a string each raise a third kind of error, and that one escaped the
+  loader entirely and took down whatever was reading the file: the daemon, the
+  GUI and the `goblin-run` wrapper alike. A wrong-typed *global* setting now
+  falls back on its own without taking the game list with it, too.
+- Three input validators accepted a value ending in a newline, because in
+  Python a `$` anchor also matches just before one — so the character classes
+  those patterns were built around were not actually enforced at the end of
+  the string. The visible effect was a runner environment variable whose name
+  ended in a newline being exported with an empty value instead of its real
+  one, silently losing the setting. All three now anchor properly.
+
+### Changed
+- The domain logic has a second implementation. Every rule the tool applies —
+  game detection, log classification, incident scoring, GPU judgement,
+  preflight advice, display mode selection, throttle assessment, frame-rate
+  dip detection and the config schema — now exists in Rust as well as Python,
+  with tests that put the same questions to both and compare the answers. The
+  Python remains the shipped implementation; this is groundwork, and it is
+  what found the two fixes above. See `docs/rust-conversion.md`.
+
 ## [1.5.0] — 2026-09-03
 
 ### Added
