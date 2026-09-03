@@ -10,7 +10,7 @@
 # language independently. docs/dbus-interface-v1.xml is what makes that safe.
 [workspace]
 resolver = "2"
-members = ["crates/gmp-core", "crates/gmp-helper"]
+members = ["crates/gmp-cli", "crates/gmp-core", "crates/gmp-helper"]
 
 [workspace.package]
 version = "1.5.0"

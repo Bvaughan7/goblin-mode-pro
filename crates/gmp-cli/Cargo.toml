@@ -1,0 +1,17 @@
+[package]
+name = "gmp-cli"
+description = "Command-line surface for Goblin Mode Pro: selftest reporting"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+gmp-core = { path = "../gmp-core" }
+serde.workspace = true
+serde_json.workspace = true
+
+[lints.rust]
+unsafe_code = "forbid"
