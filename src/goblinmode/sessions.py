@@ -293,9 +293,14 @@ def _load_all() -> list[dict]:
     out = []
     for line in SESSION_FILE.read_text().splitlines():
         try:
-            out.append(json.loads(line))
+            row = json.loads(line)
         except json.JSONDecodeError:
             continue
+        # A line that parses but is not an object is not a record. It used to
+        # be appended anyway, and `history(exe)` then reached `.get` on it and
+        # raised - out of the session list the CLI and the GUI both show.
+        if isinstance(row, dict):
+            out.append(row)
     return out
 
 

@@ -165,13 +165,20 @@ class IncidentLog:
     def load_history(self, limit: int = 100) -> list[dict]:
         if not INCIDENT_FILE.exists():
             return []
+        # The trim is on the LINES, before parsing - deliberately unlike the
+        # session reader, which filters and trims after. An unparseable line
+        # inside the window has already spent one of the slots here.
         lines = INCIDENT_FILE.read_text().splitlines()[-limit:]
         out = []
         for line in lines:
             try:
-                out.append(json.loads(line))
+                row = json.loads(line)
             except json.JSONDecodeError:
                 continue
+            # A line that parses but is not an object is not an incident;
+            # handing one back reached `.get` on a number in the exporter.
+            if isinstance(row, dict):
+                out.append(row)
         return out
 
 

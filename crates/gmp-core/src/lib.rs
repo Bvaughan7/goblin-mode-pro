@@ -31,3 +31,4 @@ pub mod runner;
 pub mod scx;
 pub mod sessions;
 pub mod status;
+pub mod store;
