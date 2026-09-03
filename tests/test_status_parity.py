@@ -28,7 +28,7 @@ import subprocess
 import unittest
 from pathlib import Path
 
-from tests._support import _SRC  # noqa: F401
+from tests._support import _SRC, typed  # noqa: F401
 
 from goblinmode import daemon
 
@@ -44,29 +44,6 @@ def _binary() -> Path | None:
         if candidate.exists():
             return candidate
     return None
-
-
-def typed(value):
-    """A comparable that keeps what ``==`` throws away.
-
-    Two things here are user-visible and invisible to ordinary equality. The
-    readiness score's TYPE carries meaning - ``0`` and ``0.0`` print
-    differently - and Python says ``0 == 0.0 == -0.0``, so a comparison of the
-    parsed replies alone cannot see the clamp at all. Dict ordering is the
-    other: the counts are shown in a fixed order with unfamiliar statuses
-    appended, and ``==`` ignores order entirely.
-    """
-    if isinstance(value, bool):
-        return ("bool", value)
-    if isinstance(value, int):
-        return ("int", value)
-    if isinstance(value, float):
-        return ("float", repr(value))
-    if isinstance(value, dict):
-        return ("dict", [(k, typed(v)) for k, v in value.items()])
-    if isinstance(value, list):
-        return ("list", [typed(v) for v in value])
-    return (type(value).__name__, value)
 
 
 def chk(status, title="t", **over) -> dict:

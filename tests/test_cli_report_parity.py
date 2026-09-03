@@ -34,7 +34,7 @@ import subprocess
 import unittest
 from pathlib import Path
 
-from tests._support import _SRC  # noqa: F401
+from tests._support import _SRC, typed  # noqa: F401
 
 from goblinmode import cli
 
@@ -236,7 +236,8 @@ class BothImplementationsAgree(unittest.TestCase):
     def test_every_reply_renders_the_same_way(self):
         for label, payload in CASES.items():
             with self.subTest(label):
-                self.assertEqual(self._rust(payload), self._python(payload))
+                self.assertEqual(typed(self._rust(payload)),
+                                 typed(self._python(payload)))
 
     def test_the_corpus_reaches_every_line_of_every_report(self):
         """A corpus that never produces a line cannot pin its wording."""

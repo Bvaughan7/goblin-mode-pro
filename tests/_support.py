@@ -31,3 +31,28 @@ def write_mangohud_csv(path: Path, fps: list[float],
         row.append(f"{i * 200_000_000}")  # elapsed in ns
         lines.append(",".join(row) + "\n")
     path.write_text("".join(lines))
+
+
+def typed(value):
+    """A comparable that keeps what ``==`` throws away.
+
+    Parity tests diff two implementations' answers, and ordinary equality is
+    blind to two things those answers can differ in. A number's TYPE can carry
+    meaning - ``0`` and ``0.0`` render differently, and Python says
+    ``0 == 0.0 == -0.0`` - and dict equality ignores insertion order, which
+    several of these formats treat as significant because Python dicts do.
+
+    Found the hard way: two mutants survived a mutation run not because the
+    corpus was too small but because the comparison could not see them.
+    """
+    if isinstance(value, bool):
+        return ("bool", value)
+    if isinstance(value, int):
+        return ("int", value)
+    if isinstance(value, float):
+        return ("float", repr(value))
+    if isinstance(value, dict):
+        return ("dict", [(k, typed(v)) for k, v in value.items()])
+    if isinstance(value, list):
+        return ("list", [typed(v) for v in value])
+    return (type(value).__name__, value)

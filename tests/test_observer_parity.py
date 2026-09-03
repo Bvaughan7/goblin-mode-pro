@@ -29,7 +29,7 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
-from tests._support import _SRC  # noqa: F401
+from tests._support import _SRC, typed  # noqa: F401
 
 from goblinmode import observer
 from goblinmode.config import _from_dict
@@ -298,8 +298,8 @@ class BothImplementationsAgree(unittest.TestCase):
     def test_every_process_table_resolves_the_same_way(self):
         for label, (settings, procs) in CASES.items():
             with self.subTest(label):
-                self.assertEqual(self._rust(settings, procs),
-                                 self._python(settings, procs))
+                self.assertEqual(typed(self._rust(settings, procs)),
+                                 typed(self._python(settings, procs)))
 
     def test_the_corpus_covers_both_answers_for_every_mode(self):
         """A corpus that only ever matches would pass against a stub."""

@@ -31,7 +31,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from tests._support import _SRC  # noqa: F401
+from tests._support import _SRC, typed  # noqa: F401
 
 from goblinmode import runner
 from goblinmode.config import Settings, _from_dict
@@ -236,8 +236,8 @@ class BothImplementationsAgree(unittest.TestCase):
     def test_every_launch_resolves_the_same_way(self):
         for label, (settings, argv) in CASES.items():
             with self.subTest(label):
-                self.assertEqual(self._rust(settings, argv),
-                                 self._python(settings, argv))
+                self.assertEqual(typed(self._rust(settings, argv)),
+                                 typed(self._python(settings, argv)))
 
     def test_the_regex_divergence_is_exactly_where_it_is_documented(self):
         for label, (settings, argv) in REGEX_ONLY_IN_PYTHON.items():

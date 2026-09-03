@@ -33,7 +33,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from tests._support import _SRC  # noqa: F401
+from tests._support import _SRC, typed  # noqa: F401
 
 from goblinmode import payload
 
@@ -227,13 +227,14 @@ class BothImplementationsAgree(unittest.TestCase):
             tmp = Path(d) / "applied.json"
             for label, raw in CASES.items():
                 with self.subTest(label):
-                    self.assertEqual(self._rust(raw), self._python(raw, tmp))
+                    self.assertEqual(typed(self._rust(raw)),
+                                     typed(self._python(raw, tmp)))
 
     def test_an_absent_file_reads_the_same_way(self):
         import tempfile
         with tempfile.TemporaryDirectory() as d:
             tmp = Path(d) / "applied.json"
-            self.assertEqual(self._rust(None), self._python(None, tmp))
+            self.assertEqual(typed(self._rust(None)), typed(self._python(None, tmp)))
 
     def test_floats_render_the_way_python_renders_them(self):
         import tempfile

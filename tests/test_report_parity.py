@@ -32,7 +32,7 @@ import unittest
 import urllib.parse
 from pathlib import Path
 
-from tests._support import _SRC  # noqa: F401
+from tests._support import _SRC, typed  # noqa: F401
 
 from goblinmode import report
 
@@ -313,7 +313,8 @@ class BothImplementationsAgree(unittest.TestCase):
     def test_every_record_renders_the_same_way(self):
         for label, record in CASES.items():
             with self.subTest(label):
-                self.assertEqual(self._rust(record), self._python(record))
+                self.assertEqual(typed(self._rust(record)),
+                                 typed(self._python(record)))
 
     def test_every_works_for_me_note_renders_the_same_way(self):
         for label, (record, profile_json) in WORKS_FOR_ME.items():
