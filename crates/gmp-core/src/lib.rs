@@ -15,5 +15,6 @@ pub mod gamedetect;
 pub mod gpu;
 pub mod incidents;
 pub mod logrules;
+pub mod preflight;
 pub(crate) mod round;
 pub mod sessions;

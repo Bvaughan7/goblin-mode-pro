@@ -186,7 +186,8 @@ jobs:
                                 tests.test_sessions_parity \
                                 tests.test_gpu_parity \
                                 tests.test_gamedetect_parity \
-                                tests.test_capabilities_parity -v
+                                tests.test_capabilities_parity \
+                                tests.test_preflight_parity -v
 
       # Advisories, licences and dependency sources. See deny.toml for why
       # this runs before the tree is big.
