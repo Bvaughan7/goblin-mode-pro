@@ -25,6 +25,21 @@ is just as useful as one saying it does.
 
 ## Machines
 
+### The daemon's own interface
+
+Measured 2026-09-02 on the Dell G7 below with
+`python3 tests/conformance/daemon.py --apply`: **23 PASS / 0 FAIL / 9 SKIP**.
+
+The SKIPs are deliberate and permanent. Six methods are never called by the
+suite at all — they rewrite the user's per-game settings, delete files, or
+write boot configuration — and the three kernel-tunable ones are graded at the
+helper seam instead, where they can be applied and reverted against a snapshot.
+The remaining skip is behaviour with two games running at once, which needs two
+real games and is not reachable from a suite.
+
+The first run scored 1 FAIL: ignoring a game could not be undone. That is
+fixed, and the same check now verifies the fix.
+
 ### Both helper implementations, same machine, same score
 
 The privileged helper exists twice: the Python one that ships, and the Rust

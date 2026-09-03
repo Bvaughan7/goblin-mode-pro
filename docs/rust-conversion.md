@@ -197,7 +197,7 @@ Block by block, tracked in [issue #1](https://github.com/Bvaughan7/goblin-mode-p
 | **R2** | Cargo workspace, the polkit authorization path, the state snapshot, and all 19 methods as refusing stubs | **Done.** The binary serves the frozen contract; `--introspect` is graded byte for byte by the same canonicalizer the Python helper goes through |
 | **R3** | Port the hardware operations, group by group | **Done, and verified on hardware.** The Rust helper served the conformance suite live and scored identically to the Python one - 39/0 root, 19/0 unprivileged. See [verified hardware](verified-hardware.md) |
 | **H1** | One unit, symlinked implementation, rollback as a drop-in | **Done.** The unit runs `/usr/libexec/goblin-mode-pro/helper`, a symlink, verified on hardware. `install.sh --helper=rust` builds, contract-checks and installs the Rust binary; Python is installed either way so rolling back needs no toolchain |
-| **P2** | Freeze the daemon's session-bus interface, and grade it from outside | **Done.** `docs/dbus-daemon-interface-v1.xml` (28 methods, 5 signals, 3 properties) + `tests/conformance/daemon.py`. Baseline on real hardware: **23 PASS / 1 FAIL / 9 SKIP**, and the FAIL is a real bug it found |
+| **P2** | Freeze the daemon's session-bus interface, and grade it from outside | **Done.** `docs/dbus-daemon-interface-v1.xml` (29 methods, 5 signals, 3 properties) + `tests/conformance/daemon.py`. Baseline on real hardware: **23 PASS / 0 FAIL / 9 SKIP** — it was 1 FAIL on the first run, and that bug is fixed |
 | **H5** | `.deb` / `.rpm` become architecture-specific | **Done, differently.** Making the whole package architecture-specific would drop every non-x86 user of a package that is otherwise pure Python. The compiled helper is a separate optional x86_64 package instead; the main package stays `all`/`noarch` |
 
 The Rust sources live in `crates/gmp-helper/`. `cargo test` covers the polkit
@@ -228,13 +228,18 @@ What the port has found so far, none of which was in the plan:
   and this crate forbids `unsafe`. The pidfd's `/proc/self/fdinfo` entry
   answers the same question instead.
 
-Freezing the *daemon's* interface found one on its first run, which is the
-same thing the helper's freeze did: **ignoring a game cannot be undone.**
-`IgnoreGame` appends to `ignored_games` and nothing anywhere removes an entry -
-not the daemon, not the interface, not the GUI. `KeepGame` is not its inverse;
-it clears `auto_created` on a profile and never touches that list. A user who
-ignores a game by mistake has to hand-edit
-`~/.config/goblin-mode-pro/config.json` to get it back.
+Freezing the *daemon's* interface did the same thing on its first run:
+**ignoring a game could not be undone.** `IgnoreGame` appended to
+`ignored_games` and nothing anywhere removed an entry — not the daemon, not the
+interface, not the GUI, whose Ignore button was therefore a one-way door.
+`KeepGame` is not its inverse; it clears `auto_created` on a profile.
+
+Fixed by adding `UnignoreGame` plus a Restore control in the GUI. Two things
+that made it a better bug than it looked: the suite found it by *committing* it
+— the first version assumed `KeepGame` was the inverse and left a sentinel
+permanently in the settings of the machine it was grading — and the suite's
+round-trip now probes the inverse *before* using the forward operation, so a
+daemon too old to have it is skipped rather than damaged.
 
 Two bugs the Python helper once had are pinned by tests that fail if the
 translation reintroduces them: snapshotting before validating (a refused call

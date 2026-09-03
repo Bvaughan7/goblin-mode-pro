@@ -6,6 +6,24 @@ All notable changes to Goblin Mode Pro. Format loosely follows
 
 ## [Unreleased]
 
+### Added
+- The daemon's session-bus interface is now a frozen contract too
+  (`docs/dbus-daemon-interface-v1.xml`, 29 methods and 5 signals), checked on
+  every push, plus `tests/conformance/daemon.py` — a suite that drives the
+  daemon from outside and never imports its source. This is the second of the
+  project's two seams; the first, between the daemon and the root helper, was
+  frozen in 1.4.0. Nothing that rewrites settings, deletes files or changes
+  boot configuration is ever called by it.
+- **Ignored games can be un-ignored.** The Games page grows an "Ignored games"
+  section, shown only when there is one, with a Restore button per row.
+
+### Fixed
+- Ignoring a game was permanent. `IgnoreGame` added to the ignore list and
+  nothing — not the daemon, not its D-Bus interface, not the GUI — ever took an
+  entry back out, so the Ignore button was a one-way door and the only way back
+  was hand-editing `~/.config/goblin-mode-pro/config.json`. Found by the new
+  daemon conformance suite on its first run against real hardware.
+
 ## [1.4.0] — 2026-09-02
 
 ### Added
