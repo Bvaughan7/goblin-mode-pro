@@ -248,8 +248,8 @@ Block by block, tracked in [issue #1](https://github.com/Bvaughan7/goblin-mode-p
 | **H1** | One unit, symlinked implementation, rollback as a drop-in | **Done.** The unit runs `/usr/libexec/goblin-mode-pro/helper`, a symlink, verified on hardware. `install.sh --helper=rust` builds, contract-checks and installs the Rust binary; Python is installed either way so rolling back needs no toolchain |
 | **P2** | Freeze the daemon's session-bus interface, and grade it from outside | **Done.** `docs/dbus-daemon-interface-v1.xml` (29 methods, 5 signals, 3 properties) + `tests/conformance/daemon.py`. Baseline on real hardware: **23 PASS / 0 FAIL / 9 SKIP** — it was 1 FAIL on the first run, and that bug is fixed |
 | **P0** | State the widened scope publicly, and say plainly that the original justification does not extend to it | **Done.** This page, the README and the ROADMAP |
-| **P3** | `gmp-core` — the domain logic, tests translated first, module by module | Next. ~4,100 lines across 12 modules |
-| **P4** | `gmp-daemon` and `gmp-cli` | Not started. ~3,350 lines; port `selftest` early, it is what verifies the rest on hardware |
+| **P3** | `gmp-core` — the domain logic, tests translated first, module by module | **Done. All 12 modules**, each with a parity harness that asks both implementations the same questions and diffs the answers. 602 Python tests, 263 Rust |
+| **P4** | `gmp-daemon` and `gmp-cli` | Next. ~3,350 lines; port `selftest` early, it is what verifies the rest on hardware |
 | **P5** | `gmp-gui` — gtk4-rs, `ksni` for the tray, and the i18n msgids preserved character for character | Not started. ~3,300 lines |
 | **P6** | Cutover: delete the Python, repackage, re-verify every capability under Rust | Not started |
 | **H5** | `.deb` / `.rpm` become architecture-specific | **Done, differently.** Making the whole package architecture-specific would drop every non-x86 user of a package that is otherwise pure Python. The compiled helper is a separate optional x86_64 package instead; the main package stays `all`/`noarch` |
@@ -294,6 +294,49 @@ that made it a better bug than it looked: the suite found it by *committing* it
 permanently in the settings of the machine it was grading — and the suite's
 round-trip now probes the inverse *before* using the forward operation, so a
 daemon too old to have it is skipped rather than damaged.
+
+### What porting the domain logic found
+
+`gmp-core` is now complete: twelve modules, each with an `examples/` binary
+that reads JSON on stdin and prints JSON, and a parity test that puts the same
+questions to both implementations and diffs the answers. The point of building
+it that way is that a disagreement shows up as a test failure rather than as an
+opinion. Six of the twelve turned up something.
+
+- **A hand-broken config file crashed the daemon at startup.** `_from_dict`
+  caught `ValueError` and `TypeError` but not `AttributeError`, and three
+  shapes reach `.strip()` or `.setdefault()` on the wrong type: `exe` as a
+  number, `mangohud` as a list, `gamescope` as a string. The exception escaped
+  the loader entirely and took down whatever was reading the file — the daemon,
+  the GUI and the launch wrapper alike. The loop it escaped was written to
+  "drop a corrupt / hand-broken entry rather than fail to start".
+- **`^...$` accepts a trailing newline, in three validators.** Python's `$`
+  also matches just before a trailing newline, so `SCX_NAME_RE`,
+  `_ENV_NAME_RE` and `_ENV_VALUE_RE` all accepted a value their own character
+  classes were written to reject. Not an injection — interior newlines are
+  still refused, so no attacker-chosen second assignment can be produced — but
+  a name ending in a newline was emitted as `FOO\n=1` and read back by the
+  wrapper as `FOO` with an empty value, silently dropping the setting.
+- **Lutris detection never matched a running game.** `lutris-wrapper` renames
+  itself to `lutris-wrapper: <title>`, with a colon, and the pattern required
+  whitespace. Every Lutris game lost its launcher score and its display name.
+- **`round(x, 1)` diverged by a factor of ten** in the session statistics, and
+  the preflight advice shipped with ten spaces in the middle of a sentence —
+  both artefacts of generating Rust text from Python source without treating
+  the string as raw.
+- **Both of Python's dict-ordering rules turned out to be load-bearing** in the
+  display code: the first matching mode id wins, and re-assigning an existing
+  key keeps its position while replacing its value. A `HashMap` reproduces
+  neither.
+
+Two properties of the config format are reproduced deliberately even though
+both look like defects. **Unknown keys are dropped, not preserved** — a key
+written by a newer build does not survive an older build saving the file — and
+**nothing is type-coerced**, so a boolean field holding the string `"yes"`
+stays that string. A port that improved on either would round-trip files the
+Python would not, and the two would stop being interchangeable. Changing them
+is a schema decision to take on both sides at once, not a side effect of a
+rewrite.
 
 Two bugs the Python helper once had are pinned by tests that fail if the
 translation reintroduces them: snapshotting before validating (a refused call
