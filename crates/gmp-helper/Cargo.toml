@@ -1,6 +1,7 @@
 [package]
 name = "gmp-helper"
 description = "Privileged system helper for Goblin Mode Pro"
+publish.workspace = true
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

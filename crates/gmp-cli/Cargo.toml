@@ -1,6 +1,7 @@
 [package]
 name = "gmp-cli"
 description = "Command-line surface for Goblin Mode Pro: selftest reporting"
+publish.workspace = true
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

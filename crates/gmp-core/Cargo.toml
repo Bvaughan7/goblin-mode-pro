@@ -1,6 +1,7 @@
 [package]
 name = "gmp-core"
 description = "Domain logic for Goblin Mode Pro: no D-Bus, no sysfs policy, no GUI"
+publish.workspace = true
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

@@ -13,6 +13,11 @@ resolver = "2"
 members = ["crates/gmp-cli", "crates/gmp-core", "crates/gmp-helper"]
 
 [workspace.package]
+# Never published to crates.io: these crates ship inside the distro packages,
+# and gmp-helper is a privileged binary that should not be installable by
+# `cargo install` from a registry. Saying so also lets the sibling path
+# dependencies stay unversioned - see deny.toml.
+publish = false
 version = "1.5.0"
 edition = "2021"
 rust-version = "1.82"

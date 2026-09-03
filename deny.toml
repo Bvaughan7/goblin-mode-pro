@@ -25,6 +25,12 @@ confidence-threshold = 0.9
 # and are denied - an unpinned dependency makes a build unreproducible.
 multiple-versions = "warn"
 wildcards = "deny"
+# ...except between the crates in this workspace. A path dependency on a
+# sibling crate resolves to the tree, not to a registry, so a version
+# requirement on it constrains nothing - it is one more number to bump at
+# release time and one more way for a release to go out inconsistent. These
+# crates are not published to crates.io.
+allow-wildcard-paths = true
 
 [sources]
 # Everything comes from crates.io. A git dependency in a privileged binary
