@@ -215,7 +215,11 @@ pub const RULES: &[Rule] = &[
 ];
 
 /// What a scan found: one per matched rule, never one per matched line.
-#[derive(Debug, Clone, PartialEq, Eq)]
+///
+/// The field ORDER is the serialised order, and it matches the Python
+/// dataclass, because `AnalyzeLog` returns `f.__dict__` and a dict keeps
+/// insertion order. A reordering here is a visible change to that reply.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct Finding {
     pub rule_id: String,
     pub label: String,

@@ -37,6 +37,13 @@ pub struct DaemonState {
     /// is what a pending flush would cover.
     pub dirty_profiles: BTreeSet<String>,
 
+    /// The Steam app id of a running game whose profile carries one, or empty.
+    ///
+    /// Kept here rather than looked up per call because it comes from the poll
+    /// loop's view of what is running, which is state this owns. Empty is the
+    /// honest answer for a daemon that has not seen a game yet.
+    pub steam_app_id: String,
+
     /// Incidents this run has raised, newest last. They are also appended to
     /// the log on disk; this is what makes the current run's answer immediate
     /// rather than a re-read, and it is why an empty one falls back to disk.

@@ -208,9 +208,20 @@ impl Api {
         Err(not_implemented("ExportLastIncident"))
     }
 
+    /// What the newest Wine/Proton log says went wrong.
+    ///
+    /// The Steam app id sharpens a couple of rules, and it comes from the
+    /// profile of a game that is currently running - so a daemon with nothing
+    /// running passes an empty one, which is what the Python does too when no
+    /// matched game has an app id.
     #[zbus(out_args("json"))]
     async fn analyze_log(&self) -> Result<String> {
-        Err(not_implemented("AnalyzeLog"))
+        let Some(text) = self.store.newest_log()? else {
+            return Ok("[]".to_string());
+        };
+        let app_id = self.state.lock().await.steam_app_id.clone();
+        let findings = gmp_core::logrules::analyze_text(&text, &app_id);
+        serde_json::to_string(&findings).map_err(|err| DaemonError::Failed(err.to_string()))
     }
 
     #[zbus(out_args("path"))]
@@ -378,6 +389,7 @@ mod tests {
         });
         resolved.session_file = dir.join("sessions.jsonl").to_string_lossy().into_owned();
         resolved.incident_file = dir.join("incidents.jsonl").to_string_lossy().into_owned();
+        resolved.game_log_dir = dir.join("logs").to_string_lossy().into_owned();
         Api::with_store(
             Arc::new(Mutex::new(DaemonState::default())),
             Store::at(resolved),
@@ -425,6 +437,41 @@ mod tests {
             api.get_incidents().await.unwrap(),
             r#"[{"kind":"thermal"}]"#
         );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[tokio::test]
+    async fn analyze_log_reads_the_newest_log_and_reports_findings() {
+        let dir = tempdir();
+        let api = api_over(&dir);
+        let logs = std::path::Path::new(api.store.paths().game_log_dir.as_str());
+        std::fs::create_dir_all(logs).unwrap();
+        std::fs::write(
+            logs.join("game.log"),
+            // A line the shipped rules really match - `vram_oom`.
+            "wine: VK_ERROR_OUT_OF_DEVICE_MEMORY allocating swapchain\n",
+        )
+        .unwrap();
+
+        let reply = api.analyze_log().await.unwrap();
+        let findings: serde_json::Value = serde_json::from_str(&reply).unwrap();
+        assert!(!findings.as_array().unwrap().is_empty(), "{reply}");
+        // The reply is a list of the dataclass's own fields, in its order.
+        let first = &findings[0];
+        for key in [
+            "rule_id", "label", "category", "cause", "fix", "severity", "count", "sample",
+            "fix_cmd",
+        ] {
+            assert!(first.get(key).is_some(), "{key} missing from {reply}");
+        }
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[tokio::test]
+    async fn analyze_log_with_no_log_is_an_empty_list_not_an_error() {
+        let dir = tempdir();
+        let api = api_over(&dir);
+        assert_eq!(api.analyze_log().await.unwrap(), "[]");
         std::fs::remove_dir_all(&dir).ok();
     }
 
