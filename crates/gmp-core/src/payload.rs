@@ -183,6 +183,146 @@ pub fn wanted(active: &[GameProfile], on_battery: bool, tdp_backend: Option<&str
     }
 }
 
+/// What the governor and EPP are set to for a game.
+pub const PERFORMANCE_GOVERNOR: &str = "performance";
+pub const PERFORMANCE_EPP: &str = "performance";
+
+/// The privileged tweaks currently in force, as the caller records them.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct HelperState {
+    /// Whether the helper has been asked for anything at all that still
+    /// stands. What decides between re-applying and putting it all back.
+    pub tweaks_applied: bool,
+    pub power_applied: bool,
+    /// `"rapl"` or `"ryzenadj"`, whichever set the limit that is in force.
+    pub power_backend: Option<String>,
+    /// Exactly what was last asked for, in that backend's units.
+    pub power_values: Option<(i64, i64)>,
+    pub fan_spinup_applied: bool,
+}
+
+/// One call to the privileged helper.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(tag = "call", rename_all = "PascalCase")]
+pub enum HelperStep {
+    SetGovernor {
+        governor: String,
+    },
+    #[serde(rename = "SetEPP")]
+    SetEpp {
+        epp: String,
+    },
+    ResetPowerLimits,
+    #[serde(rename = "ResetTDP")]
+    ResetTdp,
+    SetPowerLimits {
+        pl1_uw: i64,
+        pl2_uw: i64,
+    },
+    #[serde(rename = "SetTDP")]
+    SetTdp {
+        watts: i64,
+    },
+    SpinUpFans {
+        percent: i64,
+    },
+    /// Undo the lot, off the helper's own root-owned snapshot.
+    RevertAll,
+}
+
+/// How hard the fans are asked to spin. All of it - this is a game starting.
+pub const FAN_SPINUP_PERCENT: i64 = 100;
+
+/// The privileged calls this recompute implies, in order.
+///
+/// A plan rather than a sequence of calls, so the ORDER and the conditions can
+/// be diffed against the Python without a helper, a bus or a machine.
+///
+/// Three arms, not two, and the third is easy to miss because it is an `elif`
+/// six lines below the other in the Python. When NOTHING wants the helper any
+/// more, what happens is not "an apply with nothing in it" - it is
+/// `RevertAll`, which undoes the governor and the limits together off the
+/// helper's own snapshot. An earlier draft of this function modelled only the
+/// apply, and with a stale state it answered `ResetPowerLimits` where the
+/// Python reverts everything.
+///
+/// Within the apply, the rule worth stating is the reset. A power limit that
+/// is applied and is no longer what is wanted - a different backend, different
+/// numbers, or dropped entirely because the game that asked for it exited - is
+/// undone FIRST. Without that a raised TDP leaks until the LAST game exits,
+/// which on a laptop means it stays raised through everything the user does
+/// next.
+///
+/// The governor is deliberately NOT reset alongside it: another game may still
+/// want it, and the last one leaving is what `RevertAll` is for.
+pub fn helper_plan(wanted: &Wanted, state: &HelperState) -> Vec<HelperStep> {
+    if !wanted.helper {
+        return if state.tweaks_applied {
+            vec![HelperStep::RevertAll]
+        } else {
+            Vec::new()
+        };
+    }
+
+    let mut plan = Vec::new();
+    if wanted.governor {
+        plan.push(HelperStep::SetGovernor {
+            governor: PERFORMANCE_GOVERNOR.to_string(),
+        });
+        plan.push(HelperStep::SetEpp {
+            epp: PERFORMANCE_EPP.to_string(),
+        });
+    }
+
+    let want = wanted.power.as_ref().map(|power| {
+        let backend = match power.backend {
+            PowerBackend::Rapl => "rapl",
+            PowerBackend::Ryzenadj => "ryzenadj",
+        };
+        (backend.to_string(), (power.first, power.second))
+    });
+    let have = state
+        .power_applied
+        .then(|| (state.power_backend.clone(), state.power_values));
+    let have_matches = match (&have, &want) {
+        (Some((backend, values)), Some((wanted_backend, wanted_values))) => {
+            backend.as_deref() == Some(wanted_backend.as_str())
+                && values.as_ref() == Some(wanted_values)
+        }
+        _ => false,
+    };
+    if state.power_applied && !have_matches {
+        plan.push(match state.power_backend.as_deref() {
+            Some("ryzenadj") => HelperStep::ResetTdp,
+            _ => HelperStep::ResetPowerLimits,
+        });
+    }
+
+    if let Some(power) = &wanted.power {
+        match power.backend {
+            // One number, and zero watts is not a request - asking for it
+            // would cap the machine at nothing.
+            PowerBackend::Ryzenadj if power.first != 0 => {
+                plan.push(HelperStep::SetTdp { watts: power.first });
+            }
+            PowerBackend::Ryzenadj => {}
+            PowerBackend::Rapl => plan.push(HelperStep::SetPowerLimits {
+                pl1_uw: power.first,
+                pl2_uw: power.second,
+            }),
+        }
+    }
+
+    // Asked for once. A second request while the fans are already spun up is
+    // a call that changes nothing.
+    if wanted.fan_spinup && !state.fan_spinup_applied {
+        plan.push(HelperStep::SpinUpFans {
+            percent: FAN_SPINUP_PERCENT,
+        });
+    }
+    plan
+}
+
 /// What the scheduler needs doing, given what is running and what is applied.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 #[serde(tag = "action", rename_all = "snake_case")]
@@ -417,6 +557,207 @@ mod tests {
         assert_eq!(
             wanted(&both, false, None).vrr_outputs,
             Some(vec!["DP-1".to_string()])
+        );
+    }
+
+    fn plan_for(raw: serde_json::Value, state: HelperState) -> Vec<HelperStep> {
+        let active = one(raw);
+        helper_plan(&wanted(&active, false, Some("rapl")), &state)
+    }
+
+    #[test]
+    fn wanting_the_governor_sets_it_and_the_epp_together() {
+        // EPP is the finer knob and on intel_pstate it is the one that
+        // actually moves; setting the governor without it does half the job.
+        let plan = plan_for(
+            json!({"exe": "a", "governor_boost": true}),
+            HelperState::default(),
+        );
+        assert_eq!(
+            plan,
+            vec![
+                HelperStep::SetGovernor {
+                    governor: "performance".into()
+                },
+                HelperStep::SetEpp {
+                    epp: "performance".into()
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn a_power_limit_that_changed_is_reset_before_it_is_re_applied() {
+        // Otherwise the raised TDP leaks until the LAST game exits, which on
+        // a laptop means it stays raised through whatever comes next.
+        let state = HelperState {
+            power_applied: true,
+            power_backend: Some("rapl".into()),
+            power_values: Some((45_000_000, 60_000_000)),
+            ..HelperState::default()
+        };
+        let plan = plan_for(
+            json!({"exe": "a", "governor_boost": false, "power_limit_enabled": true,
+                   "pl1_w": 55, "pl2_w": 60}),
+            state,
+        );
+        assert_eq!(
+            plan,
+            vec![
+                HelperStep::ResetPowerLimits,
+                HelperStep::SetPowerLimits {
+                    pl1_uw: 55_000_000,
+                    pl2_uw: 60_000_000
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn an_unchanged_power_limit_is_not_reset() {
+        let state = HelperState {
+            power_applied: true,
+            power_backend: Some("rapl".into()),
+            power_values: Some((45_000_000, 60_000_000)),
+            ..HelperState::default()
+        };
+        let plan = plan_for(
+            json!({"exe": "a", "governor_boost": false, "power_limit_enabled": true,
+                   "pl1_w": 45, "pl2_w": 60}),
+            state,
+        );
+        assert_eq!(
+            plan,
+            vec![HelperStep::SetPowerLimits {
+                pl1_uw: 45_000_000,
+                pl2_uw: 60_000_000
+            }]
+        );
+    }
+
+    #[test]
+    fn a_power_limit_nobody_wants_any_more_is_reset_and_not_replaced() {
+        // The two-game case: the one that asked for headroom exits, the one
+        // that only wanted the governor stays. The helper is still wanted, so
+        // this is not the RevertAll arm - and the limit still has to come off,
+        // or it stands until the LAST game exits.
+        let state = HelperState {
+            tweaks_applied: true,
+            power_applied: true,
+            power_backend: Some("rapl".into()),
+            power_values: Some((45_000_000, 60_000_000)),
+            ..HelperState::default()
+        };
+        let plan = plan_for(json!({"exe": "a", "governor_boost": true}), state);
+        assert_eq!(
+            plan,
+            vec![
+                HelperStep::SetGovernor {
+                    governor: "performance".into()
+                },
+                HelperStep::SetEpp {
+                    epp: "performance".into()
+                },
+                HelperStep::ResetPowerLimits,
+            ]
+        );
+    }
+
+    #[test]
+    fn a_backend_change_resets_through_the_old_backend() {
+        // ResetTDP undoes ryzenadj; ResetPowerLimits undoes RAPL. Resetting
+        // through the new one would leave the old limit in place.
+        let state = HelperState {
+            power_applied: true,
+            power_backend: Some("ryzenadj".into()),
+            power_values: Some((45, 0)),
+            ..HelperState::default()
+        };
+        let active = one(json!({"exe": "a", "governor_boost": false,
+                                "power_limit_enabled": true, "pl1_w": 55}));
+        let plan = helper_plan(&wanted(&active, false, Some("rapl")), &state);
+        assert_eq!(plan[0], HelperStep::ResetTdp);
+    }
+
+    #[test]
+    fn ryzenadj_asks_for_zero_watts_never() {
+        // Zero is "no opinion"; asking for it would cap the machine at
+        // nothing. The Python guards the call the same way.
+        //
+        // Built by hand rather than from a profile, because no profile can
+        // produce it: `GameProfile` truncates and clamps every wattage into
+        // [0, 500] on both sides, so an ask that survives to here is at least
+        // one whole watt and `wanted` would answer `helper: false` for
+        // anything less. The guard is unreachable while that clamp stands and
+        // is kept because the Python keeps it - if either side ever stops
+        // clamping, this is what stops a zero going out.
+        let asked = Wanted {
+            governor: false,
+            power: Some(Power {
+                backend: PowerBackend::Ryzenadj,
+                first: 0,
+                second: 0,
+            }),
+            fan_spinup: false,
+            helper: true,
+            tearing: false,
+            adaptive_sync: false,
+            vrr_outputs: None,
+            refresh_cap: None,
+            focus_mode: false,
+        };
+        assert!(helper_plan(&asked, &HelperState::default()).is_empty());
+    }
+
+    #[test]
+    fn the_fans_are_asked_once() {
+        let raw = json!({"exe": "a", "governor_boost": false,
+                         "fan_spinup_enabled": true});
+        assert_eq!(
+            plan_for(raw.clone(), HelperState::default()),
+            vec![HelperStep::SpinUpFans { percent: 100 }]
+        );
+        let already = HelperState {
+            fan_spinup_applied: true,
+            ..HelperState::default()
+        };
+        assert!(plan_for(raw, already).is_empty());
+    }
+
+    #[test]
+    fn nothing_wanted_and_nothing_applied_is_no_calls_at_all() {
+        assert!(helper_plan(&wanted(&[], false, None), &HelperState::default()).is_empty());
+    }
+
+    #[test]
+    fn nothing_wanted_any_more_puts_everything_back_at_once() {
+        // Not a reset of the power limit alone: the last game has gone, so
+        // the governor goes back too, and RevertAll does both off the
+        // helper's own snapshot rather than off anything recorded here.
+        let state = HelperState {
+            tweaks_applied: true,
+            power_applied: true,
+            power_backend: Some("rapl".into()),
+            power_values: Some((45_000_000, 60_000_000)),
+            fan_spinup_applied: true,
+        };
+        assert_eq!(
+            helper_plan(&wanted(&[], false, None), &state),
+            vec![HelperStep::RevertAll]
+        );
+    }
+
+    #[test]
+    fn a_quiet_profile_reverts_what_a_loud_one_left() {
+        // The daemon's own case: two games, the one that wanted everything
+        // exits, and the recompute runs with only the quiet one left.
+        let state = HelperState {
+            tweaks_applied: true,
+            ..HelperState::default()
+        };
+        assert_eq!(
+            plan_for(json!({"exe": "a", "governor_boost": false}), state),
+            vec![HelperStep::RevertAll]
         );
     }
 

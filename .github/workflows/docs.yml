@@ -3,7 +3,7 @@ name: Docs
 on:
   push:
     branches: [main]
-    paths: ["docs/**", "mkdocs.yml", ".github/workflows/docs.yml"]
+    paths: ["docs/**", "mkdocs.yml", "web/**", ".github/workflows/docs.yml"]
   workflow_dispatch:
 
 permissions:
@@ -25,6 +25,13 @@ jobs:
           python-version: "3.12"
       - run: pip install mkdocs-material
       - run: mkdocs build
+      - name: Deploy custom showcase website to site root
+        run: |
+          mkdir -p site/docs-home
+          cp site/index.html site/docs-home/index.html
+          cp web/index.html site/index.html
+          mkdir -p site/assets
+          cp -r web/assets/* site/assets/
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site

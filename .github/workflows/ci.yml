@@ -166,10 +166,17 @@ jobs:
       # imports psutil at module scope - so this job needs it too. Assuming
       # the pure-stdlib property would hold for every module is what broke
       # this job the first time.
+      #
+      # PyGObject for the same reason, one module further along: `payload`
+      # imports the helper client, which imports Gio at module scope, and the
+      # payload parity test now records what that client would put on the bus.
+      # It was already an undeclared dependency - the runner image happened to
+      # carry it - and a job that passes by accident is one that breaks on a
+      # runner image change for reasons nobody can see.
       - name: Install what the parity tests import
         run: |
           sudo apt-get update
-          sudo apt-get install -y python3-psutil
+          sudo apt-get install -y python3-psutil python3-gi gir1.2-glib-2.0
 
       - name: Formatting
         run: cargo fmt --check

@@ -146,7 +146,7 @@ class MainWindow(Adw.ApplicationWindow):
                        "the CPU, compositor and Proton for a game, reverts on "
                        "exit, and turns thermal / frame-rate / Proton-log "
                        "problems into a plain-language report."),
-            website="https://github.com/Bvaughan7/goblin-mode-pro",
+            website="https://bvaughan7.github.io/goblin-mode-pro/",
             issue_url="https://github.com/Bvaughan7/goblin-mode-pro/issues",
         )
         # "Troubleshooting -> Debug Information" in the About dialog, which is

@@ -56,9 +56,21 @@ def p(exe: str, **over) -> dict:
     return {"exe": exe, **over}
 
 
-def case(profiles, on_battery=False, tdp_backend=None, scx_applied=None) -> dict:
+#: Nothing applied yet - a machine where the first game just started.
+FRESH = {"tweaks_applied": False, "power_applied": False, "power_backend": None,
+         "power_values": None, "fan_spinup_applied": False}
+
+
+def applied(**over) -> dict:
+    """A helper state with something already in force."""
+    return {**FRESH, "tweaks_applied": True, **over}
+
+
+def case(profiles, on_battery=False, tdp_backend=None, scx_applied=None,
+         helper_state=None) -> dict:
     return {"profiles": profiles, "on_battery": on_battery,
-            "tdp_backend": tdp_backend, "scx_applied": scx_applied}
+            "tdp_backend": tdp_backend, "scx_applied": scx_applied,
+            "helper_state": helper_state or FRESH}
 
 
 #: `governor_boost` defaults to True, so a profile that is meant to want
@@ -189,6 +201,86 @@ CASES = {
     "scx_same_scheduler_different_modes": case([
         p("a", **QUIET, scx_scheduler="rusty", scx_mode="powersave"),
         p("b", **QUIET, scx_scheduler="rusty", scx_mode="gaming")]),
+    # -- what the helper is asked to DO, given what it has already done -------
+    #
+    # Everything above starts from a machine where nothing has been applied,
+    # which is the first recompute after a game starts. These are the later
+    # ones, where the answer depends on what is already in force.
+    "helper_wanted_and_already_applied": case(
+        [p("a", governor_boost=True)], helper_state=applied()),
+    # The `elif` six lines below the apply: the last game wanting the helper
+    # has gone, so this is not an apply with nothing in it - it is RevertAll.
+    "nothing_wanted_any_more": case([p("a", **QUIET)], helper_state=applied()),
+    "nothing_wanted_and_nothing_applied": case([p("a", **QUIET)]),
+    "no_games_left_at_all": case([], helper_state=applied()),
+    "the_power_limit_changed": case(
+        [p("a", **QUIET, power_limit_enabled=True, pl1_w=55, pl2_w=60)],
+        tdp_backend="rapl",
+        helper_state=applied(power_applied=True, power_backend="rapl",
+                             power_values=[45_000_000, 60_000_000])),
+    "the_power_limit_did_not_change": case(
+        [p("a", **QUIET, power_limit_enabled=True, pl1_w=45, pl2_w=60)],
+        tdp_backend="rapl",
+        helper_state=applied(power_applied=True, power_backend="rapl",
+                             power_values=[45_000_000, 60_000_000])),
+    # The two-game case: the one that asked for headroom exits, the one that
+    # only wanted the governor stays. The limit still has to come off, or it
+    # stands until the LAST game exits.
+    "the_power_limit_is_no_longer_wanted": case(
+        [p("a", governor_boost=True)],
+        helper_state=applied(power_applied=True, power_backend="rapl",
+                             power_values=[45_000_000, 60_000_000])),
+    "the_backend_changed_under_the_limit": case(
+        [p("a", **QUIET, power_limit_enabled=True, pl1_w=55)],
+        tdp_backend="rapl",
+        helper_state=applied(power_applied=True, power_backend="ryzenadj",
+                             power_values=[45, 0])),
+    # Both halves of "is what is applied still what is wanted" need their own
+    # case, and this is the one that isolates the backend: the numbers are
+    # unchanged and only the backend moved. The recorded pair is not a
+    # plausible RAPL reading - RAPL records microwatts - but a state nobody
+    # can reach is still the only probe that separates the two halves, and a
+    # mutation run found this exact gap: comparing the numbers alone passed
+    # every other case in the file.
+    "the_backend_changed_but_the_numbers_did_not": case(
+        [p("a", **QUIET, power_limit_enabled=True, pl1_w=55)],
+        tdp_backend="ryzenadj",
+        helper_state=applied(power_applied=True, power_backend="rapl",
+                             power_values=[55, 0])),
+    "a_ryzenadj_limit_is_reset_through_ryzenadj": case(
+        [p("a", **QUIET, power_limit_enabled=True, pl1_w=55)],
+        tdp_backend="ryzenadj",
+        helper_state=applied(power_applied=True, power_backend="ryzenadj",
+                             power_values=[45, 0])),
+    # A backend recorded as nothing still resets, through RAPL - which is what
+    # the `else` on both sides says, and the only way to undo an unknown one.
+    "the_limit_was_applied_by_nothing_in_particular": case(
+        [p("a", **QUIET, power_limit_enabled=True, pl1_w=55, pl2_w=60)],
+        tdp_backend="rapl", helper_state=applied(power_applied=True)),
+    "the_fans_are_already_spun_up": case(
+        [p("a", **QUIET, fan_spinup_enabled=True)],
+        helper_state=applied(fan_spinup_applied=True)),
+    "the_fans_are_not_spun_up_yet": case(
+        [p("a", **QUIET, fan_spinup_enabled=True)], helper_state=applied()),
+    # A sub-watt ask is no ask: `GameProfile.__post_init__` truncates every
+    # wattage to a whole number and clamps it into [0, 500], on both sides, so
+    # 0.4 arrives here as 0 and the helper is never wanted. Worth a case in
+    # each backend because it is what makes the zero-watt guard inside the
+    # ryzenadj branch unreachable in practice - the plan can never be asked
+    # for zero watts while that clamp stands.
+    "a_sub_watt_ask_reaches_ryzenadj_as_nothing": case(
+        [p("a", **QUIET, power_limit_enabled=True, pl1_w=0.4)],
+        tdp_backend="ryzenadj"),
+    "a_sub_watt_ask_reaches_rapl_as_nothing": case(
+        [p("a", **QUIET, power_limit_enabled=True, pl1_w=0.4)],
+        tdp_backend="rapl"),
+    # Same clamp, from the other end: a negative wattage is not a request for
+    # less than nothing. It matters because the helper takes these as UNSIGNED
+    # - `GLib.Variant("(tt)", (-5000000, 0))` raises OverflowError, which is
+    # not HelperUnavailable and would abandon the rest of the recompute.
+    "a_negative_ask_is_clamped_before_it_gets_here": case(
+        [p("a", **QUIET, power_limit_enabled=True, pl1_w=-5)],
+        tdp_backend="rapl"),
     "three_games": case([
         p("a", **QUIET, refresh_rate_hz=240),
         p("b", **QUIET, refresh_rate_hz=60, tearing_enabled=True),
@@ -215,7 +307,34 @@ class BothImplementationsAgree(unittest.TestCase):
         return json.loads(r.stdout)
 
     @staticmethod
-    def _python(payload: dict) -> dict:
+    def _manager(profiles, state: dict):
+        """A `PerformancePayload` with nothing but its bookkeeping set.
+
+        `state` is what the helper has already been asked for and is still in
+        force. Everything else starts clean, which is what a first recompute
+        sees; the compositor recorder below refuses a restore for that reason.
+        """
+        manager = payload_mod.PerformancePayload.__new__(
+            payload_mod.PerformancePayload)
+        manager._active = {profile.exe: profile for profile in profiles}
+        values = state["power_values"]
+        for field, value in (
+            ("_helper_tweaks_applied", state["tweaks_applied"]),
+            ("_governor_applied", False),
+            ("_power_applied", state["power_applied"]),
+            ("_power_backend", state["power_backend"]),
+            ("_power_values", tuple(values) if values is not None else None),
+            ("_fan_spinup_applied", state["fan_spinup_applied"]),
+            ("_tearing_applied", False), ("_vrr_applied", False),
+            ("_refresh_cap_applied", False), ("_focus_applied", False),
+            ("_scx_applied", None), ("_scx_previous", None),
+        ):
+            setattr(manager, field, value)
+        manager._incident = lambda *_a: None
+        return manager
+
+    @classmethod
+    def _python(cls, payload: dict) -> dict:
         """Drive the REAL `_recompute_global` and record what it asks for.
 
         Its decisions cannot be read off a return value - it decides and acts
@@ -225,18 +344,7 @@ class BothImplementationsAgree(unittest.TestCase):
         `_recompute_global` changes what gets recorded here.
         """
         profiles = _from_dict({"profiles": payload["profiles"]}).profiles
-        manager = payload_mod.PerformancePayload.__new__(
-            payload_mod.PerformancePayload)
-        manager._active = {profile.exe: profile for profile in profiles}
-        for field, value in (
-            ("_helper_tweaks_applied", False), ("_governor_applied", False),
-            ("_power_applied", False), ("_power_backend", None),
-            ("_power_values", None), ("_fan_spinup_applied", False),
-            ("_tearing_applied", False), ("_vrr_applied", False),
-            ("_refresh_cap_applied", False), ("_focus_applied", False),
-            ("_scx_applied", None), ("_scx_previous", None),
-        ):
-            setattr(manager, field, value)
+        manager = cls._manager(profiles, FRESH)
 
         asked: dict = {}
 
@@ -271,8 +379,9 @@ class BothImplementationsAgree(unittest.TestCase):
         manager._scx_previous = None
         scx = _ScxRecorder()
         manager.scx = scx
-        manager._incident = lambda *_a: None
         manager._recompute_scx()
+
+        helper_calls = cls._helper_calls(profiles, payload)
 
         wanted = {
             "governor": asked.get("governor", False),
@@ -295,7 +404,71 @@ class BothImplementationsAgree(unittest.TestCase):
             # through what it then does. `scx_action` IS that, and it is
             # driven by the real code; the choice has its own Rust unit tests.
             "scx_action": scx.action(payload["scx_applied"]),
+            "helper_calls": helper_calls,
         }
+
+    @classmethod
+    def _helper_calls(cls, profiles, payload: dict) -> list:
+        """What the privileged helper is actually asked to do, in order.
+
+        A second pass over the same case, because the first one stubs
+        `_apply_helper_tweaks` out to read its arguments and this one needs it
+        to run. It is the same real `_recompute_global`, so all three of its
+        helper arms are exercised by the code rather than by a description of
+        it - including the one that is easy to miss, the `elif` that reverts
+        EVERYTHING when the last game wanting the helper has gone.
+
+        Recorded at `HelperClient._call`: the single place the shipped client
+        turns a decision into a D-Bus method name and a packed variant. So the
+        names and the argument order in this list came out of the client, not
+        out of this test - which is the point, because the Rust plan is
+        compared against them.
+        """
+        manager = cls._manager(profiles, payload["helper_state"])
+        calls = _HelperCalls()
+        manager.helper = calls.client()
+        manager.compositor = _Recorder()
+        manager.focus = _Recorder()
+        on_ac = not payload["on_battery"]
+        with patch("goblinmode.capabilities.on_ac_power", return_value=on_ac), \
+                patch.object(payload_mod.PerformancePayload, "_tdp_backend",
+                             lambda _self: payload["tdp_backend"]), \
+                patch.object(payload_mod.PerformancePayload, "_recompute_scx",
+                             lambda _self: None):
+            manager._recompute_global()
+        return calls.recorded
+
+
+class _HelperCalls:
+    """Records what the real client would have put on the bus.
+
+    Every reply is a truthy one. A helper that answered False is a different
+    question - the Python then leaves the corresponding flag unset - and it
+    belongs to the applying, not to the deciding this file diffs.
+    """
+
+    def __init__(self):
+        self.recorded: list = []
+
+    def client(self):
+        from goblinmode.ipc.helper_client import HelperClient
+
+        client = HelperClient.__new__(HelperClient)
+        client._call = self._record  # never reaches _get_proxy, so no bus
+        return client
+
+    def _record(self, method: str, params=None):
+        self.recorded.append([method,
+                              list(params.unpack()) if params is not None else []])
+        return _Reply()
+
+
+class _Reply:
+    """A `GLib.Variant`-shaped answer: the client unpacks and takes [0]."""
+
+    @staticmethod
+    def unpack():
+        return (True,)
 
 
 class _ScxRecorder:
@@ -394,6 +567,33 @@ class Comparison(BothImplementationsAgree):
         self.assertEqual(backends, {None, "rapl", "ryzenadj"})
         self.assertEqual(caps, {True, False})
         self.assertEqual(outputs, {True, False})
+
+    def test_every_helper_call_is_produced_by_something(self):
+        """A plan the corpus never asks for is a plan nobody is checking.
+
+        The pass that added helper calls to this file found two of these: the
+        reset arms were dead until cases with something already applied
+        existed, and `RevertAll` - the arm that is an `elif` six lines below
+        the apply, not part of it - was reachable by no case at all.
+        """
+        produced = {call for payload in CASES.values()
+                    for call, _args in self._python(payload)["helper_calls"]}
+        self.assertEqual(
+            produced,
+            {"SetGovernor", "SetEPP", "SetPowerLimits", "SetTDP",
+             "ResetPowerLimits", "ResetTDP", "SpinUpFans", "RevertAll"},
+        )
+
+    def test_a_stale_power_limit_comes_off_before_the_new_one_goes_on(self):
+        """Order, not just membership: reset FIRST, or the raise leaks.
+
+        Undoing after re-applying would put the old limit back and leave it
+        standing until the last game exits - on a laptop, through everything
+        the user does next.
+        """
+        calls = [call for call, _args in
+                 self._rust(CASES["the_power_limit_changed"])["helper_calls"]]
+        self.assertEqual(calls, ["ResetPowerLimits", "SetPowerLimits"])
 
     def test_the_two_opposite_rules_really_are_opposite(self):
         """Highest power limit, lowest refresh cap - six lines apart."""

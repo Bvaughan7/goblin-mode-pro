@@ -23,8 +23,9 @@ cause. It's the missing piece between "I can see the problem" and "it's fixed."
 ![CI](https://github.com/Bvaughan7/goblin-mode-pro/actions/workflows/ci.yml/badge.svg)
 ![helper](https://img.shields.io/badge/root_helper-polkit_hardened-4E6A24)
 ![distros](https://img.shields.io/badge/distros-any_systemd-266F64)
+[![Website](https://img.shields.io/badge/website-online-2ea043)](https://bvaughan7.github.io/goblin-mode-pro/)
 
-**[Documentation](https://bvaughan7.github.io/goblin-mode-pro/)** · [Getting started](https://bvaughan7.github.io/goblin-mode-pro/getting-started/) · [Command line](https://bvaughan7.github.io/goblin-mode-pro/cli/) · [Troubleshooting](https://bvaughan7.github.io/goblin-mode-pro/troubleshooting/)
+**[Website & Showcase](https://bvaughan7.github.io/goblin-mode-pro/)** · [Documentation](https://bvaughan7.github.io/goblin-mode-pro/getting-started/) · [Command line](https://bvaughan7.github.io/goblin-mode-pro/cli/) · [Troubleshooting](https://bvaughan7.github.io/goblin-mode-pro/troubleshooting/)
 
 <img src="docs/demo.gif" alt="Walkthrough of all four tabs: per-game settings, the system pre-flight check, the dashboard as a game launches and the boost engages, and Diagnostics catching a temperature climb and a flagged FPS regression before everything reverts." width="620">
 
