@@ -183,6 +183,77 @@ pub fn wanted(active: &[GameProfile], on_battery: bool, tdp_backend: Option<&str
     }
 }
 
+/// What the scheduler needs doing, given what is running and what is applied.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(tag = "action", rename_all = "snake_case")]
+pub enum ScxAction {
+    /// Already on the right scheduler, or nobody wants one and none is set.
+    Nothing,
+    /// Nobody wants one any more. Put the machine back.
+    Restore,
+    Switch {
+        scheduler: String,
+        mode: String,
+        /// Whether to record what is running FIRST. Only on the way in from
+        /// nothing: a game that died with a sched_ext scheduler loaded leaves
+        /// the WHOLE MACHINE on it, so the revert has to restore what was
+        /// there rather than guess, and overwriting the record on a
+        /// scheduler-to-scheduler switch would lose the original.
+        remember_previous: bool,
+    },
+}
+
+/// The scheduler the active set asks for, and the mode to run it in.
+///
+/// Refcounted like the rest, with one extra rule: if two games disagree, the
+/// first when sorted wins. That is arbitrary but it is DETERMINISTIC, and the
+/// alternative is the pair flapping the machine's scheduler between them for
+/// as long as both are running.
+pub fn scx_choice(active: &[GameProfile]) -> Option<(String, String)> {
+    let mut wanting: Vec<(String, String)> = active
+        .iter()
+        .filter(|p| truthy(&p.scx_scheduler))
+        .map(|p| {
+            (
+                p.scx_scheduler.as_str().unwrap_or_default().to_string(),
+                // The fallback is unreachable in practice and kept for the
+                // shape: the config layer normalises `scx_mode` to one of the
+                // valid choices on both sides, so anything invalid - a
+                // number, a null, a name nobody recognises - has already
+                // become "gaming" before it arrives here.
+                match p.scx_mode.as_str() {
+                    Some(mode) => mode.to_string(),
+                    None => "gaming".to_string(),
+                },
+            )
+        })
+        .collect();
+    wanting.sort();
+    wanting.into_iter().next()
+}
+
+/// What to do about the scheduler this recompute.
+pub fn scx_action(active: &[GameProfile], applied: Option<&str>) -> ScxAction {
+    let Some((scheduler, mode)) = scx_choice(active) else {
+        // Nothing to put back if nothing was ever switched. `_restore_scx`
+        // returns immediately on that, so asking the scheduler manager to
+        // restore would be a call the Python never makes.
+        return if applied.is_some() {
+            ScxAction::Restore
+        } else {
+            ScxAction::Nothing
+        };
+    };
+    if applied == Some(scheduler.as_str()) {
+        return ScxAction::Nothing;
+    }
+    ScxAction::Switch {
+        remember_previous: applied.is_none(),
+        scheduler,
+        mode,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -347,6 +418,93 @@ mod tests {
             wanted(&both, false, None).vrr_outputs,
             Some(vec!["DP-1".to_string()])
         );
+    }
+
+    #[test]
+    fn nobody_wanting_a_scheduler_puts_the_machine_back() {
+        assert_eq!(
+            scx_action(&one(json!({"exe": "a"})), Some("rusty")),
+            ScxAction::Restore
+        );
+    }
+
+    #[test]
+    fn nothing_wanted_and_nothing_applied_is_not_a_restore() {
+        // There is nothing to put back, and the Python's `_restore_scx`
+        // returns immediately rather than calling the scheduler manager.
+        assert_eq!(scx_action(&[], None), ScxAction::Nothing);
+        assert_eq!(
+            scx_action(&one(json!({"exe": "a"})), None),
+            ScxAction::Nothing
+        );
+    }
+
+    #[test]
+    fn the_first_scheduler_when_sorted_wins() {
+        // Arbitrary but DETERMINISTIC. The alternative is two games flapping
+        // the machine's scheduler between them for as long as both run.
+        let both = profiles(json!([
+            {"exe": "a", "scx_scheduler": "rusty"},
+            {"exe": "b", "scx_scheduler": "lavd"},
+        ]));
+        assert_eq!(
+            scx_choice(&both),
+            Some(("lavd".to_string(), "gaming".to_string()))
+        );
+        // And the other way round in the list, to prove it is the sort and
+        // not the order they happened to arrive in.
+        let reversed: Vec<GameProfile> = both.into_iter().rev().collect();
+        assert_eq!(
+            scx_choice(&reversed),
+            Some(("lavd".to_string(), "gaming".to_string()))
+        );
+    }
+
+    #[test]
+    fn the_previous_scheduler_is_remembered_only_on_the_way_in() {
+        // A game that died with sched_ext loaded leaves the WHOLE machine on
+        // it, so the revert restores what was there. Overwriting that record
+        // on a scheduler-to-scheduler switch would lose the original.
+        let p = one(json!({"exe": "a", "scx_scheduler": "rusty"}));
+        assert_eq!(
+            scx_action(&p, None),
+            ScxAction::Switch {
+                scheduler: "rusty".into(),
+                mode: "gaming".into(),
+                remember_previous: true,
+            }
+        );
+        assert_eq!(
+            scx_action(&p, Some("lavd")),
+            ScxAction::Switch {
+                scheduler: "rusty".into(),
+                mode: "gaming".into(),
+                remember_previous: false,
+            }
+        );
+    }
+
+    #[test]
+    fn already_on_the_right_scheduler_is_nothing_to_do() {
+        let p = one(json!({"exe": "a", "scx_scheduler": "rusty"}));
+        assert_eq!(scx_action(&p, Some("rusty")), ScxAction::Nothing);
+    }
+
+    #[test]
+    fn a_profile_with_no_scheduler_asks_for_nothing() {
+        assert_eq!(
+            scx_choice(&one(json!({"exe": "a", "scx_scheduler": ""}))),
+            None
+        );
+    }
+
+    #[test]
+    fn the_mode_defaults_to_gaming() {
+        let p = one(json!({"exe": "a", "scx_scheduler": "rusty"}));
+        assert_eq!(scx_choice(&p).unwrap().1, "gaming");
+        let explicit = one(json!({"exe": "a", "scx_scheduler": "rusty",
+                                  "scx_mode": "powersave"}));
+        assert_eq!(scx_choice(&explicit).unwrap().1, "powersave");
     }
 
     #[test]

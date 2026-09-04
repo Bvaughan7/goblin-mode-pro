@@ -18,6 +18,8 @@ fn main() {
     let backend = input["tdp_backend"].as_str();
 
     let wanted = payload::wanted(&settings.profiles, on_battery, backend);
+    // `applied` is the scheduler already running, or absent for none.
+    let applied = input["scx_applied"].as_str();
     let (pl1, pl2) = payload::desired_power_limits_uw(&settings.profiles, on_battery);
 
     println!(
@@ -25,6 +27,7 @@ fn main() {
         serde_json::to_string_pretty(&serde_json::json!({
             "wanted": wanted,
             "power_limits_uw": [pl1, pl2],
+            "scx_action": payload::scx_action(&settings.profiles, applied),
         }))
         .unwrap()
     );

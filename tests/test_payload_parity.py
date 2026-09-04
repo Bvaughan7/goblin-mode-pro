@@ -56,9 +56,9 @@ def p(exe: str, **over) -> dict:
     return {"exe": exe, **over}
 
 
-def case(profiles, on_battery=False, tdp_backend=None) -> dict:
+def case(profiles, on_battery=False, tdp_backend=None, scx_applied=None) -> dict:
     return {"profiles": profiles, "on_battery": on_battery,
-            "tdp_backend": tdp_backend}
+            "tdp_backend": tdp_backend, "scx_applied": scx_applied}
 
 
 #: `governor_boost` defaults to True, so a profile that is meant to want
@@ -164,6 +164,31 @@ CASES = {
         p("b", governor_boost=True, tearing_enabled=True, adaptive_sync_enabled=True,
           vrr_outputs=["HDMI-1"], refresh_rate_hz=60, focus_mode=True,
           power_limit_enabled=True, pl1_w=55, pl2_w=55)]),
+    # -- the kernel scheduler ------------------------------------------------------
+    "scx_nobody_wants_one": case([p("a", **QUIET)]),
+    "scx_one_game_wants_one": case([p("a", **QUIET, scx_scheduler="rusty")]),
+    "scx_already_applied": case([p("a", **QUIET, scx_scheduler="rusty")],
+                                scx_applied="rusty"),
+    "scx_switching_between_two": case([p("a", **QUIET, scx_scheduler="rusty")],
+                                      scx_applied="lavd"),
+    "scx_no_longer_wanted": case([p("a", **QUIET)], scx_applied="rusty"),
+    # Two games disagreeing: the first when sorted wins, deterministically.
+    "scx_two_disagree": case([p("a", **QUIET, scx_scheduler="rusty"),
+                              p("b", **QUIET, scx_scheduler="lavd")]),
+    "scx_two_disagree_reversed": case([p("a", **QUIET, scx_scheduler="lavd"),
+                                       p("b", **QUIET, scx_scheduler="rusty")]),
+    "scx_empty_string": case([p("a", **QUIET, scx_scheduler="")]),
+    "scx_explicit_mode": case([p("a", **QUIET, scx_scheduler="rusty",
+                                 scx_mode="powersave")]),
+    # The config layer normalises anything invalid to "gaming" on both sides,
+    # so these never reach the decision as themselves.
+    "scx_mode_is_a_number": case([p("a", **QUIET, scx_scheduler="rusty",
+                                    scx_mode=5)]),
+    "scx_mode_is_unrecognised": case([p("a", **QUIET, scx_scheduler="rusty",
+                                        scx_mode="nonsense")]),
+    "scx_same_scheduler_different_modes": case([
+        p("a", **QUIET, scx_scheduler="rusty", scx_mode="powersave"),
+        p("b", **QUIET, scx_scheduler="rusty", scx_mode="gaming")]),
     "three_games": case([
         p("a", **QUIET, refresh_rate_hz=240),
         p("b", **QUIET, refresh_rate_hz=60, tearing_enabled=True),
@@ -240,6 +265,15 @@ class BothImplementationsAgree(unittest.TestCase):
             manager._recompute_global()
             pl1, pl2 = manager._desired_power_limits_uw()
 
+        # The scheduler decision, driven the same way: the real
+        # `_recompute_scx` with only the switching stubbed.
+        manager._scx_applied = payload["scx_applied"]
+        manager._scx_previous = None
+        scx = _ScxRecorder()
+        manager.scx = scx
+        manager._incident = lambda *_a: None
+        manager._recompute_scx()
+
         wanted = {
             "governor": asked.get("governor", False),
             "power": asked.get("power"),
@@ -253,7 +287,50 @@ class BothImplementationsAgree(unittest.TestCase):
             "refresh_cap": compositor.refresh_cap,
             "focus_mode": manager.focus.calls.get("enter", False),
         }
-        return {"wanted": wanted, "power_limits_uw": [pl1, pl2]}
+        return {
+            "wanted": wanted,
+            "power_limits_uw": [pl1, pl2],
+            # `scx_choice` is not compared: the Python has no such function -
+            # the choice is inline in `_recompute_scx` and is only observable
+            # through what it then does. `scx_action` IS that, and it is
+            # driven by the real code; the choice has its own Rust unit tests.
+            "scx_action": scx.action(payload["scx_applied"]),
+        }
+
+
+class _ScxRecorder:
+    """Stands in for the scheduler manager, recording what was asked of it."""
+
+    def __init__(self):
+        self.switched = None
+        self.restored = False
+        self.asked_current = False
+
+    def action(self, applied):
+        if self.restored:
+            return {"action": "restore"}
+        if self.switched is None:
+            return {"action": "nothing"}
+        return {
+            "action": "switch",
+            "scheduler": self.switched[0],
+            "mode": self.switched[1],
+            # Asking what is running now is exactly the "remember what was
+            # there first" step, so whether it happened IS the answer.
+            "remember_previous": self.asked_current,
+        }
+
+    def current(self):
+        self.asked_current = True
+        return "eevdf"
+
+    def switch(self, scheduler, mode):
+        self.switched = (scheduler, mode)
+        return True
+
+    def restore(self, _previous=None):
+        self.restored = True
+        return True
 
 
 class _Recorder:
