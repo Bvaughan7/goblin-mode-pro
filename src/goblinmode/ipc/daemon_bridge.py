@@ -159,6 +159,27 @@ class DaemonHandler(Protocol):
 # --------------------------------------------------------------------------
 # Daemon side
 # --------------------------------------------------------------------------
+#: The three read-only identity properties, in the order GetAll reports them.
+_IDENTITY_PROPERTIES = ("Version", "InterfaceVersion", "Implementation")
+
+#: Served by hand - see `_on_bus_acquired` for why. NOT part of the frozen
+#: contract: a bus adds this interface to every object, and the canonicalizer
+#: drops it, so declaring it here changes nothing anybody can observe except
+#: that the properties now answer.
+_PROPERTIES_XML = """<node>
+  <interface name="org.freedesktop.DBus.Properties">
+    <method name="Get">
+      <arg name="interface_name" type="s" direction="in"/>
+      <arg name="property_name" type="s" direction="in"/>
+      <arg name="value" type="v" direction="out"/>
+    </method>
+    <method name="GetAll">
+      <arg name="interface_name" type="s" direction="in"/>
+      <arg name="properties" type="a{sv}" direction="out"/>
+    </method>
+  </interface>
+</node>"""
+
 class DaemonBridge:
     def __init__(self, handler: DaemonHandler) -> None:
         self._handler = handler
@@ -182,10 +203,47 @@ class DaemonBridge:
         self._conn = conn
         node = Gio.DBusNodeInfo.new_for_xml(INTROSPECTION_XML)
         self._reg_id = conn.register_object(
-            OBJECT_PATH, node.interfaces[0], self._handle_call,
-            self._handle_get_property, None,
+            OBJECT_PATH, node.interfaces[0], self._handle_call, None, None,
+        )
+        # `org.freedesktop.DBus.Properties` is served HERE rather than through
+        # the get_property vtable slot, because that slot does not work from
+        # PyGObject: a property read came back
+        # `org.freedesktop.DBus.Error.Failed: Unable to retrieve property`
+        # while every method call on the same object worked. Both
+        # `register_object` and `register_object_with_closures2` behave the
+        # same way, so it is the closure marshalling and not the deprecated
+        # entry point. Method calls DO work, and Properties is an ordinary
+        # interface, so answering it as one is the fix.
+        #
+        # The freeze check is unaffected: the canonicalizer drops the standard
+        # org.freedesktop.DBus.* interfaces, which a bus adds at runtime anyway.
+        props = Gio.DBusNodeInfo.new_for_xml(_PROPERTIES_XML)
+        self._props_reg_id = conn.register_object(
+            OBJECT_PATH, props.interfaces[0], self._handle_properties_call, None, None,
         )
         log.info("daemon bridge published on %s", name)
+
+    def _handle_properties_call(self, conn, sender, path, iface, method, params,
+                                invocation) -> None:
+        """`Get` and `GetAll` for the read-only identity properties."""
+        if method == "Get":
+            _requested_iface, prop = params.unpack()
+            value = self._handle_get_property(conn, sender, path, iface, prop, None)
+            if value is None:
+                invocation.return_dbus_error(
+                    "org.freedesktop.DBus.Error.UnknownProperty", str(prop))
+            else:
+                invocation.return_value(GLib.Variant("(v)", (value,)))
+            return
+        if method == "GetAll":
+            values = {name: self._handle_get_property(conn, sender, path, iface, name, None)
+                      for name in _IDENTITY_PROPERTIES}
+            invocation.return_value(
+                GLib.Variant("(a{sv})", ({k: v for k, v in values.items() if v},)))
+            return
+        # Set is not declared: every property here is read-only.
+        invocation.return_dbus_error(
+            "org.freedesktop.DBus.Error.UnknownMethod", method)
 
     def _handle_get_property(self, conn, sender, path, iface, prop, error):
         """Read-only identity. Same three properties the helper serves, for the

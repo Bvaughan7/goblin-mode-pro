@@ -22,6 +22,18 @@ All notable changes to Goblin Mode Pro. Format loosely follows
   A wrong-typed field is now an absence, which is what the loader always meant.
   `--revert --dry-run` also no longer fails on a field holding a number where
   it expected a list of names.
+- **The daemon advertised three identity properties it could not serve.**
+  `Version`, `InterfaceVersion` and `Implementation` — added so a bug report
+  can say which implementation answered — appeared in introspection, and
+  reading any of them returned `Unable to retrieve property`. GDBus's
+  `get_property` slot does not work from PyGObject, and every existing test
+  checked a piece rather than the wire: the XML declared them, and the getter
+  returned the right value when called directly. The daemon's own conformance
+  suite had been reporting it all along, as "this daemon predates them". The
+  properties are now served as the ordinary interface they are, and an unknown
+  one is refused as `UnknownProperty`, which is what the Rust helper already
+  returned. The privileged helper had the same defect in the same call and is
+  fixed too.
 - **A single damaged line could break the session list and the incident
   export.** Both history files are read a line at a time, and a line that
   fails to parse has always been skipped — but a line that parsed into

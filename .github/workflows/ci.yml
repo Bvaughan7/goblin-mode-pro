@@ -96,6 +96,13 @@ jobs:
       - name: Construct MainWindow under Xvfb (tests/gui_smoke.py)
         run: xvfb-run -a dbus-run-session -- python3 tests/gui_smoke.py
 
+      # The identity properties are only readable over a real bus, and every
+      # other test of them checks a piece: the XML declares them, the getter
+      # returns the right variant when called directly. Both passed while a
+      # real read failed on the running daemon.
+      - name: The daemon's identity properties answer over a bus
+        run: dbus-run-session -- python3 -m unittest tests.test_dbus_properties_live -v
+
   # This job is the reason mixed Python/Rust installs are safe. The helper,
   # the daemon and the GUI are three processes that only ever meet over D-Bus,
   # so each one can be in either language - but ONLY for as long as every

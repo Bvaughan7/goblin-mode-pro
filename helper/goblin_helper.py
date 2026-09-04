@@ -1140,13 +1140,69 @@ def _handle_get_property(connection, sender, path, iface, prop, error, user_data
     return None
 
 
+#: The three read-only identity properties, in the order GetAll reports them.
+_IDENTITY_PROPERTIES = ("Version", "InterfaceVersion", "Implementation")
+
+#: Served by hand - see `_on_bus_acquired`. NOT part of the frozen contract: a
+#: bus adds this interface to every object and the canonicalizer drops it.
+_PROPERTIES_XML = """<node>
+  <interface name="org.freedesktop.DBus.Properties">
+    <method name="Get">
+      <arg name="interface_name" type="s" direction="in"/>
+      <arg name="property_name" type="s" direction="in"/>
+      <arg name="value" type="v" direction="out"/>
+    </method>
+    <method name="GetAll">
+      <arg name="interface_name" type="s" direction="in"/>
+      <arg name="properties" type="a{sv}" direction="out"/>
+    </method>
+  </interface>
+</node>"""
+
+
+def _handle_properties_call(connection, sender, path, iface, method, params,
+                            invocation, user_data=None):
+    """`Get` and `GetAll` for the read-only identity properties."""
+    if method == "Get":
+        _requested_iface, prop = params.unpack()
+        value = _handle_get_property(connection, sender, path, iface, prop, None, None)
+        if value is None:
+            invocation.return_dbus_error(
+                "org.freedesktop.DBus.Error.UnknownProperty", str(prop))
+        else:
+            invocation.return_value(GLib.Variant("(v)", (value,)))
+        return
+    if method == "GetAll":
+        values = {name: _handle_get_property(connection, sender, path, iface, name,
+                                             None, None)
+                  for name in _IDENTITY_PROPERTIES}
+        invocation.return_value(
+            GLib.Variant("(a{sv})", ({k: v for k, v in values.items() if v},)))
+        return
+    # Set is not declared: every property here is read-only.
+    invocation.return_dbus_error("org.freedesktop.DBus.Error.UnknownMethod", method)
+
+
 def _on_bus_acquired(connection, name):
     node_info = Gio.DBusNodeInfo.new_for_xml(INTROSPECTION_XML)
     connection.register_object(
         OBJECT_PATH,
         node_info.interfaces[0],
         _handle_call,
-        _handle_get_property,
+        None,
+        None,
+    )
+    # The get_property vtable slot does not work from PyGObject - a read comes
+    # back `org.freedesktop.DBus.Error.Failed: Unable to retrieve property`
+    # while every method call on the same object works, and both
+    # `register_object` and `register_object_with_closures2` behave the same
+    # way. Properties is an ordinary interface, so it is answered as one.
+    props = Gio.DBusNodeInfo.new_for_xml(_PROPERTIES_XML)
+    connection.register_object(
+        OBJECT_PATH,
+        props.interfaces[0],
+        _handle_properties_call,
+        None,
         None,
     )
     log.info("registered %s", OBJECT_PATH)
