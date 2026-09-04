@@ -16,5 +16,6 @@ pub mod api;
 pub mod error;
 pub mod helper;
 pub mod lifecycle;
+pub mod procscan;
 pub mod state;
 pub mod store;

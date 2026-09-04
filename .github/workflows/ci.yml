@@ -196,6 +196,7 @@ jobs:
           python3 tools/gen_config_tables.py | diff - crates/gmp-core/src/config_tables.rs
           cargo build -p gmp-core --examples
           cargo build -p gmp-cli --examples
+          cargo build -p gmp-daemon --examples
           python3 -m unittest tests.test_logrules_parity \
                                 tests.test_incidents_parity \
                                 tests.test_sessions_parity \
@@ -216,7 +217,8 @@ jobs:
                                 tests.test_report_parity \
                                 tests.test_status_parity \
                                 tests.test_paths_parity \
-                                tests.test_store_parity -v
+                                tests.test_store_parity \
+                                tests.test_procscan_parity -v
 
       # Advisories, licences and dependency sources. See deny.toml for why
       # this runs before the tree is big.
