@@ -23,6 +23,7 @@ pub mod incidents;
 pub mod logrules;
 pub mod observer;
 pub mod paths;
+pub mod payload;
 pub mod preflight;
 pub mod pyfmt;
 pub mod report;
