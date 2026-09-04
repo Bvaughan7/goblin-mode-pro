@@ -73,8 +73,9 @@ is a game that has not started rendering yet rather than a problem.
 
 ### The daemon's own interface
 
-Measured 2026-09-02 on the Dell G7 below with
-`python3 tests/conformance/daemon.py --apply`: **23 PASS / 0 FAIL / 9 SKIP**.
+Measured 2026-09-03 on the Dell G7 below with
+`python3 tests/conformance/daemon.py --apply`: **25 PASS / 0 FAIL / 7 SKIP**.
+It was 23 PASS / 0 FAIL / 9 SKIP on 2026-09-02.
 
 The SKIPs are deliberate and permanent. Six methods are never called by the
 suite at all — they rewrite the user's per-game settings, delete files, or
@@ -83,8 +84,29 @@ helper seam instead, where they can be applied and reverted against a snapshot.
 The remaining skip is behaviour with two games running at once, which needs two
 real games and is not reachable from a suite.
 
+Two checks have moved off that list since, and both moved because a real
+defect was fixed rather than because the suite got easier.
+
 The first run scored 1 FAIL: ignoring a game could not be undone. That is
 fixed, and the same check now verifies the fix.
+
+The identity properties were the second. The suite read them as absent and
+said so — "this daemon predates them" — when in fact the daemon declared all
+three and could not serve any: GDBus's `get_property` slot does not work from
+PyGObject, so a read returned `Unable to retrieve property`. Verified live
+after the fix, on this machine:
+
+```
+Version           (<'1.5.0'>,)
+InterfaceVersion  (<uint32 1>,)
+Implementation    (<'python'>,)
+Nonsense          Error: …UnknownProperty: Nonsense
+```
+
+which is the same answer shape the Rust helper gives for its own three, error
+name included. The privileged helper carried the identical defect in the
+identical call and is fixed the same way; that one is unverified on the wire
+here, because the Rust helper is what this machine runs.
 
 ### Both helper implementations, same machine, same score
 
