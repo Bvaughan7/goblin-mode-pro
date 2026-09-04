@@ -15,7 +15,8 @@
 
 use std::collections::BTreeSet;
 
-use crate::config::GameProfile;
+use crate::config::{GameProfile, Settings};
+use crate::pyfmt::names;
 use crate::runner::basename;
 
 /// Longest string a user regex is run against.
@@ -152,6 +153,156 @@ fn haystack(name: &str, exe: &str, cmdline: &[String]) -> String {
     format!("{name} {exe} {}", cmdline.join(" "))
 }
 
+/// A game the auto-detector found that has no profile yet.
+///
+/// Produced by the sweep, which reads `/proc/*/maps` and fdinfo and so stays
+/// in Python; this side only decides what to do with the result.
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+pub struct Candidate {
+    pub exe: String,
+    pub pid: i64,
+    #[serde(default)]
+    pub display_name: String,
+    #[serde(default)]
+    pub source: String,
+}
+
+/// A game started or stopped.
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+pub struct Event {
+    /// The exe the daemon keys everything on - a profile's, or a candidate's.
+    pub exe: String,
+    /// The profile that matched, or `None` for an auto-detected game that has
+    /// none yet.
+    pub profile_exe: Option<String>,
+    pub pid: Option<i64>,
+    /// True for a launch, false for an exit.
+    pub running: bool,
+    pub auto: bool,
+}
+
+/// What one poll saw, and what it now believes is running.
+///
+/// `running` is an ordered list rather than a map because the ORDER is
+/// observable: Python keeps it in a dict, exit events come out in the order
+/// games were first seen, and a caller reverting tweaks in a different order
+/// is a different program.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Poll {
+    pub events: Vec<Event>,
+    pub running: Vec<(String, i64)>,
+}
+
+/// One tick of the observer: what changed since the last one.
+///
+/// Pure. The process table and the auto-detect sweep are both handed in, so
+/// the decision can be diffed against the Python without a machine.
+///
+/// The master switch has a subtlety worth stating. When it is off AND nothing
+/// is running, this returns immediately - there is nothing to do and no reason
+/// to walk the table. When it is off and something IS running, it does NOT
+/// return early: `enabled_profiles` is empty with the master off, so nothing
+/// is found, and everything currently running gets an exit event. That is the
+/// path that reverts a game's tweaks when the user turns the tool off
+/// mid-session, and short-circuiting it would leave them applied.
+pub fn poll_once(
+    settings: &Settings,
+    procs: &[Process],
+    candidates: &[Candidate],
+    running: &[(String, i64)],
+) -> Poll {
+    let master = crate::config::truthy(&settings.master_enabled);
+    // The Python returns here to avoid walking the process table at all. With
+    // the table already in hand this is only a shortcut - nothing is enabled
+    // with the master off, so the work below would reach the same answer - but
+    // it is kept because the caller uses it to skip the scan.
+    if !master && running.is_empty() {
+        return Poll {
+            events: Vec::new(),
+            running: running.to_vec(),
+        };
+    }
+
+    // exe -> (pid, candidate), in the order found. Insertion order decides the
+    // order launch events come out in, so it is a list.
+    let mut found: Vec<(String, i64, Option<Candidate>)> = Vec::new();
+    for profile in settings.enabled_profiles() {
+        if let Some(pid) = pick_pid(profile, procs) {
+            found.push((profile.exe.clone(), pid, None));
+        }
+    }
+
+    // The sweep is the expensive half, and it is skipped entirely while a
+    // profiled game is already matched: a SECOND concurrent game is rare and
+    // not worth the per-process /proc reads on every poll during play.
+    if crate::config::truthy(&settings.auto_detect) && master && found.is_empty() {
+        let ignored: Vec<String> = names(&settings.ignored_games)
+            .into_iter()
+            .map(|name| name.to_lowercase())
+            .collect();
+        for candidate in candidates {
+            if found.iter().any(|(exe, _, _)| exe == &candidate.exe)
+                || ignored.contains(&candidate.exe.to_lowercase())
+                // A disabled profile already exists for it, which is the
+                // user having said no. Respect that rather than re-offering.
+                || settings.profile_for_exe(&candidate.exe).is_some()
+            {
+                continue;
+            }
+            found.push((
+                candidate.exe.clone(),
+                candidate.pid,
+                Some(candidate.clone()),
+            ));
+        }
+    }
+
+    let mut events = Vec::new();
+    let mut next: Vec<(String, i64)> = running.to_vec();
+    for (exe, pid, candidate) in &found {
+        match next.iter_mut().find(|(seen, _)| seen == exe) {
+            // Already running: just follow the pid, which can change when a
+            // launcher hands off to the real game process.
+            Some(entry) => entry.1 = *pid,
+            None => {
+                next.push((exe.clone(), *pid));
+                events.push(Event {
+                    exe: exe.clone(),
+                    profile_exe: candidate.is_none().then(|| exe.clone()),
+                    pid: Some(*pid),
+                    running: true,
+                    auto: candidate.is_some(),
+                });
+            }
+        }
+    }
+
+    // Exits, in the order the games were first seen.
+    let gone: Vec<String> = next
+        .iter()
+        .filter(|(exe, _)| !found.iter().any(|(f, _, _)| f == exe))
+        .map(|(exe, _)| exe.clone())
+        .collect();
+    for exe in gone {
+        next.retain(|(seen, _)| seen != &exe);
+        events.push(Event {
+            // An exit carries the profile if there still is one - the daemon
+            // needs it to know what to revert - and none if the game was
+            // auto-detected and never given one.
+            profile_exe: settings.profile_for_exe(&exe).map(|p| p.exe.clone()),
+            exe,
+            pid: None,
+            running: false,
+            auto: false,
+        });
+    }
+
+    Poll {
+        events,
+        running: next,
+    }
+}
+
 /// The PID to optimise: the real game process, not a wrapper around it.
 pub fn pick_pid(profile: &GameProfile, procs: &[Process]) -> Option<i64> {
     let mut candidates: Vec<&Process> = procs
@@ -175,6 +326,7 @@ pub fn pick_pid(profile: &GameProfile, procs: &[Process]) -> Option<i64> {
 mod tests {
     use super::*;
     use crate::config::from_value;
+    use serde_json::json;
 
     fn profile(exe: &str, mode: &str) -> GameProfile {
         let settings = from_value(&serde_json::json!({
@@ -378,6 +530,171 @@ mod tests {
     fn an_empty_name_is_not_a_candidate() {
         assert!(candidate_names("", "", &[]).is_empty());
         assert!(candidate_names("", "", &cmd(["", "  "].as_ref())).is_empty());
+    }
+
+    fn settings_with(profiles: serde_json::Value, extra: serde_json::Value) -> Settings {
+        let mut raw = serde_json::json!({"profiles": profiles});
+        for (key, value) in extra.as_object().unwrap() {
+            raw[key] = value.clone();
+        }
+        crate::config::from_value(&raw)
+    }
+
+    fn running_proc(pid: i64, name: &str) -> Process {
+        proc(pid, name, 1000)
+    }
+
+    #[test]
+    fn a_game_starting_is_one_launch_event() {
+        let s = settings_with(json!([{"exe": "Wow.exe"}]), json!({}));
+        let poll = poll_once(&s, &[running_proc(10, "Wow.exe")], &[], &[]);
+        assert_eq!(poll.running, vec![("Wow.exe".to_string(), 10)]);
+        assert_eq!(poll.events.len(), 1);
+        assert!(poll.events[0].running && !poll.events[0].auto);
+        assert_eq!(poll.events[0].profile_exe.as_deref(), Some("Wow.exe"));
+    }
+
+    #[test]
+    fn a_game_still_running_is_no_event_at_all() {
+        let s = settings_with(json!([{"exe": "Wow.exe"}]), json!({}));
+        let was = vec![("Wow.exe".to_string(), 10)];
+        let poll = poll_once(&s, &[running_proc(10, "Wow.exe")], &[], &was);
+        assert!(poll.events.is_empty());
+        assert_eq!(poll.running, was);
+    }
+
+    #[test]
+    fn a_pid_that_moved_is_followed_without_an_event() {
+        // A launcher handing off to the real game process does this, and
+        // treating it as an exit-then-launch would revert and re-apply
+        // everything mid-session.
+        let s = settings_with(json!([{"exe": "Wow.exe"}]), json!({}));
+        let was = vec![("Wow.exe".to_string(), 10)];
+        let poll = poll_once(&s, &[running_proc(99, "Wow.exe")], &[], &was);
+        assert!(poll.events.is_empty());
+        assert_eq!(poll.running, vec![("Wow.exe".to_string(), 99)]);
+    }
+
+    #[test]
+    fn a_game_stopping_is_one_exit_event_carrying_its_profile() {
+        let s = settings_with(json!([{"exe": "Wow.exe"}]), json!({}));
+        let was = vec![("Wow.exe".to_string(), 10)];
+        let poll = poll_once(&s, &[], &[], &was);
+        assert!(poll.running.is_empty());
+        assert_eq!(poll.events.len(), 1);
+        assert!(!poll.events[0].running);
+        // The profile has to come with it: the daemon needs it to revert.
+        assert_eq!(poll.events[0].profile_exe.as_deref(), Some("Wow.exe"));
+    }
+
+    #[test]
+    fn turning_the_master_switch_off_mid_session_still_reports_the_exit() {
+        // The path that reverts a running game's tweaks when the user turns
+        // the tool off. Short-circuiting on `!master` would leave them applied.
+        let s = settings_with(
+            json!([{"exe": "Wow.exe"}]),
+            json!({"master_enabled": false}),
+        );
+        let was = vec![("Wow.exe".to_string(), 10)];
+        let poll = poll_once(&s, &[running_proc(10, "Wow.exe")], &[], &was);
+        assert_eq!(poll.events.len(), 1);
+        assert!(!poll.events[0].running);
+        assert!(poll.running.is_empty());
+    }
+
+    #[test]
+    fn the_master_switch_off_with_nothing_running_does_nothing() {
+        let s = settings_with(
+            json!([{"exe": "Wow.exe"}]),
+            json!({"master_enabled": false}),
+        );
+        let poll = poll_once(&s, &[running_proc(10, "Wow.exe")], &[], &[]);
+        assert!(poll.events.is_empty());
+        assert!(poll.running.is_empty());
+    }
+
+    #[test]
+    fn exits_come_out_in_the_order_the_games_were_first_seen() {
+        let s = settings_with(json!([{"exe": "a"}, {"exe": "b"}]), json!({}));
+        let was = vec![("b".to_string(), 2), ("a".to_string(), 1)];
+        let poll = poll_once(&s, &[], &[], &was);
+        let order: Vec<&str> = poll.events.iter().map(|e| e.exe.as_str()).collect();
+        assert_eq!(order, vec!["b", "a"], "not sorted - first-seen order");
+    }
+
+    #[test]
+    fn an_auto_detected_game_is_a_launch_with_no_profile() {
+        let s = settings_with(json!([]), json!({"auto_detect": true}));
+        let candidate = Candidate {
+            exe: "newgame.exe".into(),
+            pid: 42,
+            display_name: "New Game".into(),
+            source: "steam".into(),
+        };
+        let poll = poll_once(&s, &[], &[candidate], &[]);
+        assert_eq!(poll.events.len(), 1);
+        assert!(poll.events[0].auto);
+        assert_eq!(poll.events[0].profile_exe, None);
+        assert_eq!(poll.events[0].pid, Some(42));
+    }
+
+    #[test]
+    fn the_sweep_is_skipped_while_a_profiled_game_is_matched() {
+        // The expensive half, and a second concurrent game is not worth the
+        // per-process /proc reads on every poll during play.
+        let s = settings_with(json!([{"exe": "Wow.exe"}]), json!({"auto_detect": true}));
+        let candidate = Candidate {
+            exe: "other.exe".into(),
+            pid: 42,
+            display_name: String::new(),
+            source: String::new(),
+        };
+        let poll = poll_once(&s, &[running_proc(10, "Wow.exe")], &[candidate], &[]);
+        assert_eq!(poll.events.len(), 1);
+        assert_eq!(poll.events[0].exe, "Wow.exe");
+    }
+
+    #[test]
+    fn an_ignored_game_is_not_detected_however_it_is_cased() {
+        let s = settings_with(
+            json!([]),
+            json!({"auto_detect": true, "ignored_games": ["NewGame.EXE"]}),
+        );
+        let candidate = Candidate {
+            exe: "newgame.exe".into(),
+            pid: 42,
+            display_name: String::new(),
+            source: String::new(),
+        };
+        assert!(poll_once(&s, &[], &[candidate], &[]).events.is_empty());
+    }
+
+    #[test]
+    fn a_game_with_a_disabled_profile_is_not_re_offered() {
+        // A disabled profile is the user having said no already.
+        let s = settings_with(
+            json!([{"exe": "newgame.exe", "enabled": false}]),
+            json!({"auto_detect": true}),
+        );
+        let candidate = Candidate {
+            exe: "newgame.exe".into(),
+            pid: 42,
+            display_name: String::new(),
+            source: String::new(),
+        };
+        assert!(poll_once(&s, &[], &[candidate], &[]).events.is_empty());
+    }
+
+    #[test]
+    fn auto_detect_off_means_no_sweep() {
+        let s = settings_with(json!([]), json!({"auto_detect": false}));
+        let candidate = Candidate {
+            exe: "newgame.exe".into(),
+            pid: 42,
+            display_name: String::new(),
+            source: String::new(),
+        };
+        assert!(poll_once(&s, &[], &[candidate], &[]).events.is_empty());
     }
 
     #[test]

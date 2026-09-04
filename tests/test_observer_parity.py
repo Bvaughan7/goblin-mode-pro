@@ -34,6 +34,17 @@ from tests._support import _SRC, typed  # noqa: F401
 from goblinmode import observer
 from goblinmode.config import _from_dict
 
+
+def _exited_exe(event, obs, previously_running):
+    """An exit for a game with no profile left: find it by elimination.
+
+    The Python event carries `profile=None` for an auto-detected game that
+    stopped, so the exe has to come from what is no longer running.
+    """
+    still = set(obs._running)
+    gone = [exe for exe, _ in previously_running if exe not in still]
+    return gone[0] if gone else ""
+
 _REPO = Path(__file__).resolve().parent.parent
 
 
@@ -241,6 +252,63 @@ CASES = {
 }
 
 
+#: One tick of the observer, as (settings, process table, sweep result,
+#: what was running last time). The sweep is handed in rather than run: it
+#: reads /proc/*/maps per process and stays in Python, so what is diffed here
+#: is the decision taken over its result.
+POLL_CASES = {
+    "nothing_running_nothing_found": (cfg(p("Wow.exe")), [], [], []),
+    "a_game_starts": (cfg(p("Wow.exe")), [pr(10, name="Wow.exe", rss=1000)], [], []),
+    "a_game_keeps_running": (cfg(p("Wow.exe")), [pr(10, name="Wow.exe", rss=1000)],
+                             [], [["Wow.exe", 10]]),
+    # A launcher handing off to the real process: followed, not re-announced.
+    "the_pid_moves": (cfg(p("Wow.exe")), [pr(99, name="Wow.exe", rss=1000)],
+                      [], [["Wow.exe", 10]]),
+    "a_game_stops": (cfg(p("Wow.exe")), [], [], [["Wow.exe", 10]]),
+    "two_games_start": (cfg(p("a.exe"), p("b.exe")),
+                        [pr(1, name="a.exe", rss=10), pr(2, name="b.exe", rss=10)],
+                        [], []),
+    "two_games_stop": (cfg(p("a.exe"), p("b.exe")), [], [],
+                       [["b.exe", 2], ["a.exe", 1]]),
+    "one_of_two_stops": (cfg(p("a.exe"), p("b.exe")),
+                         [pr(1, name="a.exe", rss=10)], [],
+                         [["a.exe", 1], ["b.exe", 2]]),
+    # The master switch off with a game running is the revert path.
+    "master_off_with_a_game_running": (cfg(p("Wow.exe"), master_enabled=False),
+                                       [pr(10, name="Wow.exe", rss=1000)], [],
+                                       [["Wow.exe", 10]]),
+    "master_off_with_nothing_running": (cfg(p("Wow.exe"), master_enabled=False),
+                                        [pr(10, name="Wow.exe", rss=1000)], [], []),
+    "disabled_profile_never_starts": (cfg(p("Wow.exe", enabled=False)),
+                                      [pr(10, name="Wow.exe", rss=1000)], [], []),
+    # -- the auto-detect sweep -----------------------------------------------
+    "a_candidate_is_adopted": (cfg(auto_detect=True), [],
+                               [{"exe": "new.exe", "pid": 42,
+                                 "display_name": "New", "source": "steam"}], []),
+    "the_sweep_is_skipped_while_a_profile_matches": (
+        cfg(p("Wow.exe"), auto_detect=True), [pr(10, name="Wow.exe", rss=1000)],
+        [{"exe": "new.exe", "pid": 42, "display_name": "New", "source": "steam"}], []),
+    # Case-folded on BOTH sides: the stored list and the candidate's exe.
+    "an_ignored_candidate_is_skipped": (
+        cfg(auto_detect=True, ignored_games=["NEW.EXE"]), [],
+        [{"exe": "new.exe", "pid": 42, "display_name": "New", "source": "steam"}], []),
+    "an_ignored_candidate_with_an_upper_case_exe_is_skipped": (
+        cfg(auto_detect=True, ignored_games=["new.exe"]), [],
+        [{"exe": "New.EXE", "pid": 42, "display_name": "New", "source": "steam"}], []),
+    "a_candidate_with_a_disabled_profile_is_skipped": (
+        cfg(p("new.exe", enabled=False), auto_detect=True), [],
+        [{"exe": "new.exe", "pid": 42, "display_name": "New", "source": "steam"}], []),
+    "auto_detect_off": (
+        cfg(auto_detect=False), [],
+        [{"exe": "new.exe", "pid": 42, "display_name": "New", "source": "steam"}], []),
+    "two_candidates": (
+        cfg(auto_detect=True), [],
+        [{"exe": "a.exe", "pid": 1, "display_name": "A", "source": "steam"},
+         {"exe": "b.exe", "pid": 2, "display_name": "B", "source": "lutris"}], []),
+    "a_detected_game_stops": (cfg(auto_detect=True), [], [], [["new.exe", 42]]),
+}
+
+
 class BothImplementationsAgree(unittest.TestCase):
     maxDiff = None
 
@@ -258,6 +326,9 @@ class BothImplementationsAgree(unittest.TestCase):
                            capture_output=True, text=True, timeout=60, check=False)
         self.assertEqual(r.returncode, 0, r.stderr)
         got = json.loads(r.stdout)
+        # One tick of the observer comes back on the same call; it has its own
+        # corpus and its own comparison below.
+        got.pop("poll", None)
         # The blocklist is a hand-maintained constant in both implementations
         # rather than a generated table, so nothing but this stops one of them
         # gaining an entry the other has not - and a missing entry means the
@@ -295,6 +366,50 @@ class BothImplementationsAgree(unittest.TestCase):
             "wine_infra": sorted(observer._WINE_INFRA),
         }
 
+    def _rust_poll(self, settings, procs, candidates, running) -> dict:
+        payload = {"settings": settings, "procs": procs,
+                   "candidates": candidates, "running": running}
+        r = subprocess.run([str(self.binary)], input=json.dumps(payload),
+                           capture_output=True, text=True, timeout=60, check=False)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        return json.loads(r.stdout)["poll"]
+
+    @staticmethod
+    def _python_poll(settings, procs, candidates, running) -> dict:
+        from unittest.mock import patch
+
+        from goblinmode.gamedetect import GameCandidate
+
+        s = _from_dict(settings)
+        events = []
+        obs = observer.Observer(s, events.append)
+        obs._running = {exe: pid for exe, pid in running}
+        table = [FakeProcess(**proc) for proc in procs]
+        sweep = [GameCandidate(pid=c["pid"], exe=c["exe"],
+                               display_name=c["display_name"], score=99,
+                               source=c["source"])
+                 for c in candidates]
+        with patch("psutil.process_iter", return_value=table), \
+                patch("goblinmode.gamedetect.detect_games", return_value=sweep):
+            obs.poll()
+        return {
+            "events": [
+                {
+                    # The exe the daemon keys on: a profile's, or a
+                    # candidate's for a game that has none yet.
+                    "exe": (e.profile.exe if e.profile is not None
+                            else (e.candidate.exe if e.candidate is not None
+                                  else _exited_exe(e, obs, running))),
+                    "profile_exe": e.profile.exe if e.profile is not None else None,
+                    "pid": e.pid,
+                    "running": e.running,
+                    "auto": e.auto,
+                }
+                for e in events
+            ],
+            "running": [[exe, pid] for exe, pid in obs._running.items()],
+        }
+
     def test_every_process_table_resolves_the_same_way(self):
         for label, (settings, procs) in CASES.items():
             with self.subTest(label):
@@ -312,6 +427,40 @@ class BothImplementationsAgree(unittest.TestCase):
                         profile, proc["name"], proc["exe"], proc["cmdline"]))
         for mode, answers in seen.items():
             self.assertEqual(answers, {True, False}, f"{mode} is one-sided")
+
+
+class OneTickDecidesTheSame(unittest.TestCase):
+    """The poll tick's state machine, over a table and a sweep handed in.
+
+    The sweep itself reads /proc/*/maps per process and stays in Python; what
+    is compared is what the observer DOES with its result, plus the launch and
+    exit bookkeeping - including the order events come out in, which a caller
+    reverting tweaks depends on.
+    """
+
+    maxDiff = None
+    setUp = BothImplementationsAgree.setUp
+    _rust_poll = BothImplementationsAgree._rust_poll
+    _python_poll = staticmethod(BothImplementationsAgree._python_poll)
+
+    def test_every_tick_decides_the_same_way(self):
+        for label, (settings, procs, candidates, running) in POLL_CASES.items():
+            with self.subTest(label):
+                self.assertEqual(
+                    typed(self._rust_poll(settings, procs, candidates, running)),
+                    typed(self._python_poll(settings, procs, candidates, running)),
+                )
+
+    def test_the_corpus_produces_launches_exits_and_quiet_ticks(self):
+        kinds = set()
+        for settings, procs, candidates, running in POLL_CASES.values():
+            answer = self._python_poll(settings, procs, candidates, running)
+            if not answer["events"]:
+                kinds.add("quiet")
+            for event in answer["events"]:
+                kinds.add(("launch" if event["running"] else "exit")
+                          + ("-auto" if event["auto"] else ""))
+        self.assertEqual(kinds, {"quiet", "launch", "launch-auto", "exit"})
 
 
 if __name__ == "__main__":

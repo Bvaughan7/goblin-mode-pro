@@ -47,11 +47,23 @@ fn main() {
         })
         .collect();
 
+    // One tick of the observer, over the same table.
+    let candidates: Vec<observer::Candidate> =
+        serde_json::from_value(input["candidates"].clone()).unwrap_or_default();
+    let running: Vec<(String, i64)> =
+        serde_json::from_value(input["running"].clone()).unwrap_or_default();
+    let ticked = observer::poll_once(&settings, &procs, &candidates, &running);
+    let poll = serde_json::json!({
+        "events": ticked.events,
+        "running": ticked.running,
+    });
+
     println!(
         "{}",
         serde_json::to_string_pretty(&serde_json::json!({
             "profiles": per_profile,
             "candidate_names": names,
+            "poll": poll,
             // Reported rather than left for the test to read out of the
             // source: it is a hand-maintained constant on both sides, so the
             // comparison has to go through the value the code actually uses.
