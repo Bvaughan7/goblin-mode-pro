@@ -69,12 +69,53 @@ fn read_process(dir: &std::path::Path, pid: i64) -> Option<Process> {
         // `/proc/<pid>/exe` is a symlink that a process owned by another user
         // will not let this daemon read. Unreadable is empty, not an error:
         // psutil raises AccessDenied there and the observer catches it.
-        exe: std::fs::read_link(dir.join("exe"))
-            .map(|path| path.to_string_lossy().into_owned())
-            .unwrap_or_default(),
+        exe: read_exe(dir),
         rss: read_rss(dir),
         cmdline,
     })
+}
+
+/// The executable behind a process, as psutil reports it.
+///
+/// `/proc/<pid>/exe` is a symlink that a process owned by another user will not
+/// let this daemon read. Unreadable is empty, not an error: psutil raises
+/// AccessDenied there and every caller in this tool turns that into "".
+fn read_exe(dir: &std::path::Path) -> String {
+    match std::fs::read_link(dir.join("exe")) {
+        Ok(target) => exe_from_link(&target.to_string_lossy()),
+        Err(_) => String::new(),
+    }
+}
+
+/// psutil's `readlink` wrapper, which is not `readlink`.
+///
+/// Two rules, both of them the kernel decorating a link rather than naming a
+/// file, and both of them load-bearing here because the observer matches a
+/// profile against the BASENAME of this string. `Wow.exe (deleted)` is not
+/// `Wow.exe`, so a decorated path does not match the profile that was matching
+/// a moment ago - the observer reports the game as having exited, the tweaks
+/// are reverted underneath it and a session summary is written for a game that
+/// is still running.
+///
+/// 1. Everything after a NUL is garbage (psutil issue 717).
+/// 2. ` (deleted)` is appended once the file behind a running process has been
+///    replaced - a package update, or a game patching itself. It is stripped
+///    UNLESS a file by that whole name exists, because a file may legitimately
+///    be called that and renaming it would be worse than keeping the marker.
+///
+/// A path that cannot be stat'd for lack of permission is reported unreadable:
+/// psutil raises there rather than guessing, and this is the same answer as an
+/// unreadable link.
+fn exe_from_link(raw: &str) -> String {
+    let path = raw.split('\0').next().unwrap_or_default();
+    let Some(undecorated) = path.strip_suffix(" (deleted)") else {
+        return path.to_string();
+    };
+    match std::fs::metadata(path) {
+        Ok(_) => path.to_string(),
+        Err(err) if err.kind() == std::io::ErrorKind::PermissionDenied => String::new(),
+        Err(_) => undecorated.to_string(),
+    }
 }
 
 /// psutil's rule, and the reason this module exists.
@@ -327,6 +368,62 @@ mod tests {
         ]);
         let pids: Vec<i64> = scan_root(&root).iter().map(|p| p.pid).collect();
         assert_eq!(pids, vec![42, 101, 300]);
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    /// A `/proc/<pid>/exe` symlink, pointed wherever the test needs it.
+    fn proc_with_exe(target: &str) -> std::path::PathBuf {
+        let root = fake_proc(&[("42", "sh", &["/bin/sh"], "0 0")]);
+        std::os::unix::fs::symlink(target, root.join("42").join("exe")).unwrap();
+        root
+    }
+
+    #[test]
+    fn a_replaced_binary_loses_the_kernels_deleted_marker() {
+        // A package update - or a game patch - replaces the file under a
+        // running process, and the kernel decorates the link from then on.
+        assert_eq!(
+            exe_from_link("/usr/bin/fish (deleted)"),
+            "/usr/bin/fish",
+            "psutil strips the marker, so the observer still matches the profile"
+        );
+    }
+
+    #[test]
+    fn a_file_really_named_deleted_keeps_its_name() {
+        // The marker is only a marker when there is no such file. psutil
+        // checks, and so must this, or it would rename a real executable.
+        let root = fake_proc(&[("42", "sh", &["/bin/sh"], "0 0")]);
+        let real = root.join("Some Game (deleted)");
+        std::fs::write(&real, "").unwrap();
+        assert_eq!(
+            exe_from_link(&real.to_string_lossy()),
+            real.to_string_lossy()
+        );
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn a_link_target_is_truncated_at_the_first_nul() {
+        // psutil's issue 717: everything after a NUL is garbage.
+        assert_eq!(exe_from_link("/bin/sh\0new"), "/bin/sh");
+    }
+
+    #[test]
+    fn the_scan_reports_the_undecorated_executable() {
+        let root = proc_with_exe("/usr/bin/fish (deleted)");
+        assert_eq!(scan_root(&root)[0].exe, "/usr/bin/fish");
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn an_unreadable_exe_is_empty_rather_than_a_missing_process() {
+        // Another user's process. psutil raises AccessDenied and the observer
+        // matches on the name instead.
+        let root = fake_proc(&[("42", "sh", &["/bin/sh"], "0 0")]);
+        let procs = scan_root(&root);
+        assert_eq!(procs.len(), 1, "the process is still reported");
+        assert_eq!(procs[0].exe, "");
         std::fs::remove_dir_all(&root).ok();
     }
 
