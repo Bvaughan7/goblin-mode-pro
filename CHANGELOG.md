@@ -7,6 +7,16 @@ All notable changes to Goblin Mode Pro. Format loosely follows
 ## [Unreleased]
 
 ### Fixed
+- **A profile with a wrong-typed field made `SetProfile` fail instead of
+  refusing.** The method is a D-Bus entry point whose payload is JSON from any
+  client on the session bus, and it is declared to answer a boolean - but a
+  field holding the wrong type (an `exe` that is a number, a `scx_scheduler`
+  that is not a string) reaches `.strip()` on something that has not got one,
+  and `AttributeError` was neither of the two exceptions it caught. The caller
+  got a D-Bus error where the interface promises `false`, and the journal got a
+  traceback for what is ordinary bad input. This is the same shape that used to
+  take down the config loader, in the one place that kept it; both now use the
+  same tuple, and the edit is refused with nothing left behind.
 - **A build could be adopted as a game, permanently.** Auto-detection scores a
   launcher tag on one process and then attributes it to the fattest process in
   that process's whole subtree - which is how a Proton tree gets tuned for the

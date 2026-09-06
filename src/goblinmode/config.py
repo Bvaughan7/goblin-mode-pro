@@ -415,6 +415,10 @@ def load() -> Settings:
 #: what the loop below is for.
 _CORRUPT = (ValueError, TypeError, AttributeError)
 
+#: The same tuple, for the one caller outside this module that builds a
+#: profile from something a client sent: `Daemon.set_profile`.
+CORRUPT = _CORRUPT
+
 
 def _from_dict(raw: dict[str, Any]) -> Settings:
     if not isinstance(raw, dict):

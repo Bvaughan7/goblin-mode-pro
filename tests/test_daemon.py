@@ -141,6 +141,23 @@ class SetProfileValidation(unittest.TestCase):
         for junk in (None, "profile", 42, [], True):
             self.assertFalse(d.set_profile(junk), f"{junk!r} was accepted")
 
+    def test_a_wrong_typed_field_is_rejected_rather_than_raised(self):
+        """The same shape that used to take down the config loader, in the one
+        place that kept it. A field holding the wrong type reaches `.strip()`
+        on something that has not got one, and AttributeError is neither of
+        the two exceptions this used to catch. The method is a D-Bus entry
+        point whose payload is JSON from any client on the session bus, and it
+        is declared to answer a boolean - so a profile it cannot build is
+        false, not an error out of the handler."""
+        for field, value in (("exe", 5), ("exe", True), ("exe", ["a"]),
+                             ("exe", {"a": 1}), ("scx_scheduler", 7)):
+            with self.subTest(field=field, value=value):
+                d = self._daemon()
+                profile = {"exe": "Game.exe", field: value}
+                self.assertFalse(d.set_profile(profile))
+                self.assertEqual(d.settings.profiles, [],
+                                 "a rejected profile must leave nothing behind")
+
     def test_a_profile_without_an_exe_is_rejected(self):
         self.assertFalse(self._daemon().set_profile({"display_name": "x"}))
 

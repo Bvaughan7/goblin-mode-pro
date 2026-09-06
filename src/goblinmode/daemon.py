@@ -631,7 +631,14 @@ class Daemon:
         known = {f.name for f in dataclasses.fields(config.GameProfile)}
         try:
             new = config.GameProfile(**{k: v for k, v in profile.items() if k in known})
-        except (ValueError, TypeError) as exc:
+        except config.CORRUPT as exc:
+            # The same tuple the config loader uses, and for the same reason:
+            # a field holding the wrong type reaches `.strip()` on something
+            # that has not got one, and AttributeError is neither of the other
+            # two. This method's payload is JSON from any client on the
+            # session bus and it is declared to answer a boolean, so a profile
+            # that cannot be built is false rather than an error out of the
+            # handler.
             log.warning("rejected invalid profile: %s", exc)
             return False
         exe = new.exe
