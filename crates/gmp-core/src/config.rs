@@ -683,9 +683,158 @@ pub fn from_value(raw: &serde_json::Value) -> Settings {
     settings
 }
 
+/// One thing a saved profile edit makes the daemon redo, for one profile.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FlushStep {
+    /// Re-arm the frame-rate watcher on this profile's dip thresholds.
+    RetuneWatcher { exe: String },
+    /// Rewrite MangoHud's config file so the NEXT launch is right.
+    WriteMangoHud { exe: String },
+    /// Re-apply what can be changed under a running game.
+    Reapply { exe: String },
+}
+
+/// What a batch of saved profile edits makes the daemon redo.
+///
+/// The edits themselves are already in `settings` and already on disk; this is
+/// the work that has to follow them. Three rules, one per step.
+///
+/// The frame-rate watcher is re-armed for every edited profile, because its
+/// two thresholds live on the profile and it is holding the old ones.
+///
+/// MangoHud's config file is rewritten when the overlay is on OR the watchdog
+/// is - and the OR is the part a rewrite gets wrong. The watchdog does not
+/// draw anything; it reads MangoHud's LOG. Writing the file only for a visible
+/// overlay would leave the watchdog with nothing to read and no error to
+/// explain it. The file is written for the NEXT launch, which is why it
+/// happens whether or not the game is running now.
+///
+/// Re-applying is for a game that is running, and it is deliberately partial:
+/// the governor, the tearing hint and the power limits can change under a live
+/// game, and MangoHud cannot be hot-reloaded.
+///
+/// A profile that has been deleted since it was edited is skipped. The edit
+/// and the flush are 400 ms apart and a removal can land in between.
+///
+/// `dirty` is a Python `set`, whose iteration order is arbitrary. This sorts
+/// it: nothing here depends on the order, and an arbitrary one cannot be
+/// compared against anything.
+pub fn flush_plan(settings: &Settings, dirty: &[String], active: &[String]) -> Vec<FlushStep> {
+    let mut exes: Vec<&String> = dirty.iter().collect();
+    exes.sort();
+    exes.dedup();
+    let mut plan = Vec::new();
+    for exe in exes {
+        let Some(profile) = settings.profile_for_exe(exe) else {
+            continue;
+        };
+        plan.push(FlushStep::RetuneWatcher { exe: exe.clone() });
+        let overlay = profile.mangohud.get("enabled").map(truthy).unwrap_or(false);
+        if truthy(&profile.fps_watchdog) || overlay {
+            plan.push(FlushStep::WriteMangoHud { exe: exe.clone() });
+        }
+        if active.iter().any(|running| running == exe) {
+            plan.push(FlushStep::Reapply { exe: exe.clone() });
+        }
+    }
+    plan
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ---- what a saved profile edit makes the daemon redo -------------------
+
+    fn edited(exe: &str, watchdog: bool, overlay: bool) -> GameProfile {
+        GameProfile {
+            exe: exe.to_string(),
+            fps_watchdog: serde_json::json!(watchdog),
+            mangohud: match serde_json::json!({"enabled": overlay}) {
+                serde_json::Value::Object(map) => map,
+                _ => unreachable!(),
+            },
+            ..GameProfile::default()
+        }
+    }
+
+    fn settings_with(profiles: Vec<GameProfile>) -> Settings {
+        Settings {
+            profiles,
+            ..Settings::default()
+        }
+    }
+
+    #[test]
+    fn every_edited_profile_retunes_the_watcher() {
+        let settings = settings_with(vec![edited("a", false, false)]);
+        let plan = flush_plan(&settings, &["a".to_string()], &[]);
+        assert_eq!(plan, vec![FlushStep::RetuneWatcher { exe: "a".into() }]);
+    }
+
+    #[test]
+    fn the_overlay_config_is_written_for_the_watchdog_too() {
+        // The OR is the point. The watchdog reads MangoHud's LOG, so it needs
+        // the file written even with the overlay switched off - a rewrite that
+        // only checked `mangohud.enabled` would leave the watchdog with
+        // nothing to read and no error to explain it.
+        for (watchdog, overlay, want) in [
+            (false, false, false),
+            (true, false, true),
+            (false, true, true),
+            (true, true, true),
+        ] {
+            let settings = settings_with(vec![edited("a", watchdog, overlay)]);
+            let plan = flush_plan(&settings, &["a".to_string()], &[]);
+            assert_eq!(
+                plan.contains(&FlushStep::WriteMangoHud { exe: "a".into() }),
+                want,
+                "watchdog={watchdog} overlay={overlay}"
+            );
+        }
+    }
+
+    #[test]
+    fn only_a_running_game_is_reapplied_to() {
+        let settings = settings_with(vec![edited("a", false, false)]);
+        assert!(!flush_plan(&settings, &["a".to_string()], &[])
+            .contains(&FlushStep::Reapply { exe: "a".into() }));
+        assert!(
+            flush_plan(&settings, &["a".to_string()], &["a".to_string()])
+                .contains(&FlushStep::Reapply { exe: "a".into() })
+        );
+    }
+
+    #[test]
+    fn a_profile_deleted_since_it_was_edited_is_skipped() {
+        // The edit and the flush are 400 ms apart, and Remove can land in
+        // between. Nothing is redone for a profile that is no longer there.
+        let settings = settings_with(vec![edited("b", true, true)]);
+        let plan = flush_plan(&settings, &["a".to_string()], &["a".to_string()]);
+        assert_eq!(plan, vec![]);
+    }
+
+    #[test]
+    fn each_profile_is_redone_in_full_before_the_next_one() {
+        let settings = settings_with(vec![edited("a", true, false), edited("b", true, false)]);
+        let plan = flush_plan(
+            &settings,
+            &["b".to_string(), "a".to_string()],
+            &["a".to_string(), "b".to_string()],
+        );
+        assert_eq!(
+            plan,
+            vec![
+                FlushStep::RetuneWatcher { exe: "a".into() },
+                FlushStep::WriteMangoHud { exe: "a".into() },
+                FlushStep::Reapply { exe: "a".into() },
+                FlushStep::RetuneWatcher { exe: "b".into() },
+                FlushStep::WriteMangoHud { exe: "b".into() },
+                FlushStep::Reapply { exe: "b".into() },
+            ],
+            "sorted, and one profile finished before the next begins"
+        );
+    }
 
     fn profile(json: serde_json::Value) -> Option<GameProfile> {
         let mut p: GameProfile = serde_json::from_value(json).ok()?;
