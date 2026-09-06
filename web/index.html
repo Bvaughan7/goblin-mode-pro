@@ -335,6 +335,169 @@
       padding: 10px 16px;
     }
 
+    /* Getting Started / Quickstart Section */
+    .install-guide-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      overflow: hidden;
+      margin-bottom: 90px;
+      box-shadow: 0 20px 45px -10px rgba(0, 0, 0, 0.7);
+      border-color: rgba(16, 185, 129, 0.2);
+    }
+
+    .install-guide-tabs {
+      display: flex;
+      background: #111a26;
+      border-bottom: 1px solid var(--card-border);
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+
+    .guide-tab {
+      padding: 14px 22px;
+      background: transparent;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: var(--text-muted);
+      font-size: 0.92rem;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.2s ease;
+      font-family: var(--font-sans);
+    }
+
+    .guide-tab:hover {
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .guide-tab.active {
+      color: var(--accent-goblin-light);
+      border-bottom-color: var(--accent-goblin);
+      background: rgba(16, 185, 129, 0.06);
+    }
+
+    .guide-content-wrapper {
+      padding: 24px 28px;
+    }
+
+    .guide-panel {
+      display: none;
+    }
+
+    .guide-panel.active {
+      display: block;
+    }
+
+    .guide-note {
+      color: var(--text-muted);
+      font-size: 0.95rem;
+      margin-bottom: 12px;
+    }
+
+    .code-terminal {
+      background: var(--code-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      padding: 12px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 8px;
+    }
+
+    .code-line {
+      font-family: var(--font-mono);
+      font-size: 0.92rem;
+      color: var(--accent-goblin-light);
+      overflow-x: auto;
+      white-space: nowrap;
+      scrollbar-width: none;
+    }
+
+    .cmd-prompt {
+      color: var(--accent-cyan-light);
+      margin-right: 8px;
+      user-select: none;
+    }
+
+    .guide-step {
+      padding: 24px 28px;
+      border-top: 1px solid var(--card-border);
+    }
+
+    .guide-step h4 {
+      font-size: 1.15rem;
+      font-weight: 700;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .step-num {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: var(--accent-goblin);
+      color: #04261a;
+      font-size: 0.85rem;
+      font-weight: 800;
+    }
+
+    .guide-step p {
+      color: var(--text-muted);
+      font-size: 0.95rem;
+      margin-bottom: 14px;
+    }
+
+    .launcher-table-wrapper {
+      overflow-x: auto;
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      background: #0d141f;
+    }
+
+    .launcher-table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 0.92rem;
+    }
+
+    .launcher-table th {
+      background: #141d2a;
+      padding: 12px 18px;
+      color: var(--text);
+      font-weight: 700;
+      border-bottom: 1px solid var(--card-border);
+    }
+
+    .launcher-table td {
+      padding: 12px 18px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      color: var(--text-muted);
+    }
+
+    .launcher-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    .launcher-table code {
+      font-family: var(--font-mono);
+      background: #090d14;
+      padding: 4px 8px;
+      border-radius: 6px;
+      border: 1px solid #1a2738;
+      color: var(--accent-goblin-light);
+    }
+
     .action-cmd {
       font-family: var(--font-mono);
       font-size: 0.95rem;
@@ -918,11 +1081,11 @@
       </a>
       <div class="nav-links">
         <a href="#features">Features</a>
+        <a href="#getting-started">Getting Started</a>
         <a href="#comparison">Comparison</a>
         <a href="#architecture">Architecture</a>
         <a href="#cli">CLI</a>
-        <a href="getting-started/">Getting Started</a>
-        <a href="per-game-settings/">Docs</a>
+        <a href="#docs">Docs</a>
         <a href="https://github.com/Bvaughan7/goblin-mode-pro" class="btn-gh" target="_blank" rel="noopener">
           <svg height="16" width="16" viewBox="0 0 16 16" fill="currentColor">
             <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
@@ -965,16 +1128,13 @@
 
       <!-- Hero CTA Buttons -->
       <div class="hero-buttons">
-        <a href="getting-started/" class="btn btn-primary">
+        <a href="#getting-started" class="btn btn-primary">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
           Get Started
         </a>
-        <a href="#showcase" class="btn btn-secondary">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
-          Watch Demo
-        </a>
         <a href="https://github.com/Bvaughan7/goblin-mode-pro" target="_blank" rel="noopener" class="btn btn-secondary">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
+          </svg>
           GitHub
         </a>
       </div>
@@ -1078,6 +1238,121 @@
         <h3>High-Performance Rust Core</h3>
         <p>Core process table scanning, scheduling decisions, and root helper operations ported to statically-linked Rust (<code>gmp-core</code>, <code>gmp-helper</code>) for sub-millisecond responsiveness.</p>
         <span class="tag-pill">Rust Edition 2021</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Getting Started & Quickstart Section -->
+  <section class="container" id="getting-started">
+    <div class="section-title">
+      <span class="section-tag">Quickstart Guide</span>
+      <h2>Get Started in 60 Seconds</h2>
+      <p>Install Goblin Mode Pro for your distribution, enable the systemd services, and launch your games with maximum hardware priority.</p>
+    </div>
+
+    <div class="install-guide-card">
+      <div class="install-guide-tabs">
+        <button class="guide-tab active" onclick="switchInstallTab(0)">Arch / CachyOS / Manjaro</button>
+        <button class="guide-tab" onclick="switchInstallTab(1)">Fedora / Nobara</button>
+        <button class="guide-tab" onclick="switchInstallTab(2)">Debian / Ubuntu</button>
+        <button class="guide-tab" onclick="switchInstallTab(3)">Universal Installer (Source)</button>
+      </div>
+
+      <div class="guide-content-wrapper">
+        <!-- Arch Tab -->
+        <div class="guide-panel active">
+          <p class="guide-note">Install the packaged release from the repo or build via makepkg:</p>
+          <div class="code-terminal">
+            <span class="code-line"><span class="cmd-prompt">$</span><span id="cmdArch">cd packaging/arch &amp;&amp; makepkg -si</span></span>
+            <button class="copy-btn" onclick="copySnippet('cmdArch', this)">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+              <span>Copy</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Fedora Tab -->
+        <div class="guide-panel">
+          <p class="guide-note">Clone and run the automated installer script:</p>
+          <div class="code-terminal">
+            <span class="code-line"><span class="cmd-prompt">$</span><span id="cmdFedora">git clone https://github.com/Bvaughan7/goblin-mode-pro.git &amp;&amp; cd goblin-mode-pro &amp;&amp; ./install.sh</span></span>
+            <button class="copy-btn" onclick="copySnippet('cmdFedora', this)">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+              <span>Copy</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Debian / Ubuntu Tab -->
+        <div class="guide-panel">
+          <p class="guide-note">Install dependencies and run the installer script:</p>
+          <div class="code-terminal">
+            <span class="code-line"><span class="cmd-prompt">$</span><span id="cmdDebian">git clone https://github.com/Bvaughan7/goblin-mode-pro.git &amp;&amp; cd goblin-mode-pro &amp;&amp; ./install.sh</span></span>
+            <button class="copy-btn" onclick="copySnippet('cmdDebian', this)">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+              <span>Copy</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Universal Tab -->
+        <div class="guide-panel">
+          <p class="guide-note">One-liner curl installer directly from GitHub:</p>
+          <div class="code-terminal">
+            <span class="code-line"><span class="cmd-prompt">$</span><span id="cmdUni">curl -sSL https://raw.githubusercontent.com/Bvaughan7/goblin-mode-pro/main/install.sh | bash</span></span>
+            <button class="copy-btn" onclick="copySnippet('cmdUni', this)">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+              <span>Copy</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 2: Service Activation -->
+      <div class="guide-step">
+        <h4><span class="step-num">2</span> Enable the Systemd Services</h4>
+        <p>Enable the root helper (for hardware power &amp; governor tuning) and user daemon (for auto-detection):</p>
+        <div class="code-terminal">
+          <span class="code-line"><span class="cmd-prompt">$</span><span id="cmdServices">sudo systemctl enable --now goblin-mode-pro-helper.service &amp;&amp; systemctl --user enable --now goblin-mode-pro.service</span></span>
+          <button class="copy-btn" onclick="copySnippet('cmdServices', this)">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+            <span>Copy</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Step 3: Launcher Integration -->
+      <div class="guide-step">
+        <h4><span class="step-num">3</span> Add the Game Launcher Wrapper</h4>
+        <p>Ensure env-var injection, MangoHud telemetry, and Proton logs are active by setting your launcher launch options:</p>
+        <div class="launcher-table-wrapper">
+          <table class="launcher-table">
+            <thead>
+              <tr>
+                <th>Launcher</th>
+                <th>Configuration Location</th>
+                <th>Launch Option Value</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Steam</strong></td>
+                <td>Game → Properties → Launch Options</td>
+                <td><code>goblin-run %command%</code></td>
+              </tr>
+              <tr>
+                <td><strong>Lutris</strong></td>
+                <td>Game → Configure → System options → Command prefix</td>
+                <td><code>goblin-run</code></td>
+              </tr>
+              <tr>
+                <td><strong>Heroic</strong></td>
+                <td>Settings → Advanced → Wrapper command</td>
+                <td><code>goblin-run</code></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   </section>
@@ -1350,7 +1625,7 @@
         <h3>Ready to Boost Your Linux Gaming?</h3>
         <p>Clone the repository or install the package for your distribution, paste <code>goblin-run %command%</code> into Steam, and reclaim your framerate.</p>
       </div>
-      <a href="getting-started/" class="btn-primary">
+      <a href="#getting-started" class="btn-primary">
         <span>Get Started Now</span>
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
           <path d="M5 12h14M12 5l7 7-7 7"/>
@@ -1368,10 +1643,10 @@
           <span>Goblin Mode Pro</span>
         </div>
         <div class="footer-links">
-          <a href="getting-started/">Getting Started</a>
-          <a href="cli/">CLI</a>
-          <a href="architecture/">Architecture</a>
-          <a href="troubleshooting/">Troubleshooting</a>
+          <a href="#getting-started">Getting Started</a>
+          <a href="#cli">CLI</a>
+          <a href="#architecture">Architecture</a>
+          <a href="#docs">Docs</a>
           <a href="https://github.com/Bvaughan7/goblin-mode-pro" target="_blank" rel="noopener">GitHub</a>
           <a href="https://github.com/Bvaughan7/goblin-mode-pro/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>
         </div>
@@ -1398,6 +1673,17 @@
           btn.style.borderColor = '';
           btn.style.color = '';
         }, 2000);
+      });
+    }
+
+    function switchInstallTab(idx) {
+      const tabs = document.querySelectorAll('.guide-tab');
+      const panels = document.querySelectorAll('.guide-panel');
+      tabs.forEach((tab, i) => {
+        tab.classList.toggle('active', i === idx);
+      });
+      panels.forEach((panel, i) => {
+        panel.classList.toggle('active', i === idx);
       });
     }
 
