@@ -9,7 +9,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::round::{half_even as round_half_even, one_dp as round1};
+use crate::round::{half_even as round_half_even, one_dp as round1, py_sum, two_dp as round2};
 
 /// How many recent prior sessions form the comparison baseline.
 pub const BASELINE_SESSIONS: usize = 6;
@@ -194,6 +194,230 @@ pub fn detect_regression(
     None
 }
 
+/// A session that has started but not yet ended.
+///
+/// The clock readings the tracker takes at `start` stay with the caller: this
+/// carries only the wall-clock stamp that ends up in the record, because the
+/// elapsed time is measured against a MONOTONIC reading that never appears in
+/// the summary and has no business in a crate that cannot read a clock.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct OpenSession {
+    pub exe: String,
+    pub game: String,
+    pub tweaks: Vec<String>,
+    pub started_wall: String,
+}
+
+impl OpenSession {
+    /// `SessionTracker.start`'s one rule: a game with no display name is
+    /// recorded under its executable. Python spells that `game or exe`, so it
+    /// is an EMPTY name that falls back, not a missing one.
+    pub fn new(exe: &str, game: &str, tweaks: &[String], started_wall: &str) -> Self {
+        Self {
+            exe: exe.to_owned(),
+            game: if game.is_empty() { exe } else { game }.to_owned(),
+            tweaks: tweaks.to_vec(),
+            started_wall: started_wall.to_owned(),
+        }
+    }
+}
+
+/// One finished session, as it is written to `sessions.jsonl`.
+///
+/// Field order is the Python dataclass's, because `asdict` preserves it and
+/// the file is read back by builds on both sides of the cutover.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct SessionSummary {
+    pub exe: String,
+    pub game: String,
+    pub started: String,
+    pub ended: String,
+    pub duration_s: f64,
+    pub fps_avg: Option<f64>,
+    pub fps_median: Option<f64>,
+    pub fps_1low: Option<f64>,
+    pub fps_min: Option<f64>,
+    pub samples: usize,
+    pub cpu_temp_avg: Option<f64>,
+    pub gpu_temp_avg: Option<f64>,
+    pub kernel: String,
+    pub tweaks: Vec<String>,
+
+    // populated only for benchmark runs
+    pub benchmark: bool,
+    /// 0.1% low.
+    pub fps_01low: Option<f64>,
+    pub fps_p95: Option<f64>,
+    pub frametime_ms_avg: Option<f64>,
+    /// Percentage of frames longer than twice the median frame time.
+    pub frametime_stutter_pct: Option<f64>,
+    pub cpu_temp_max: Option<f64>,
+    pub gpu_temp_max: Option<f64>,
+}
+
+/// The shortest session worth recording, in seconds.
+///
+/// A benchmark is held to half of it: a benchmark run is deliberate and
+/// usually short, where an ordinary session under a minute is almost always a
+/// game that failed to start.
+pub const MIN_DURATION_S: f64 = 60.0;
+/// The same, for a run that was armed as a benchmark.
+pub const MIN_BENCHMARK_DURATION_S: f64 = 30.0;
+
+/// Summarise a finished session, or decide it was not worth recording.
+///
+/// `elapsed_s` is the monotonic time since the session started and
+/// `ended_wall` the wall-clock stamp for the record; both are the caller's to
+/// read. `series` is every sample from every MangoHud log in the window,
+/// concatenated in the order the logs were read - which log a sample came from
+/// makes no difference to any figure here, but the ORDER the samples arrive in
+/// does, and that is the subtlest thing in this function. See `mean_in_order`.
+///
+/// Returns `None` when the session was too short, which is the only way it
+/// declines: a session with no frames at all is still recorded, because how
+/// long you played and what was applied while you did are worth keeping even
+/// when the overlay logged nothing.
+pub fn summarise(
+    open: &OpenSession,
+    series: &Series,
+    elapsed_s: f64,
+    kernel: &str,
+    ended_wall: &str,
+    benchmark: bool,
+) -> Option<SessionSummary> {
+    // Python clamps a backwards clock to zero here, and nothing can tell:
+    // any negative elapsed time is below the floor either way, so the clamp
+    // only ever feeds a value that is about to be rejected. Kept because it
+    // is what the other side does.
+    let duration = elapsed_s.max(0.0);
+    let floor = if benchmark {
+        MIN_BENCHMARK_DURATION_S
+    } else {
+        MIN_DURATION_S
+    };
+    // The UNROUNDED duration is what is compared, so 59.99 s is too short even
+    // though the record would have said 60.0.
+    if duration < floor {
+        return None;
+    }
+
+    let mut out = SessionSummary {
+        exe: open.exe.clone(),
+        game: open.game.clone(),
+        started: open.started_wall.clone(),
+        ended: ended_wall.to_owned(),
+        duration_s: round1(duration),
+        kernel: kernel.to_owned(),
+        tweaks: open.tweaks.clone(),
+        benchmark,
+        ..SessionSummary::default()
+    };
+
+    if series.fps.len() >= MIN_SAMPLES {
+        let sorted = sorted(&series.fps);
+        out.samples = sorted.len();
+        // Summed over the SORTED copy, where the temperatures below sum the
+        // order they were logged in - which is what Python does, and which
+        // NOTHING can observe. `py_sum` compensates, and over 257,000
+        // constructed sets whose mean sits on a rounding boundary no order of
+        // the same samples differed from another by a single bit. Faithful
+        // rather than load-bearing; do not "simplify" it into one order and
+        // expect a test to complain.
+        out.fps_avg = Some(round1(mean(&sorted)));
+        out.fps_median = Some(round1(percentile(&sorted, 0.5)));
+        out.fps_1low = Some(round1(percentile(&sorted, 0.01)));
+        out.fps_min = Some(round1(sorted[0]));
+        if benchmark {
+            out.fps_01low = Some(round1(percentile(&sorted, 0.001)));
+            out.fps_p95 = Some(round1(percentile(&sorted, 0.95)));
+        }
+    }
+
+    // No sample minimum on the temperatures, and none on purpose: one reading
+    // is a fair answer to "how hot did it get", where one frame is not a fair
+    // answer to "how did it run".
+    for (samples, avg, max) in [
+        (
+            &series.cpu_temp,
+            &mut out.cpu_temp_avg,
+            &mut out.cpu_temp_max,
+        ),
+        (
+            &series.gpu_temp,
+            &mut out.gpu_temp_avg,
+            &mut out.gpu_temp_max,
+        ),
+    ] {
+        if samples.is_empty() {
+            continue;
+        }
+        *avg = Some(round1(mean(samples)));
+        if benchmark {
+            *max = Some(round1(largest(samples)));
+        }
+    }
+
+    if benchmark && series.frametime_ms.len() >= MIN_SAMPLES {
+        // The frame times carry their own minimum, counted over THEMSELVES: a
+        // log can hold 40 frame rates and 29 frame times, because a row whose
+        // frametime cell is out of range still contributes its frame rate.
+        let sorted = sorted(&series.frametime_ms);
+        let median = percentile(&sorted, 0.5);
+        // Python writes `or 1.0` here, guarding a median of zero it cannot
+        // reach: a frame time is only kept when it is strictly positive, so a
+        // percentile of a non-empty series is positive too. Kept as it stands
+        // rather than reproduced, because a divisor of 1.0 ms would be a
+        // silent and arbitrary answer if it ever DID become reachable.
+        // Counted over the logged order, though a count over the sorted copy
+        // would be the same number - it is the same multiset. Written this way
+        // because it is the samples being counted, not the ranking.
+        let stutters = series
+            .frametime_ms
+            .iter()
+            .filter(|x| **x > 2.0 * median)
+            .count();
+        out.frametime_ms_avg = Some(round2(mean(&series.frametime_ms)));
+        out.frametime_stutter_pct = Some(round2(
+            100.0 * stutters as f64 / series.frametime_ms.len() as f64,
+        ));
+    }
+
+    Some(out)
+}
+
+/// `sorted(values)` - ascending, and a copy, because the caller's order is
+/// itself significant to the arithmetic above.
+fn sorted(values: &[f64]) -> Vec<f64> {
+    let mut out = values.to_vec();
+    out.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    out
+}
+
+/// `sum(values) / len(values)`.
+///
+/// Through `round::py_sum`, and not `iter().sum()`, because CPython's `sum`
+/// compensates and the fold does not - see the note there. The two differ by
+/// an ulp on samples like these, and `round(x, 1)` does not always hide it.
+fn mean(values: &[f64]) -> f64 {
+    py_sum(values) / values.len() as f64
+}
+
+/// `max(values)`.
+///
+/// Written to keep the first of equal values, as Python's `max` does, though
+/// for floats that is a distinction without a difference: two values that
+/// compare equal are the same number, so `>` and `>=` return the same answer
+/// and no test can tell them apart.
+fn largest(values: &[f64]) -> f64 {
+    let mut best = values[0];
+    for v in &values[1..] {
+        if *v > best {
+            best = *v;
+        }
+    }
+    best
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -207,6 +431,89 @@ mod tests {
                 fps_avg: Some(avg),
             })
             .collect()
+    }
+
+    // ---- summarise -------------------------------------------------------
+    //
+    // The parity corpus in tests/test_sessions_parity.py is what proves these
+    // agree with Python, and it is far larger than this. These hold the shape
+    // for a build that has no Python to diff against.
+
+    fn open_session() -> OpenSession {
+        OpenSession::new("game.exe", "A Game", &["governor".to_owned()], "STARTED")
+    }
+
+    fn frames(n: usize) -> Series {
+        Series {
+            fps: (0..n).map(|i| 60.0 + (i % 7) as f64).collect(),
+            cpu_temp: vec![70.0; n],
+            gpu_temp: vec![65.0; n],
+            frametime_ms: vec![8.0; n],
+        }
+    }
+
+    #[test]
+    fn a_session_under_a_minute_is_not_recorded() {
+        let s = &frames(60);
+        assert!(summarise(&open_session(), s, 59.9, "k", "ENDED", false).is_none());
+        assert!(summarise(&open_session(), s, 60.0, "k", "ENDED", false).is_some());
+    }
+
+    #[test]
+    fn a_benchmark_is_recorded_from_thirty_seconds() {
+        let s = &frames(60);
+        assert!(summarise(&open_session(), s, 29.9, "k", "ENDED", true).is_none());
+        assert!(summarise(&open_session(), s, 30.0, "k", "ENDED", true).is_some());
+    }
+
+    #[test]
+    fn too_few_frames_leave_the_rate_fields_empty_but_still_record() {
+        let out = summarise(&open_session(), &frames(29), 600.0, "k", "ENDED", false).unwrap();
+        assert_eq!(out.samples, 0);
+        assert_eq!(out.fps_avg, None);
+        assert_eq!(out.duration_s, 600.0);
+        assert_eq!(out.game, "A Game");
+    }
+
+    #[test]
+    fn an_ordinary_session_carries_no_benchmark_figures() {
+        let out = summarise(&open_session(), &frames(40), 600.0, "k", "ENDED", false).unwrap();
+        assert_eq!(out.samples, 40);
+        assert_eq!(out.fps_01low, None);
+        assert_eq!(out.fps_p95, None);
+        assert_eq!(out.cpu_temp_max, None);
+        assert_eq!(out.frametime_stutter_pct, None);
+        assert_eq!(out.cpu_temp_avg, Some(70.0));
+    }
+
+    #[test]
+    fn a_benchmark_carries_them_all() {
+        let out = summarise(&open_session(), &frames(40), 600.0, "k", "ENDED", true).unwrap();
+        assert!(out.benchmark);
+        assert!(out.fps_01low.is_some() && out.fps_p95.is_some());
+        assert_eq!(out.cpu_temp_max, Some(70.0));
+        assert_eq!(out.frametime_stutter_pct, Some(0.0));
+    }
+
+    #[test]
+    fn a_frame_of_exactly_twice_the_median_is_not_a_stutter() {
+        let mut s = frames(32);
+        for (i, ft) in s.frametime_ms.iter_mut().enumerate() {
+            *ft = if i < 24 { 8.0 } else { 16.0 };
+        }
+        let out = summarise(&open_session(), &s, 600.0, "k", "ENDED", true).unwrap();
+        assert_eq!(out.frametime_stutter_pct, Some(0.0));
+        s.frametime_ms[31] = 16.001;
+        let out = summarise(&open_session(), &s, 600.0, "k", "ENDED", true).unwrap();
+        // 1 frame in 32 is 3.125%, which is exactly representable and so an
+        // exact tie at two places: it goes to even, not up.
+        assert_eq!(out.frametime_stutter_pct, Some(3.12));
+    }
+
+    #[test]
+    fn a_nameless_game_is_recorded_under_its_executable() {
+        let open = OpenSession::new("game.exe", "", &[], "STARTED");
+        assert_eq!(open.game, "game.exe");
     }
 
     // ---- translated from tests/test_sessions.py --------------------------

@@ -1,5 +1,5 @@
-//! Rounding that matches Python's, because two implementations reporting
-//! different numbers for the same input is a bug users can see.
+//! Float arithmetic that matches CPython's, because two implementations
+//! reporting different numbers for the same input is a bug users can see.
 //!
 //! Python's `round` is half-to-EVEN, and it rounds the exact binary value
 //! rather than a scaled copy of it. Both halves of that matter, and both have
@@ -22,6 +22,48 @@ pub(crate) fn half_even(x: f64) -> f64 {
 /// `round(x, 1)` - to one decimal place, halves to even.
 pub(crate) fn one_dp(x: f64) -> f64 {
     format!("{x:.1}").parse().unwrap_or(x)
+}
+
+/// `sum(values)` for floats - which is NOT a fold.
+///
+/// CPython's `sum` stopped being a plain left-to-right addition in 3.12: over
+/// floats it now carries a compensation term (the improved Kahan-Babuska
+/// algorithm, due to Neumaier) and returns a result far closer to the exact
+/// one than any single pass can be. `iter().sum::<f64>()` is the fold, so the
+/// two disagree by an ulp or two on any set of samples large enough to lose
+/// bits - and a session average passes through `round(x, 1)`, which turns
+/// that ulp into a different frame rate whenever the mean lands near a
+/// boundary. Found exactly that way: 40 frame rates whose exact mean is
+/// 55.15, reported as 55.1 by Python and 55.2 by the fold.
+///
+/// The compensation is what makes this order-INSENSITIVE in practice, which
+/// is worth knowing: two callers summing the same samples in different orders
+/// will usually now agree, where the fold would not.
+pub(crate) fn py_sum(values: &[f64]) -> f64 {
+    let mut total = 0.0f64;
+    let mut compensation = 0.0f64;
+    for &x in values {
+        let t = total + x;
+        // Whichever addend is larger keeps its bits; the other's lost low bits
+        // are what the compensation accumulates.
+        if total.abs() >= x.abs() {
+            compensation += (total - t) + x;
+        } else {
+            compensation += (x - t) + total;
+        }
+        total = t;
+    }
+    total + compensation
+}
+
+/// `round(x, 2)` - to two decimal places, halves to even.
+///
+/// The session summary's frame-time figures are the only two-place numbers in
+/// the project, and one of them - a stutter percentage of `100 * n / total` -
+/// lands on an exact half often enough to matter: 7 frames in 32 is 21.875,
+/// which is representable exactly, so the tie is real rather than an artefact.
+pub(crate) fn two_dp(x: f64) -> f64 {
+    format!("{x:.2}").parse().unwrap_or(x)
 }
 
 /// `str(x)` for a float - which is not what Rust's `{}` prints.
@@ -79,6 +121,57 @@ pub(crate) fn py_str(x: f64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Every expected value here is what CPython 3.14 prints for `sum(...)`
+    /// of the same list. The fold's answer is given alongside, because on
+    /// three of these it is not close.
+    #[test]
+    fn py_sum_matches_cpython_where_a_fold_does_not() {
+        let cases: &[(&str, &[f64], f64, f64)] = &[
+            // (name, samples, CPython sum, the fold's answer)
+            (
+                "a tiny running total, then values that swamp it",
+                &[1e-8, 1e8, 1.0, -1e8, 1e-8],
+                1.00000002,
+                1.0000000249011611,
+            ),
+            // The compensation term is the whole answer here: the fold loses
+            // both 1.0s into 1e100 and gets zero.
+            (
+                "addends a hundred orders of magnitude apart",
+                &[1.0, 1e100, 1.0, -1e100],
+                2.0,
+                0.0,
+            ),
+            (
+                "largest first, which is the fold's worst order",
+                &[1e6, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1],
+                1000001.0,
+                1000000.9999999998,
+            ),
+            (
+                "a frame-rate window, where the two agree",
+                &[59.9, 60.1, 60.0, 59.95],
+                239.95,
+                239.95,
+            ),
+        ];
+        for (name, samples, cpython, folded) in cases {
+            let fold: f64 = samples.iter().sum();
+            assert_eq!(
+                py_sum(samples).to_bits(),
+                cpython.to_bits(),
+                "{name}: py_sum gave {}, CPython gives {cpython}",
+                py_sum(samples)
+            );
+            assert_eq!(fold.to_bits(), folded.to_bits(), "{name}: the fold moved");
+        }
+    }
+
+    #[test]
+    fn py_sum_of_nothing_is_zero() {
+        assert_eq!(py_sum(&[]), 0.0);
+    }
 
     #[test]
     fn an_integral_float_keeps_its_point() {
