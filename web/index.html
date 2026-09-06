@@ -576,13 +576,15 @@
       padding: 12px 20px;
       display: flex;
       align-items: center;
-      justify-content: space-between;
+      justify-content: center;
+      position: relative;
       border-bottom: 1px solid var(--card-border);
       gap: 16px;
-      flex-wrap: wrap;
     }
 
     .window-dots {
+      position: absolute;
+      left: 20px;
       display: flex;
       gap: 7px;
     }
@@ -1089,11 +1091,18 @@
         justify-content: center;
       }
       .showcase-titlebar {
+        position: static;
         flex-direction: column;
-        align-items: flex-start;
+        align-items: center;
+        gap: 12px;
+      }
+      .window-dots {
+        position: static;
+        margin-bottom: 4px;
       }
       .showcase-tabs {
         flex-wrap: wrap;
+        justify-content: center;
       }
       .nav-links {
         display: none;
