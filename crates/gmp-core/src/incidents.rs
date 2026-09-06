@@ -252,9 +252,267 @@ impl IncidentLog {
     }
 }
 
+/// One thing the daemon should do when an incident is raised, in order.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RaiseStep {
+    /// Put it in the bounded log, which persists it best-effort.
+    File,
+    /// Tell whoever is watching the bus.
+    Emit,
+    /// Keep the thirty seconds around it, if something is recording.
+    SaveClip { kind: String },
+    Notify {
+        title: String,
+        body: String,
+        urgency: u8,
+        tag: String,
+    },
+}
+
+/// The kinds worth having the thirty seconds before them on video.
+const WORTH_A_CLIP: &[&str] = &["gpu_fault", "fps_dip", "thermal_throttle"];
+
+/// The kinds worth interrupting someone mid-game for, and what to call them.
+///
+/// Not the same list as [`WORTH_A_CLIP`], and the two disagreeing is the
+/// point. A frame-rate dip is worth watching back and is not worth a popup -
+/// the user was there for it. VRAM left behind after a game exits is worth
+/// saying out loud and there is nothing to watch.
+const WORTH_SAYING: &[(&str, &str)] = &[
+    ("gpu_fault", "GPU / driver fault"),
+    ("thermal_throttle", "Thermal throttling"),
+    ("vram_not_freed", "VRAM not released after exit"),
+];
+
+/// How much of the detail a notification carries.
+const NOTIFY_DETAIL_CHARS: usize = 160;
+
+/// Everything raising an incident implies, in order.
+///
+/// Filing and emitting happen whatever it was. The two judgements are which
+/// kinds are worth a clip and which are worth a notification, and only one
+/// kind in the union of those lists is critical: an actual driver fault. KDE
+/// renders critical notifications as resident popups that ignore the expire
+/// timeout and bypass the user's per-app mute, and routine thermal throttling
+/// on a gaming laptop does not warrant that - it also made a stuck popup
+/// impossible to dismiss short of restarting plasmashell.
+pub fn raise_plan(kind: &str, detail: &str, clip_running: bool) -> Vec<RaiseStep> {
+    let mut plan = vec![RaiseStep::File, RaiseStep::Emit];
+    if clip_running && WORTH_A_CLIP.contains(&kind) {
+        plan.push(RaiseStep::SaveClip {
+            kind: kind.to_string(),
+        });
+    }
+    if let Some((_, title)) = WORTH_SAYING.iter().find(|(k, _)| *k == kind) {
+        plan.push(RaiseStep::Notify {
+            title: (*title).to_string(),
+            // Python slices a str by CODE POINT. Taking 160 BYTES would cut a
+            // detail with any non-ASCII in it short, and cut it inside a
+            // character it would panic.
+            body: detail.chars().take(NOTIFY_DETAIL_CHARS).collect(),
+            urgency: if kind == "gpu_fault" { 2 } else { 1 },
+            tag: "incident".to_string(),
+        });
+    }
+    plan
+}
+
+/// What the incident says was running: every active executable, joined.
+///
+/// The field is read by a person and by a model, and an empty string reads as
+/// missing data where `(none)` reads as an answer.
+pub fn game_label(active_exes: &[String]) -> String {
+    if active_exes.is_empty() {
+        return "(none)".to_string();
+    }
+    active_exes.join(", ")
+}
+
+/// The pid the incident is filed against: the first game that launched.
+///
+/// Not the game the incident is about - the daemon does not know which that
+/// is. Arbitrary, but the same arbitrary choice every time. A zero is the
+/// observer recording a game whose pid it never learned, and it is no pid
+/// rather than process zero.
+pub fn game_pid(pids: &[i64]) -> Option<i64> {
+    match pids.first() {
+        Some(0) | None => None,
+        Some(pid) => Some(*pid),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ---- what raising an incident does -----------------------------------
+
+    /// Every kind the daemon can raise. Two lists overlap without matching,
+    /// which is the whole shape of this decision.
+    const KINDS: &[&str] = &[
+        "thermal_throttle",
+        "power_limit",
+        "gpu_throttle",
+        "gpu_fault",
+        "fps_dip",
+        "fps_recovered",
+        "vram_not_freed",
+    ];
+
+    #[test]
+    fn every_incident_is_filed_and_emitted_whatever_it_is() {
+        for kind in KINDS {
+            let plan = raise_plan(kind, "something happened", false);
+            assert_eq!(&plan[..2], &[RaiseStep::File, RaiseStep::Emit], "{kind}");
+        }
+    }
+
+    #[test]
+    fn a_clip_is_saved_for_the_three_kinds_worth_watching_back() {
+        for kind in KINDS {
+            let saved = raise_plan(kind, "d", true)
+                .iter()
+                .any(|s| matches!(s, RaiseStep::SaveClip { .. }));
+            let want = matches!(*kind, "gpu_fault" | "fps_dip" | "thermal_throttle");
+            assert_eq!(saved, want, "{kind}");
+        }
+    }
+
+    #[test]
+    fn nothing_is_saved_when_nothing_is_recording() {
+        for kind in KINDS {
+            assert!(
+                !raise_plan(kind, "d", false)
+                    .iter()
+                    .any(|s| matches!(s, RaiseStep::SaveClip { .. })),
+                "{kind}"
+            );
+        }
+    }
+
+    #[test]
+    fn only_three_kinds_are_worth_interrupting_someone_for() {
+        for kind in KINDS {
+            let notified = raise_plan(kind, "d", true)
+                .iter()
+                .any(|s| matches!(s, RaiseStep::Notify { .. }));
+            let want = matches!(*kind, "gpu_fault" | "thermal_throttle" | "vram_not_freed");
+            assert_eq!(notified, want, "{kind}");
+        }
+    }
+
+    #[test]
+    fn a_dip_is_recorded_but_never_announced() {
+        // The two lists are not the same list. A dip is worth having the clip
+        // of and is not worth a popup; VRAM left behind is worth the popup and
+        // there is nothing to watch back.
+        let dip = raise_plan("fps_dip", "d", true);
+        assert!(dip.contains(&RaiseStep::SaveClip {
+            kind: "fps_dip".into()
+        }));
+        assert!(!dip.iter().any(|s| matches!(s, RaiseStep::Notify { .. })));
+
+        let vram = raise_plan("vram_not_freed", "d", true);
+        assert!(!vram.iter().any(|s| matches!(s, RaiseStep::SaveClip { .. })));
+        assert!(vram.iter().any(|s| matches!(s, RaiseStep::Notify { .. })));
+    }
+
+    #[test]
+    fn only_a_driver_fault_is_critical() {
+        // KDE renders critical notifications as resident popups that ignore
+        // the expire timeout and bypass a per-app mute. Routine throttling on
+        // a gaming laptop does not warrant that.
+        let urgency = |kind: &str| {
+            raise_plan(kind, "d", false).iter().find_map(|s| match s {
+                RaiseStep::Notify { urgency, .. } => Some(*urgency),
+                _ => None,
+            })
+        };
+        assert_eq!(urgency("gpu_fault"), Some(2));
+        assert_eq!(urgency("thermal_throttle"), Some(1));
+        assert_eq!(urgency("vram_not_freed"), Some(1));
+    }
+
+    #[test]
+    fn the_notification_says_what_happened_in_words() {
+        let title = |kind: &str| {
+            raise_plan(kind, "d", false).iter().find_map(|s| match s {
+                RaiseStep::Notify { title, .. } => Some(title.clone()),
+                _ => None,
+            })
+        };
+        assert_eq!(title("gpu_fault").as_deref(), Some("GPU / driver fault"));
+        assert_eq!(
+            title("thermal_throttle").as_deref(),
+            Some("Thermal throttling")
+        );
+        assert_eq!(
+            title("vram_not_freed").as_deref(),
+            Some("VRAM not released after exit")
+        );
+    }
+
+    #[test]
+    fn a_long_detail_is_cut_to_160_characters_not_160_bytes() {
+        // Python slices a str by CODE POINT. A detail with any non-ASCII in
+        // it - a game's title, a line of Proton output - would be cut short by
+        // a byte slice, and cut in the MIDDLE of a character it would panic.
+        let detail = "\u{e9}".repeat(200);
+        let body = raise_plan("gpu_fault", &detail, false)
+            .iter()
+            .find_map(|s| match s {
+                RaiseStep::Notify { body, .. } => Some(body.clone()),
+                _ => None,
+            })
+            .unwrap();
+        assert_eq!(body.chars().count(), 160);
+        assert_eq!(body, "\u{e9}".repeat(160));
+    }
+
+    #[test]
+    fn a_short_detail_is_left_alone() {
+        let body = raise_plan("gpu_fault", "brief", false)
+            .iter()
+            .find_map(|s| match s {
+                RaiseStep::Notify { body, .. } => Some(body.clone()),
+                _ => None,
+            })
+            .unwrap();
+        assert_eq!(body, "brief");
+    }
+
+    // ---- what the incident says it happened to ---------------------------
+
+    #[test]
+    fn the_game_is_every_active_exe_joined() {
+        assert_eq!(
+            game_label(&["Wow.exe".to_string(), "rs2client".to_string()]),
+            "Wow.exe, rs2client"
+        );
+    }
+
+    #[test]
+    fn nothing_running_is_the_word_none_rather_than_an_empty_field() {
+        // The field is read by a human and by a model. An empty string reads
+        // as missing data; "(none)" reads as an answer.
+        assert_eq!(game_label(&[]), "(none)");
+    }
+
+    #[test]
+    fn the_pid_is_the_first_game_that_launched() {
+        // Not the game the incident is about - the daemon does not know which
+        // that is. Arbitrary, but it is the same arbitrary choice every time.
+        assert_eq!(game_pid(&[4242, 99]), Some(4242));
+    }
+
+    #[test]
+    fn a_pid_of_zero_is_no_pid_at_all() {
+        // The observer records 0 for a game whose pid it never learned, and
+        // the Python turns that into None on the way out. A literal 0 in the
+        // field would be read as a process.
+        assert_eq!(game_pid(&[0]), None);
+        assert_eq!(game_pid(&[]), None);
+    }
 
     fn incident() -> Incident {
         Incident {
