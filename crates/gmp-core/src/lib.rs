@@ -18,6 +18,7 @@ pub mod config_tables;
 pub mod diagnostics;
 pub mod fpswatch;
 pub mod gamedetect;
+pub mod gameevent;
 pub mod gpu;
 pub mod incidents;
 pub mod logrules;
