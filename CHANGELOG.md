@@ -7,6 +7,22 @@ All notable changes to Goblin Mode Pro. Format loosely follows
 ## [Unreleased]
 
 ### Fixed
+- **A build could be adopted as a game, permanently.** Auto-detection scores a
+  launcher tag on one process and then attributes it to the fattest process in
+  that process's whole subtree - which is how a Proton tree gets tuned for the
+  game rather than for the wrapper that started it. The walk skipped Wine
+  scaffolding but not the blocklist, so anything started under a shell whose
+  command line merely mentions a launcher could be picked instead, and on a
+  developer's machine the fattest thing under a shell is a compiler. The
+  adopted profile is written to the config and matches by substring from then
+  on, so every subsequent build pinned the governor, wrote a session to the
+  history, and announced performance mode for a game that was not running.
+  The walk now refuses the same names scoring always has, and build tooling -
+  `cargo`, `rustc`, the compilers, the linkers, `make`, `ninja`, `cmake`,
+  `npm` and friends - is on that list. Exact names only: a stem like "make" or
+  "ld" would match half the games ever released. An existing bad profile is
+  removed by ignoring it (the tool's own Ignore button, or `IgnoreGame`), and
+  can be brought back with Restore.
 - **A damaged `applied.json` could stop the daemon starting, and break
   `--revert`.** The file records what the last run applied so that a *different*
   process can undo it — the `--revert` hook systemd runs on stop, and the

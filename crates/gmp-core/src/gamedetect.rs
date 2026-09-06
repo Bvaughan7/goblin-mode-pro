@@ -6,6 +6,12 @@
 //! Steam appmanifest for a title - stay in Python for now. What moves here is
 //! the decision made from them.
 //!
+//! `_pick_real_pid` stays there too, because it walks a process tree. When it
+//! moves, it must consult [`blocked`]: a launcher tag is scored on ONE process
+//! and then attributed to the fattest thing in its whole subtree, and a walk
+//! that skips only Wine scaffolding is a way around this list rather than a
+//! use of it. That was a real bug, not a hypothetical one.
+//!
 //! The asymmetry to keep in mind while reading: a false NEGATIVE means the
 //! tool does nothing, which is disappointing. A false POSITIVE means it
 //! renices a browser and pins the governor for a text editor, which is worse.
@@ -24,6 +30,12 @@ const GENERIC_SCORE: i32 = 6;
 /// Exact process names that are never games. Carried across verbatim.
 /// Adding a name here is how a false positive gets fixed, so the list is
 /// the specification rather than a convenience.
+///
+/// The build tooling at the end of it is there because a compiler is the
+/// desktop process that looks most like a game on the signals this scores:
+/// gigabytes resident, minutes at a time, started and stopped over and over.
+/// Exact names only - a stem like "make" or "ld" would match half the games
+/// ever released.
 pub const BLOCKLIST: &[&str] = &[
     r"Xorg",
     r"Xwayland",
@@ -31,28 +43,55 @@ pub const BLOCKLIST: &[&str] = &[
     r"blender",
     r"bottles",
     r"brave",
+    r"c++",
+    r"cargo",
+    r"cc",
+    r"cc1",
+    r"cc1plus",
+    r"ccache",
     r"chrome",
     r"chromium",
+    r"clang",
+    r"clang++",
+    r"clangd",
+    r"cmake",
     r"code",
     r"dbus-daemon",
     r"discord",
     r"dolphin",
     r"electron",
     r"firefox",
+    r"g++",
+    r"gcc",
     r"ghostty",
     r"gimp",
     r"gjs",
+    r"gmake",
+    r"gold",
     r"heroic",
     r"kitty",
     r"konsole",
+    r"ld",
+    r"ld.lld",
+    r"lld",
     r"lutris",
+    r"make",
+    r"meson",
+    r"mold",
     r"nautilus",
+    r"ninja",
     r"node",
+    r"npm",
     r"obs",
     r"pipewire",
+    r"pnpm",
     r"pulseaudio",
     r"python",
     r"python3",
+    r"rust-analyzer",
+    r"rustc",
+    r"samu",
+    r"sccache",
     r"spotify",
     r"steam",
     r"steamwebhelper",
@@ -61,6 +100,7 @@ pub const BLOCKLIST: &[&str] = &[
     r"thunderbird",
     r"wezterm-gui",
     r"wireplumber",
+    r"yarn",
 ];
 
 /// Name/exe substrings marking a desktop-environment or system process.

@@ -210,5 +210,90 @@ class Scoring(unittest.TestCase):
         self.assertIsNone(result)
 
 
+BUILD_TOOLS = ("cargo", "rustc", "rust-analyzer", "cc1", "gcc", "clang", "ld",
+               "mold", "make", "ninja", "cmake", "meson", "npm", "sccache")
+
+
+class BuildToolsAreNotGames(unittest.TestCase):
+    """A compiler is the one desktop process that looks most like a game on
+    the signals this scores: it eats memory, it runs for minutes, and it is
+    started and stopped over and over. It renders nothing, but it does not
+    have to - a launcher tag anywhere in its process tree is enough."""
+
+    def _score(self, name, **kw):
+        return Scoring._score(self, name, **kw)
+
+    def test_a_build_tool_scores_nothing_however_hard_it_renders(self):
+        for tool in BUILD_TOOLS:
+            with self.subTest(tool=tool):
+                self.assertIsNone(
+                    self._score(tool, gpu=2, libs=True, rss_mb=4000))
+
+    def test_the_case_it_spells_itself_in_does_not_matter(self):
+        self.assertIsNone(self._score("CARGO", gpu=2, libs=True, rss_mb=4000))
+
+
+class TheGameInsideATaggedTree(unittest.TestCase):
+    """`_pick_real_pid` picks which process in a launcher-tagged tree is the
+    game. A launcher tags a whole Proton tree, and the process that holds the
+    memory is the game rather than the wrapper that started it - but the
+    fattest process in a tree is not always something that should be tuned."""
+
+    def _tree(self, rows):
+        """rows: (pid, ppid, name, rss_mb). Returns the by_pid map."""
+        class _Proc:
+            def __init__(self, pid, ppid, name, rss_mb):
+                self.info = {"pid": pid, "ppid": ppid, "name": name,
+                             "exe": f"/usr/bin/{name}"}
+                self._rss = rss_mb * 1024 * 1024
+
+            def memory_info(self):
+                class _M:
+                    pass
+                m = _M()
+                m.rss = self._rss
+                return m
+
+        return {row[0]: _Proc(*row) for row in rows}
+
+    def test_the_fattest_descendant_is_the_game(self):
+        by_pid = self._tree([
+            (1, 0, "reaper", 10),
+            (2, 1, "launch-wrapper", 20),
+            (3, 2, "factorio", 900),
+        ])
+        self.assertEqual(gamedetect._pick_real_pid(1, by_pid), (3, "factorio"))
+
+    def test_wine_scaffolding_is_never_the_game(self):
+        by_pid = self._tree([
+            (1, 0, "reaper", 10),
+            (2, 1, "explorer.exe", 4000),
+            (3, 1, "Game.exe", 900),
+        ])
+        self.assertEqual(gamedetect._pick_real_pid(1, by_pid), (3, "Game.exe"))
+
+    def test_a_blocklisted_process_is_never_the_game(self):
+        """The one that actually happened: a shell whose command line mentions
+        a launcher tags its whole subtree, and the fattest thing under it is
+        whatever the developer is building. Scoring skips blocklisted names;
+        this walk did not, so the blocklist could be bypassed by being a
+        child of something tagged."""
+        by_pid = self._tree([
+            (1, 0, "sh", 5),
+            (2, 1, "cargo", 4000),
+            (3, 1, "Game.exe", 900),
+        ])
+        self.assertEqual(gamedetect._pick_real_pid(1, by_pid), (3, "Game.exe"))
+
+    def test_a_tree_with_nothing_worth_tuning_falls_back_to_the_root(self):
+        """Every candidate refused. The root's own name is the answer, which
+        is what the caller already does when the pid has no children at all."""
+        by_pid = self._tree([
+            (1, 0, "sh", 5),
+            (2, 1, "cargo", 4000),
+        ])
+        self.assertEqual(gamedetect._pick_real_pid(1, by_pid)[1], "sh")
+
+
 if __name__ == "__main__":
     unittest.main()

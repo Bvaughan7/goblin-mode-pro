@@ -44,6 +44,14 @@ _BLOCKLIST = {
     "python3", "python", "gjs", "node", "nautilus", "dolphin", "konsole",
     "alacritty", "kitty", "wezterm-gui", "ghostty", "Xorg", "Xwayland",
     "pipewire", "wireplumber", "pulseaudio", "systemd", "dbus-daemon",
+    # Build tooling. A compiler is the desktop process that looks most like a
+    # game on these signals: it holds gigabytes, it runs for minutes, and it
+    # starts and stops over and over. Exact names only - a stem like "make"
+    # or "ld" would match half the games ever released.
+    "cargo", "rustc", "rust-analyzer", "cc1", "cc1plus", "gcc", "g++", "cc",
+    "c++", "clang", "clang++", "clangd", "ld", "ld.lld", "lld", "mold",
+    "gold", "make", "gmake", "ninja", "samu", "cmake", "meson", "ccache",
+    "sccache", "npm", "pnpm", "yarn",
 }
 # name/exe substrings that mark a desktop-environment / system process
 _BLOCK_STEMS = (
@@ -305,6 +313,14 @@ def _pick_real_pid(pid: int, by_pid: dict) -> tuple[int, str]:
         cname = cur.info.get("name") or ""
         cbase = (_win_basename(cur.info.get("exe") or "") or cname)
         if cbase.lower() in _WINE_INFRA or cname.lower() in _WINE_INFRA:
+            continue
+        # The blocklist applies here too, and used not to. A launcher tag is
+        # scored on ONE process and then attributed to the fattest thing in
+        # its whole subtree, so a shell whose command line merely mentions a
+        # launcher tags everything it started - and the fattest of those is
+        # whatever the machine is busy with, not a game. Scoring has always
+        # refused those names; this walk was the way around it.
+        if _blocked(cname, cbase):
             continue
         try:
             rss = cur.memory_info().rss
