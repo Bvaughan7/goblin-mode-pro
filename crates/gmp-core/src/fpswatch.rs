@@ -18,7 +18,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::round::one_dp;
+use crate::round::{one_dp, py_sum};
 
 pub const REMIND_SECONDS: f64 = 120.0;
 const RECENT_S: f64 = 3.0;
@@ -358,7 +358,7 @@ impl Watcher {
 
     pub fn current_fps(&self) -> Option<f64> {
         let w = self.window(RECENT_S);
-        (!w.is_empty()).then(|| one_dp(w.iter().sum::<f64>() / w.len() as f64))
+        (!w.is_empty()).then(|| one_dp(mean(&w)))
     }
 
     /// `{}` when there is nothing to report, which the caller distinguishes
@@ -372,7 +372,7 @@ impl Watcher {
         sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
         let min = sorted.first().copied().unwrap_or(0.0);
         Some(serde_json::json!({
-            "fps_avg": one_dp(w.iter().sum::<f64>() / w.len() as f64),
+            "fps_avg": one_dp(mean(&w)),
             "fps_min": one_dp(min),
             "fps_1low": one_dp(sorted[sorted.len() / 100]),
             "in_dip": self.state == State::Dipping,
@@ -410,7 +410,7 @@ impl Watcher {
         if recent.len() < 3 || base.len() < 12 {
             return None;
         }
-        let fps = recent.iter().sum::<f64>() / recent.len() as f64;
+        let fps = mean(&recent);
         let now = self.vclock;
 
         let prev_baseline = self.frozen_baseline;
@@ -475,6 +475,16 @@ impl Watcher {
         }
         None
     }
+}
+
+/// `sum(values) / len(values)`, through the compensated sum CPython uses.
+///
+/// Not `iter().sum::<f64>()`. Every average here is reported to one decimal
+/// place, and the fold's extra ulp is enough to cross that: a 60 s window
+/// whose exact mean is 55.15 reads 55.2 as a fold and 55.1 in Python. The
+/// caller must not be empty.
+fn mean(values: &[f64]) -> f64 {
+    py_sum(values) / values.len() as f64
 }
 
 #[cfg(test)]
