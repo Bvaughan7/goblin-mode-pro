@@ -394,9 +394,222 @@ pub fn scx_action(active: &[GameProfile], applied: Option<&str>) -> ScxAction {
     }
 }
 
+/// The reserved name force-boost applies under.
+///
+/// It is not a game and there is no process behind it, and the payload checks
+/// for it by name in two places rather than trusting the profile's fields -
+/// see [`forced_profile`].
+pub const FORCED_EXE: &str = "__forced__";
+
+/// One thing a switch that is not a game makes the daemon do.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SwitchStep {
+    /// Hand back every tweak, for every profile at once.
+    RevertAll,
+    /// Forget every live pid. Nothing is being tuned any more.
+    ForgetEveryPid,
+    StopDiagnostics,
+    /// Apply [`forced_profile`].
+    ApplyForced,
+    EnsureDiagnostics,
+    /// Undo it. Only the reserved name is read on the way out.
+    RevertForced,
+    BroadcastStatus,
+}
+
+/// The profile force-boost applies: a DEFAULT profile under the reserved name.
+///
+/// Worth saying out loud, because it means the switch has no settings of its
+/// own. What it does to the machine is whatever a fresh profile asks for -
+/// the governor, the tearing hint, the power limits - so changing a profile
+/// default changes what this switch does.
+///
+/// Three fields are set explicitly and none of them is the defence. Renice and
+/// core-pinning are already refused for want of a pid, and MangoHud already
+/// refuses the reserved name. They are belt and braces, and neither layer is
+/// redundant enough to drop: with the name check gone, an overlay switched
+/// "off" still means a MangoHud config file WRITTEN with the overlay hidden,
+/// not one left alone.
+pub fn forced_profile() -> GameProfile {
+    let mut profile = GameProfile {
+        exe: FORCED_EXE.to_string(),
+        display_name: "Forced performance".to_string(),
+        renice_enabled: serde_json::json!(false),
+        per_game_mangohud: serde_json::json!(false),
+        mangohud: match serde_json::json!({"enabled": false}) {
+            serde_json::Value::Object(map) => map,
+            _ => unreachable!(),
+        },
+        ..GameProfile::default()
+    };
+    // `__post_init__` runs on construction in the Python, and it is not
+    // cosmetic here: the overlay map passed in holds ONE key, and the fill-in
+    // adds the rest. A forced profile that skipped it would carry a different
+    // overlay config from every other profile in the tool.
+    profile
+        .normalise()
+        .expect("the reserved name is a valid one");
+    profile
+}
+
+/// What the master switch does when it is thrown.
+///
+/// Turning the tool ON does nothing but say so. The observer's next sweep
+/// finds whatever is running and starts it through the ordinary path; applying
+/// here as well would race that and apply twice.
+///
+/// Turning it OFF hands everything back at once. It does not wait for the
+/// observer, even though the observer will also report every running game as
+/// exited on its next tick - with nothing enabled, nothing is found, so
+/// everything running gets an exit event. That second teardown is what clears
+/// the per-game state this one does not touch, and this one is what makes the
+/// switch immediate rather than up to a poll interval late.
+///
+/// The sampler is the exception, for the same reason it is everywhere else: a
+/// forced boost is the user holding the machine up by hand, and the sampler is
+/// what watches it. The tweaks still go back - the switch means what it says.
+pub fn master_plan(enabled: bool, forced_boost: bool) -> Vec<SwitchStep> {
+    let mut plan = Vec::new();
+    if !enabled {
+        plan.push(SwitchStep::RevertAll);
+        plan.push(SwitchStep::ForgetEveryPid);
+        if !forced_boost {
+            plan.push(SwitchStep::StopDiagnostics);
+        }
+    }
+    plan.push(SwitchStep::BroadcastStatus);
+    plan
+}
+
+/// What force-boost does when it is thrown.
+///
+/// On, the sampler starts whether or not anything is being played: the point
+/// of the switch is to hold the machine up outside a game, and a boost nothing
+/// is watching is a boost nobody can see the effect of.
+///
+/// Off, it stops only when nothing is being played. A game that is still
+/// running still wants its diagnostics, and taking them away because a switch
+/// the user threw for something else went back would be the same mistake as
+/// one game's exit tearing down another's.
+pub fn force_boost_plan(on: bool, games_running: bool) -> Vec<SwitchStep> {
+    let mut plan = Vec::new();
+    if on {
+        plan.push(SwitchStep::ApplyForced);
+        plan.push(SwitchStep::EnsureDiagnostics);
+    } else {
+        plan.push(SwitchStep::RevertForced);
+        if !games_running {
+            plan.push(SwitchStep::StopDiagnostics);
+        }
+    }
+    plan.push(SwitchStep::BroadcastStatus);
+    plan
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ---- the two switches that are not a game -----------------------------
+
+    #[test]
+    fn the_forced_profile_is_a_default_one_under_a_reserved_name() {
+        // What force-boost DOES is whatever a default profile asks for. That
+        // is worth saying out loud: the switch has no settings of its own, so
+        // changing a profile default changes what this switch does.
+        let forced = forced_profile();
+        assert_eq!(forced.exe, FORCED_EXE);
+        assert_eq!(forced.display_name, "Forced performance");
+        let default = GameProfile::default();
+        assert_eq!(forced.governor_boost, default.governor_boost);
+        assert_eq!(forced.tearing_enabled, default.tearing_enabled);
+        assert_eq!(forced.power_limit_enabled, default.power_limit_enabled);
+    }
+
+    #[test]
+    fn the_forced_profile_asks_for_nothing_that_needs_a_process() {
+        // There is no pid. Each of these is ALSO refused elsewhere - renice
+        // and core-pinning are guarded on the pid, and MangoHud on the
+        // reserved name - so all three are belt and braces rather than the
+        // defence. Neither layer is redundant enough to remove: with the
+        // name check gone, an overlay switched "off" still means a written
+        // MangoHud config, not an unwritten one.
+        let forced = forced_profile();
+        assert!(!truthy(&forced.renice_enabled));
+        assert!(!truthy(&forced.per_game_mangohud));
+        assert_eq!(
+            forced.mangohud.get("enabled").map(truthy),
+            Some(false),
+            "the overlay is off, whatever a profile default says"
+        );
+    }
+
+    #[test]
+    fn turning_the_tool_off_hands_everything_back() {
+        assert_eq!(
+            master_plan(false, false),
+            vec![
+                SwitchStep::RevertAll,
+                SwitchStep::ForgetEveryPid,
+                SwitchStep::StopDiagnostics,
+                SwitchStep::BroadcastStatus,
+            ]
+        );
+    }
+
+    #[test]
+    fn turning_the_tool_on_changes_nothing_by_itself() {
+        // The observer's next sweep finds whatever is running and starts it.
+        // Applying here would race that and apply twice.
+        assert_eq!(master_plan(true, false), vec![SwitchStep::BroadcastStatus]);
+        assert_eq!(master_plan(true, true), vec![SwitchStep::BroadcastStatus]);
+    }
+
+    #[test]
+    fn a_forced_boost_keeps_the_sampler_when_the_tool_is_switched_off() {
+        // The tweaks still go back - the switch means what it says - but the
+        // boost the user is holding by hand is still up, and the sampler is
+        // what watches it.
+        assert_eq!(
+            master_plan(false, true),
+            vec![
+                SwitchStep::RevertAll,
+                SwitchStep::ForgetEveryPid,
+                SwitchStep::BroadcastStatus,
+            ]
+        );
+    }
+
+    #[test]
+    fn forcing_a_boost_applies_the_profile_and_starts_watching() {
+        assert_eq!(
+            force_boost_plan(true, false),
+            vec![
+                SwitchStep::ApplyForced,
+                SwitchStep::EnsureDiagnostics,
+                SwitchStep::BroadcastStatus,
+            ]
+        );
+        assert_eq!(force_boost_plan(true, true), force_boost_plan(true, false));
+    }
+
+    #[test]
+    fn releasing_a_boost_stops_watching_only_if_nothing_is_playing() {
+        assert_eq!(
+            force_boost_plan(false, false),
+            vec![
+                SwitchStep::RevertForced,
+                SwitchStep::StopDiagnostics,
+                SwitchStep::BroadcastStatus,
+            ]
+        );
+        assert_eq!(
+            force_boost_plan(false, true),
+            vec![SwitchStep::RevertForced, SwitchStep::BroadcastStatus],
+            "a game is still being played and still wants its diagnostics"
+        );
+    }
+
     use serde_json::json;
 
     fn profiles(raw: serde_json::Value) -> Vec<GameProfile> {
