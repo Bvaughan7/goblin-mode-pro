@@ -160,7 +160,7 @@
 
     .hero-glow {
       position: absolute;
-      top: 10%;
+      top: 0;
       left: 50%;
       transform: translateX(-50%);
       width: 600px;
@@ -169,6 +169,37 @@
       filter: blur(80px);
       z-index: -1;
       pointer-events: none;
+    }
+
+    .hero-mascot {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      margin-bottom: 24px;
+    }
+
+    .hero-mascot img {
+      width: 110px;
+      height: 110px;
+      object-fit: contain;
+      filter: drop-shadow(0 0 28px rgba(16, 185, 129, 0.45));
+      animation: mascotFloat 4s ease-in-out infinite;
+      transition: transform 0.3s ease, filter 0.3s ease;
+      cursor: pointer;
+    }
+
+    .hero-mascot img:hover {
+      transform: scale(1.08) rotate(-3deg);
+      filter: drop-shadow(0 0 38px rgba(16, 185, 129, 0.7));
+    }
+
+    @keyframes mascotFloat {
+      0%, 100% {
+        transform: translateY(0);
+      }
+      50% {
+        transform: translateY(-8px);
+      }
     }
 
     .pill-badge {
@@ -1100,6 +1131,9 @@
   <section class="hero">
     <div class="hero-glow"></div>
     <div class="container">
+      <div class="hero-mascot">
+        <img src="assets/logo.svg" alt="Goblin Mode Pro Mascot">
+      </div>
       <div class="pill-badge">
         <span>v1.2.0</span>
         <span>•</span>
