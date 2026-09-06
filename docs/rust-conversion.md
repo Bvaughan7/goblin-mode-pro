@@ -249,7 +249,7 @@ Block by block, tracked in [issue #1](https://github.com/Bvaughan7/goblin-mode-p
 | **P2** | Freeze the daemon's session-bus interface, and grade it from outside | **Done.** `docs/dbus-daemon-interface-v1.xml` (29 methods, 5 signals, 3 properties) + `tests/conformance/daemon.py`. Baseline on real hardware: **23 PASS / 0 FAIL / 9 SKIP** — it was 1 FAIL on the first run, and that bug is fixed |
 | **P0** | State the widened scope publicly, and say plainly that the original justification does not extend to it | **Done.** This page, the README and the ROADMAP |
 | **P3** | `gmp-core` — the domain logic, tests translated first, module by module | **Done. All 12 modules**, each with a parity harness that asks both implementations the same questions and diffs the answers. 602 Python tests, 263 Rust |
-| **P4** | `gmp-daemon` and `gmp-cli` | **In progress.** Nine judgement slices are ported, and `crates/gmp-daemon` serves the frozen interface - graded byte for byte by the same canonicalizer the Python daemon goes through - with the four disk-backed read methods answering for real and the rest refusing. What is left is the poll loop, the apply/revert path and the state they own: a rewrite against that contract rather than an extract-and-diff |
+| **P4** | `gmp-daemon` and `gmp-cli` | **In progress.** `crates/gmp-daemon` serves the frozen interface - graded byte for byte by the same canonicalizer the Python daemon goes through - with the four disk-backed read methods answering for real and the rest refusing. The judgement the loop makes is being ported ahead of the loop itself, each piece as a plan the daemon carries out rather than as calls it makes: the poll tick, what the machine should be doing for the active set, the calls that implies and their order, the scheduler decision, the record a finished session leaves behind, and what a game leaving means. What is left is the launch half of that last one, the incident and diagnostics ticks, and the apply/revert plumbing that holds the live helper handles |
 | **P5** | `gmp-gui` — gtk4-rs, `ksni` for the tray, and the i18n msgids preserved character for character | Not started. ~3,300 lines |
 | **P6** | Cutover: delete the Python, repackage, re-verify every capability under Rust | Not started |
 | **H5** | `.deb` / `.rpm` become architecture-specific | **Done, differently.** Making the whole package architecture-specific would drop every non-x86 user of a package that is otherwise pure Python. The compiled helper is a separate optional x86_64 package instead; the main package stays `all`/`noarch` |
@@ -281,6 +281,17 @@ What the port has found so far, none of which was in the plan:
   Python uses for liveness, because its `Signal` is non-zero by construction
   and this crate forbids `unsafe`. The pidfd's `/proc/self/fdinfo` entry
   answers the same question instead.
+- **The kernel's `(deleted)` marker is not part of the path.** Once the file
+  behind a running process is replaced - a package update, or a game patching
+  itself - `/proc/<pid>/exe` reads `/usr/bin/thing (deleted)` for the rest of
+  that process's life. psutil strips that; the Rust process scanner did not,
+  and the observer matches a profile against the basename of that string. A
+  game updated mid-session would have stopped matching its own profile, so the
+  daemon would have reported it as exited: tweaks reverted underneath it and a
+  session summary written while it was still on screen. Found by the parity
+  harness against a live `/proc` after an update, which is the only place it
+  could have been found - three processes on the machine disagreed with psutil
+  that day and none on any other.
 
 Freezing the *daemon's* interface did the same thing on its first run:
 **ignoring a game could not be undone.** `IgnoreGame` appended to
