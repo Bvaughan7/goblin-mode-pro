@@ -69,6 +69,56 @@ pub struct Sample {
     pub gpu_throttle_reasons: String,
     #[serde(default)]
     pub cpu_throttled: bool,
+    /// Per-core load. Only [`dip_context`] reads it; `assess` works off the
+    /// aggregate.
+    #[serde(default)]
+    pub per_core: Vec<f64>,
+    #[serde(default)]
+    pub disk_read_mbps: Option<f64>,
+}
+
+/// What was going on around a frame-rate dip, as `describe_dip` wants it.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct DipContext {
+    pub cpu_load: Option<f64>,
+    pub cpu_core_max: Option<f64>,
+    pub disk_read: Option<f64>,
+}
+
+/// The worst moment in the window a dip is classified against.
+///
+/// A maximum rather than an average or the last reading, and the reason is the
+/// question being asked: a dip is caused by a SPIKE, and a spike is invisible
+/// in both of those. The window the daemon passes is the last few seconds.
+///
+/// The three fields do not treat a missing reading the same way, and that
+/// asymmetry is carried across rather than tidied up. A sample with no
+/// per-core readings is skipped, so a window that never read them reports
+/// nothing. A sample with no disk reading counts as ZERO, so a window that
+/// never read the disk reports "no disk activity" - which is a claim, and a
+/// different one from the empty window's "nothing was sampled".
+pub fn dip_context(recent: &[Sample]) -> DipContext {
+    if recent.is_empty() {
+        return DipContext::default();
+    }
+    let worst = |values: &mut dyn Iterator<Item = f64>| {
+        values.fold(None, |acc: Option<f64>, v| {
+            Some(acc.map_or(v, |a| a.max(v)))
+        })
+    };
+    DipContext {
+        cpu_load: worst(&mut recent.iter().map(|s| s.cpu_load)),
+        // A sample with no per-core readings drops out here rather than
+        // being guarded against: the worst of nothing is nothing, and
+        // `filter_map` discards it. An explicit is_empty check in front of
+        // this reads as though it did something and does not.
+        cpu_core_max: worst(
+            &mut recent
+                .iter()
+                .filter_map(|s| worst(&mut s.per_core.iter().copied())),
+        ),
+        disk_read: worst(&mut recent.iter().map(|s| s.disk_read_mbps.unwrap_or(0.0))),
+    }
 }
 
 /// `int(raw, 16)` / `int(raw)`, with Python's rules rather than Rust's.
@@ -287,6 +337,82 @@ pub fn package_power(prev: Option<(f64, i64)>, now: f64, energy_uj: i64) -> Opti
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ---- the window a dip is classified against ---------------------------
+
+    fn window_sample(cpu_load: f64, per_core: &[f64], disk: Option<f64>) -> Sample {
+        Sample {
+            cpu_load,
+            per_core: per_core.to_vec(),
+            disk_read_mbps: disk,
+            ..Sample::default()
+        }
+    }
+
+    #[test]
+    fn each_field_is_the_worst_moment_in_the_window() {
+        // Not the last sample and not an average: a dip is caused by a spike,
+        // and a spike is invisible in either.
+        let got = dip_context(&[
+            window_sample(10.0, &[5.0, 90.0], Some(1.0)),
+            window_sample(80.0, &[70.0, 60.0], Some(400.0)),
+            window_sample(20.0, &[10.0, 10.0], Some(3.0)),
+        ]);
+        assert_eq!(got.cpu_load, Some(80.0));
+        assert_eq!(got.cpu_core_max, Some(90.0));
+        assert_eq!(got.disk_read, Some(400.0));
+    }
+
+    #[test]
+    fn a_core_maximum_comes_from_one_sample_not_from_the_busiest_sample() {
+        // The busiest core in the window, whichever sample it was in - the
+        // sample with the highest aggregate need not hold it.
+        let got = dip_context(&[
+            window_sample(10.0, &[99.0, 1.0], None),
+            window_sample(90.0, &[90.0, 90.0], None),
+        ]);
+        assert_eq!(got.cpu_core_max, Some(99.0));
+    }
+
+    #[test]
+    fn an_empty_window_knows_nothing_rather_than_reporting_zero() {
+        // Nothing sampled yet. Zero would read as "the machine was idle",
+        // which is an answer this has not got.
+        assert_eq!(dip_context(&[]), DipContext::default());
+    }
+
+    #[test]
+    fn samples_without_per_core_readings_are_skipped_not_counted_as_zero() {
+        let got = dip_context(&[
+            window_sample(50.0, &[], None),
+            window_sample(10.0, &[42.0], None),
+        ]);
+        assert_eq!(got.cpu_core_max, Some(42.0));
+        assert_eq!(
+            dip_context(&[window_sample(50.0, &[], None)]).cpu_core_max,
+            None
+        );
+    }
+
+    #[test]
+    fn an_unread_disk_counts_as_an_idle_one() {
+        // The asymmetry with per_core, and it is in the Python: a missing
+        // disk reading contributes ZERO to the maximum rather than being
+        // skipped. So a window that read nothing reports 0 - "no disk
+        // activity" - where an empty window reports nothing at all.
+        assert_eq!(
+            dip_context(&[window_sample(1.0, &[1.0], None)]).disk_read,
+            Some(0.0)
+        );
+        assert_eq!(
+            dip_context(&[
+                window_sample(1.0, &[1.0], None),
+                window_sample(1.0, &[1.0], Some(7.0))
+            ])
+            .disk_read,
+            Some(7.0)
+        );
+    }
 
     fn sample(t: f64) -> Sample {
         Sample {

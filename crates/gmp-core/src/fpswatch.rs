@@ -487,9 +487,137 @@ fn mean(values: &[f64]) -> f64 {
     py_sum(values) / values.len() as f64
 }
 
+/// A frame-rate event, once the daemon has learned everything it needs about
+/// it. A dip arrives already classified - [`crate::gpu::describe_dip`] runs off
+/// the loop's thread against a FRESH GPU snapshot, which is the whole reason
+/// the classification is not done here.
+#[derive(Debug, Clone, PartialEq)]
+pub enum FpsOutcome {
+    Recovered { fps: f64, duration_s: f64 },
+    Dip { detail: String, real: bool },
+}
+
+/// One thing the daemon should do about a frame-rate event.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FpsStep {
+    /// Remember that a real dip happened, so the exit plan asks the GPU about
+    /// it once the game is gone.
+    RememberDip,
+    Raise {
+        kind: String,
+        detail: String,
+    },
+}
+
+/// What one frame-rate event is worth doing about.
+///
+/// The asymmetry is the whole of it. A dip that was classified as REAL is
+/// remembered, because the exit plan asks the GPU whether it let go once the
+/// game is gone and that question only makes sense if something actually
+/// happened. A dip classified benign - the launch-time drop from nothing to
+/// nothing, before the game has rendered a frame - is still filed, because a
+/// log of what the watcher saw is worth having, and is not worth chasing.
+///
+/// A recovery is never remembered. The dip it recovered from already asked,
+/// if it was real, and asking again from the recovery would ask twice.
+pub fn fps_event_plan(outcome: &FpsOutcome) -> Vec<FpsStep> {
+    match outcome {
+        FpsOutcome::Recovered { fps, duration_s } => vec![FpsStep::Raise {
+            kind: "fps_recovered".to_string(),
+            detail: format!("Frame rate recovered to {fps:.0} FPS after a {duration_s:.0}s dip"),
+        }],
+        FpsOutcome::Dip { detail, real } => {
+            let mut plan = Vec::new();
+            if *real {
+                plan.push(FpsStep::RememberDip);
+            }
+            plan.push(FpsStep::Raise {
+                kind: "fps_dip".to_string(),
+                detail: detail.clone(),
+            });
+            plan
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ---- what the daemon does with one frame-rate event -------------------
+
+    #[test]
+    fn a_recovery_is_reported_with_the_rate_and_how_long_it_lasted() {
+        assert_eq!(
+            fps_event_plan(&FpsOutcome::Recovered {
+                fps: 143.7,
+                duration_s: 12.4
+            }),
+            vec![FpsStep::Raise {
+                kind: "fps_recovered".into(),
+                detail: "Frame rate recovered to 144 FPS after a 12s dip".into(),
+            }]
+        );
+    }
+
+    #[test]
+    fn a_recovery_is_never_worth_a_post_mortem() {
+        // The dip it recovered from already asked for one, if it was real.
+        // Asking again from the recovery would double it.
+        let plan = fps_event_plan(&FpsOutcome::Recovered {
+            fps: 60.0,
+            duration_s: 3.0,
+        });
+        assert!(!plan.contains(&FpsStep::RememberDip));
+    }
+
+    #[test]
+    fn a_real_dip_is_remembered_before_it_is_reported() {
+        assert_eq!(
+            fps_event_plan(&FpsOutcome::Dip {
+                detail: "GPU pegged".into(),
+                real: true
+            }),
+            vec![
+                FpsStep::RememberDip,
+                FpsStep::Raise {
+                    kind: "fps_dip".into(),
+                    detail: "GPU pegged".into()
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn a_dip_classified_benign_is_reported_but_not_remembered() {
+        // The launch-time dip from nothing to nothing is the common one. It
+        // is worth having in the log and is not worth a post-mortem.
+        assert_eq!(
+            fps_event_plan(&FpsOutcome::Dip {
+                detail: "benign".into(),
+                real: false
+            }),
+            vec![FpsStep::Raise {
+                kind: "fps_dip".into(),
+                detail: "benign".into()
+            }]
+        );
+    }
+
+    #[test]
+    fn the_reported_numbers_round_the_way_python_prints_them() {
+        // Halves go to even, in both languages, on the exact binary value.
+        assert_eq!(
+            fps_event_plan(&FpsOutcome::Recovered {
+                fps: 2.5,
+                duration_s: 3.5
+            }),
+            vec![FpsStep::Raise {
+                kind: "fps_recovered".into(),
+                detail: "Frame rate recovered to 2 FPS after a 4s dip".into(),
+            }]
+        );
+    }
 
     #[test]
     fn a_labelled_unit_beats_the_heuristic() {
