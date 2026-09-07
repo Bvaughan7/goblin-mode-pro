@@ -23,6 +23,7 @@ pub mod gameevent;
 pub mod gpu;
 pub mod incidents;
 pub mod logrules;
+pub mod mangohud;
 pub mod observer;
 pub mod paths;
 pub mod payload;

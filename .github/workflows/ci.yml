@@ -236,7 +236,8 @@ jobs:
                                 tests.test_appliedstate_parity \
                                 tests.test_recompute_parity \
                                 tests.test_cpuset_parity \
-                                tests.test_statusreads_parity -v
+                                tests.test_statusreads_parity \
+                                tests.test_mangohud_parity -v
 
       # Advisories, licences and dependency sources. See deny.toml for why
       # this runs before the tree is big.

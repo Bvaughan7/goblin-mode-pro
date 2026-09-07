@@ -18,8 +18,6 @@ from goblinmode.paths import MANGOHUD_CONF, MANGOHUD_DIR, MANGOHUD_LOG_DIR
 
 log = logging.getLogger(__name__)
 
-_MANAGED_KEYS = ("no_display", "fps", "cpu_temp", "gpu_temp", "ram", "frame_timing")
-
 _GMP_BEGIN = "### goblin-mode-pro begin"
 _GMP_END = "### goblin-mode-pro end"
 
