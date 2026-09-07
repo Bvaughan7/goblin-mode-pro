@@ -71,6 +71,21 @@ class BothImplementationsBuildTheSamePayload(unittest.TestCase):
             kind="thermal_throttle", detail="package hit 97C", ts="2026-09-03T00:00:00+00:00"))
         self.assertTrue(text.startswith(incidents.SYSTEM_PROMPT))
 
+    def test_an_incident_that_is_not_ascii(self):
+        """`json.dumps` escapes every non-ASCII character to `\\uXXXX`, and a
+        renderer that emits UTF-8 instead produces a different document for
+        the same data. An incident detail is one of the likeliest places for
+        this: a game's title, a path with an accent in it, a line of Proton
+        output. Astral characters are a surrogate PAIR, which is the part a
+        hand-written escaper gets wrong."""
+        self._assert_same(incidents.Incident(
+            kind="gpu_fault", detail="Pokémon crashed \U0001f525 — device lost",
+            ts="T", game="Pokémon.exe", game_pid=1234,
+            gpu_state={"vendor": "AMD Radeon\u2122"},
+            logs_tail=["wine: Unhandled page fault in /home/tester/Jeux/été/x"],
+            active_tweaks={"governor": "performance"},
+        ))
+
     def test_the_system_prompt_is_identical(self):
         """It is the instruction an external model actually receives; a
         paraphrase would change the answers users get back."""

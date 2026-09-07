@@ -27,6 +27,7 @@ pub mod paths;
 pub mod payload;
 pub mod preflight;
 pub mod pyfmt;
+pub mod pyjson;
 pub mod report;
 pub(crate) mod round;
 pub mod runner;

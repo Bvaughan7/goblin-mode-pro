@@ -293,6 +293,18 @@ What the port has found so far, none of which was in the plan:
   could have been found - three processes on the machine disagreed with psutil
   that day and none on any other.
 
+- **`json.dumps` escapes every non-ASCII character and `serde_json` does
+  not.** `ensure_ascii` is CPython's default, so a game called Pokémon, a path
+  with an accent in it or a line of Proton output carrying a trademark sign is
+  written as `\\uXXXX` - and anything above U+FFFF as a UTF-16 surrogate
+  pair. `serde_json` emits UTF-8 for all of it, and leaves DEL alone where
+  CPython escapes it. This was already shipped in the Rust `build_llm_payload`,
+  whose own module doc says the comparison is on the exact string because the
+  payload is text a user pastes somewhere. The parity harness had passed all
+  along: every incident in its corpus was ASCII. There is now one renderer that
+  writes what CPython writes, checked against it over 2,000 generated
+  documents.
+
 Freezing the *daemon's* interface did the same thing on its first run:
 **ignoring a game could not be undone.** `IgnoreGame` appended to
 `ignored_games` and nothing anywhere removed an entry — not the daemon, not the

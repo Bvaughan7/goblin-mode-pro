@@ -150,7 +150,7 @@ pub fn build_llm_payload(
 
     format!(
         "{SYSTEM_PROMPT}\n\n```json\n{}\n```\n",
-        serde_json::to_string_pretty(&Value::Object(payload)).unwrap_or_default()
+        crate::pyjson::dumps_indented(&Value::Object(payload), 2)
     )
 }
 
