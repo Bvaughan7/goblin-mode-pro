@@ -226,7 +226,17 @@ jobs:
                                 tests.test_paths_parity \
                                 tests.test_store_parity \
                                 tests.test_procscan_parity \
-                                tests.test_payload_parity -v
+                                tests.test_payload_parity \
+                                tests.test_gameevent_parity \
+                                tests.test_raise_parity \
+                                tests.test_fpsevent_parity \
+                                tests.test_flushplan_parity \
+                                tests.test_switches_parity \
+                                tests.test_pyjson_parity \
+                                tests.test_appliedstate_parity \
+                                tests.test_recompute_parity \
+                                tests.test_cpuset_parity \
+                                tests.test_statusreads_parity -v
 
       # Advisories, licences and dependency sources. See deny.toml for why
       # this runs before the tree is big.

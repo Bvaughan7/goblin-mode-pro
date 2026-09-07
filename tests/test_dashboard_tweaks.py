@@ -12,7 +12,7 @@ import unittest
 
 from tests._support import _SRC  # noqa: F401
 
-from goblinmode.gui.page_dashboard import active_tweak_labels
+from goblinmode.gui.labels import active_tweak_labels
 
 
 class TheActiveTweaksRow(unittest.TestCase):
