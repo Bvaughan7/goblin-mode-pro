@@ -7,6 +7,14 @@ All notable changes to Goblin Mode Pro. Format loosely follows
 ## [Unreleased]
 
 ### Fixed
+- **A `ryzenadj --info` table the self-test could not parse was reported as a
+  crash in the self-test.** The pattern that finds the STAPM limit accepts
+  digits and dots, so a bare `.` matches it and is not a float - and the probe
+  converted without guarding. The suite catches a probe that raises, so nothing
+  broke; what a person saw was "the probe itself failed: ValueError" where it
+  should have said that ryzenadj did. An unparseable table is an absent reading
+  now. The same parse existed twice, inline in the probe and in a helper beside
+  it; there is one of it.
 - **A benchmark comparison showed `Stutter (%% of frames)`.** The label carried
   a printf escape and nothing formats it: both the CLI's comparison table and
   the GUI's diagnostics page interpolate the label straight into a string, so

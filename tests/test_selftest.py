@@ -188,5 +188,27 @@ class FailureExplanations(unittest.TestCase):
         self.assertIn("weird", msg)
 
 
+class StapmParsing(unittest.TestCase):
+    """`ryzenadj --info` is read on a machine that may be misbehaving - that
+    is the whole reason the self-test exists - so a table it cannot make sense
+    of has to be an absent reading rather than an exception."""
+
+    def test_an_ordinary_table_yields_the_limit(self):
+        out = "CPU Family\t| Renoir\nSTAPM LIMIT      | 25.000 | stapm limit\n"
+        self.assertEqual(selftest._parse_stapm(out), 25.0)
+
+    def test_a_table_with_no_limit_in_it_yields_nothing(self):
+        self.assertIsNone(selftest._parse_stapm("nothing here"))
+        self.assertIsNone(selftest._parse_stapm(""))
+
+    def test_a_value_that_is_not_a_number_yields_nothing_rather_than_raising(self):
+        """The pattern accepts digits and dots, so a bare dot matches it and
+        is not a float. A probe that raises here reports "the probe itself
+        failed: ValueError" where it should report that ryzenadj did."""
+        self.assertIsNone(selftest._parse_stapm("STAPM LIMIT | . |\n"))
+        self.assertIsNone(selftest._parse_stapm("STAPM LIMIT | ... |\n"))
+        self.assertIsNone(selftest._parse_stapm("STAPM LIMIT | 1.2.3 |\n"))
+
+
 if __name__ == "__main__":
     unittest.main()

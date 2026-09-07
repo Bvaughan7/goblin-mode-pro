@@ -43,6 +43,7 @@ pub mod report;
 pub(crate) mod round;
 pub mod runner;
 pub mod scx;
+pub mod selftest;
 pub mod sessions;
 pub mod shadercache;
 pub mod status;

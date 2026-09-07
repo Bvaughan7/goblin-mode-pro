@@ -546,10 +546,7 @@ class SelfTest:
             return
         path, why = _ryzenadj_access_path()
         rc, out = _run([binary, "--info"], timeout=10.0)
-        stapm = None
-        m = re.search(r"STAPM LIMIT\s*\|\s*([\d.]+)", out)
-        if m:
-            stapm = float(m.group(1))
+        stapm = _parse_stapm(out)
         status = PASS if rc == 0 and stapm is not None else FAIL
         detail = (f"{binary}, access path: {path} ({why}); "
                   f"STAPM limit {stapm} W" if status == PASS else
@@ -800,10 +797,26 @@ def _w(uw: int | None) -> str:
     return "unknown" if uw is None else f"{uw / 1_000_000:.1f} W"
 
 
+def _parse_stapm(out: str) -> float | None:
+    """The STAPM limit out of a `ryzenadj --info` table, in watts.
+
+    A table this cannot make sense of is an absent reading, not an exception.
+    The pattern accepts digits and dots, so a bare `.` matches it and is not a
+    float - and a probe that raised there would report "the probe itself
+    failed: ValueError" where it should be reporting that ryzenadj did.
+    """
+    m = re.search(r"STAPM LIMIT\s*\|\s*([\d.]+)", out)
+    if not m:
+        return None
+    try:
+        return float(m.group(1))
+    except ValueError:
+        return None
+
+
 def _ryzenadj_stapm(binary: str) -> float | None:
     _rc, out = _run([binary, "--info"], timeout=10.0)
-    m = re.search(r"STAPM LIMIT\s*\|\s*([\d.]+)", out)
-    return float(m.group(1)) if m else None
+    return _parse_stapm(out)
 
 
 # ---------------------------------------------------------------------------
