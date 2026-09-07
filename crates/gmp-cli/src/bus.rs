@@ -60,4 +60,21 @@ impl Daemon {
     pub async fn sessions(&self) -> Result<Value> {
         self.json("GetSessions").await
     }
+
+    /// One game's history, or every game's when `exe` is empty - which is what
+    /// the interface means by an empty string here, not "no games".
+    pub async fn session_history(&self, exe: &str) -> Result<Value> {
+        let reply: String = self
+            .proxy
+            .call("GetSessionHistory", &(exe))
+            .await
+            .context("GetSessionHistory failed")?;
+        serde_json::from_str(&reply).context("GetSessionHistory did not answer with JSON")
+    }
+
+    /// Runs the checks. It reads and reports; the fixing is a different method
+    /// and this CLI does not call it.
+    pub async fn preflight(&self) -> Result<Value> {
+        self.json("RunPreflight").await
+    }
 }

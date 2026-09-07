@@ -22,6 +22,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import sys
 import unittest
 from pathlib import Path
 
@@ -183,26 +184,27 @@ class ThisMachineAgrees(unittest.TestCase):
                                            "statuses": [status]})[0],
                          exporter.render(status))
 
+    def _gmp_cli(self):
+        for profile in ("debug", "release"):
+            candidate = _REPO / "target" / profile / "gmp-cli"
+            if candidate.exists():
+                return candidate
+        self.skipTest("build it with `cargo build -p gmp-cli`")
+        return None
+
     def test_the_rust_cli_prints_what_the_python_cli_prints(self):
         """End to end, against whichever daemon is running: the Rust binary
-        connects to the session bus, calls `GetStatus`, parses the JSON string
-        the interface answers with and renders it - and the result has to be
-        the lines the Python renderer produces from the same reply.
+        connects to the session bus, calls the method, parses the JSON string
+        the interface answers with and renders it - and every line has to be
+        the line the Python CLI prints from the same daemon.
 
         This is the first thing in the port that is a CLIENT of the running
         system rather than a function asked a question, so it is the first
         check that the seam works in the direction a cutover needs.
+
+        Read-only commands only. Nothing here changes a setting.
         """
-        from goblinmode import cli
-
-        binary = None
-        for profile in ("debug", "release"):
-            candidate = _REPO / "target" / profile / "gmp-cli"
-            if candidate.exists():
-                binary = candidate
-        if binary is None:
-            self.skipTest("build it with `cargo build -p gmp-cli`")
-
+        binary = self._gmp_cli()
         probe = subprocess.run(
             ["gdbus", "call", "--session", "-d", "com.goblinmode.Pro.Daemon",
              "-o", "/com/goblinmode/Pro/Daemon",
@@ -210,25 +212,26 @@ class ThisMachineAgrees(unittest.TestCase):
             capture_output=True, text=True)
         if probe.returncode != 0:
             self.skipTest("the daemon is not on the session bus")
-        raw = probe.stdout.strip()
-        status = json.loads(raw[2:raw.rindex("',")].encode().decode("unicode_escape"))
 
-        rust = subprocess.run([str(binary), "status"], capture_output=True,
-                              text=True, timeout=60)
-        self.assertEqual(rust.returncode, 0, rust.stderr)
-        self.assertEqual(rust.stdout.splitlines(), cli.status_lines(status))
+        env = dict(os.environ, PYTHONPATH=str(_REPO / "src"))
+        for argv in (["status"], ["health"], ["games"], ["preflight"],
+                     ["sessions", "--limit", "3"], ["sessions", "--limit", "0"]):
+            with self.subTest(command=" ".join(argv)):
+                rust = subprocess.run([str(binary), *argv], capture_output=True,
+                                      text=True, timeout=120)
+                python = subprocess.run(
+                    [sys.executable, "-m", "goblinmode.cli", *argv],
+                    capture_output=True, text=True, timeout=120, env=env)
+                self.assertEqual(rust.returncode, 0, rust.stderr)
+                self.assertEqual(python.returncode, 0, python.stderr)
+                self.assertEqual(rust.stdout.splitlines(),
+                                 python.stdout.splitlines())
 
     def test_the_rust_cli_says_so_when_nothing_is_listening(self):
         """A CLI that silently starts a background service because it was
         asked for a status line is doing something nobody asked for. This one
         connects without auto-starting, so a missing daemon is a message."""
-        binary = None
-        for profile in ("debug", "release"):
-            candidate = _REPO / "target" / profile / "gmp-cli"
-            if candidate.exists():
-                binary = candidate
-        if binary is None:
-            self.skipTest("build it with `cargo build -p gmp-cli`")
+        binary = self._gmp_cli()
         empty = dict(os.environ)
         empty["DBUS_SESSION_BUS_ADDRESS"] = "unix:path=/nonexistent/gmp-no-bus"
         out = subprocess.run([str(binary), "status"], capture_output=True,
