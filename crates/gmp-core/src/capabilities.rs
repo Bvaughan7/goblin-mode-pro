@@ -194,9 +194,324 @@ pub fn controllers_from_blob(blob: &str) -> Vec<String> {
     out
 }
 
+/// The PCI vendor ids this tool knows how to name.
+const GPU_VENDORS: &[(&str, &str)] =
+    &[("0x10de", "nvidia"), ("0x1002", "amd"), ("0x8086", "intel")];
+
+/// Which CPU this is, from `/proc/cpuinfo`.
+///
+/// A substring of the WHOLE file lowercased, rather than a parse: the vendor
+/// string appears once per core and the file has no stable shape across
+/// architectures, so looking for the name is more robust than looking for the
+/// field that should hold it.
+pub fn cpu_vendor(cpuinfo: &str) -> &'static str {
+    // Not stripped, unlike its neighbours: this is a substring test over the
+    // whole file, so leading whitespace cannot change the answer, and a
+    // `.trim()` here would be a line no test could ever fail on.
+    let blob = cpuinfo.to_lowercase();
+    if blob.contains("genuineintel") {
+        "intel"
+    } else if blob.contains("authenticamd") {
+        "amd"
+    } else {
+        "other"
+    }
+}
+
+/// The processor's marketing name, capped at eighty CHARACTERS.
+///
+/// The first `model name` line wins, and the match is case-insensitive
+/// because the field is spelled differently on different architectures. The
+/// cap is a display cap: these strings run long and this one goes into a
+/// status line and a bug report.
+pub fn cpu_model(cpuinfo: &str) -> String {
+    for line in crate::store::splitlines(cpuinfo.trim()) {
+        if line.to_lowercase().starts_with("model name") {
+            let Some((_, value)) = line.split_once(':') else {
+                continue;
+            };
+            return value.trim().chars().take(80).collect();
+        }
+    }
+    String::new()
+}
+
+/// The cpufreq driver in charge, or the word `none`.
+///
+/// `none` rather than an empty string: a machine with no cpufreq driver is a
+/// real answer (a VM, usually), and an empty field reads as a failed probe.
+pub fn cpufreq_driver(cpu_root: &std::path::Path) -> String {
+    let text =
+        std::fs::read_to_string(cpu_root.join("cpu0/cpufreq/scaling_driver")).unwrap_or_default();
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return "none".to_string();
+    }
+    trimmed.to_string()
+}
+
+/// Which GPU vendors are present, named and sorted.
+///
+/// Two things here are narrower than they look and both are the Python's.
+/// The cards are matched as `card` followed by ONE digit, so a machine with
+/// more than ten DRM devices does not report the eleventh. Rare enough to have
+/// never come up, and reproduced rather than quietly widened.
+///
+/// And a vendor this build cannot name is dropped rather than listed as
+/// `other`, so a machine with only unknown cards answers `unknown`: one word
+/// saying "something is there and I do not know what", instead of a list that
+/// looks like a finding.
+pub fn gpu_vendors(drm_root: &std::path::Path, nvidia_smi: bool) -> Vec<String> {
+    let mut found: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+    if let Ok(entries) = std::fs::read_dir(drm_root) {
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            let is_card = name
+                .strip_prefix("card")
+                .is_some_and(|rest| rest.len() == 1 && rest.chars().all(|c| c.is_ascii_digit()));
+            if !is_card {
+                continue;
+            }
+            let vendor = std::fs::read_to_string(entry.path().join("device/vendor"))
+                .unwrap_or_default()
+                .trim()
+                .to_lowercase();
+            let named = GPU_VENDORS
+                .iter()
+                .find(|(id, _)| *id == vendor)
+                .map_or("other", |(_, name)| *name);
+            found.insert(named.to_string());
+        }
+    }
+    if nvidia_smi {
+        found.insert("nvidia".to_string());
+    }
+    let named: Vec<String> = found.into_iter().filter(|v| v != "other").collect();
+    if named.is_empty() {
+        return vec!["unknown".to_string()];
+    }
+    named
+}
+
+/// Which handheld this is, from DMI, or nothing.
+///
+/// Matched on the product name, board name and vendor joined together, so a
+/// model that identifies itself in any one of the three is recognised. Valve
+/// needs BOTH of its words: `valve` alone is a vendor that also ships other
+/// things, and `steam` alone appears on machines that merely have Steam.
+pub fn handheld(dmi_root: &std::path::Path) -> Option<&'static str> {
+    let field = |name: &str| {
+        std::fs::read_to_string(dmi_root.join(name))
+            .unwrap_or_default()
+            .trim()
+            .to_string()
+    };
+    let board = format!(
+        "{} {} {}",
+        field("product_name"),
+        field("board_name"),
+        field("sys_vendor")
+    )
+    .to_lowercase();
+
+    if board.contains("jupiter")
+        || board.contains("galileo")
+        || (board.contains("valve") && board.contains("steam"))
+    {
+        return Some("steamdeck");
+    }
+    if board.contains("rog ally") || board.contains("rc71") || board.contains("rc72") {
+        return Some("rog_ally");
+    }
+    if board.contains("83e1") || board.contains("legion go") {
+        return Some("legion_go");
+    }
+    if board.contains("aokzoe")
+        || board.contains("onexplayer")
+        || board.contains("aya neo")
+        || board.contains("ayaneo")
+    {
+        return Some("other_handheld");
+    }
+    None
+}
+
+/// The distribution's id, from `/etc/os-release`.
+///
+/// The first `ID=` line, unquoted. Anchored on the whole prefix, so that
+/// `ID_LIKE=` (which sits right beside it in most of these files, and holds
+/// something different) is not mistaken for it.
+///
+/// The blob is stripped before it is split, because the Python reader strips
+/// every file it reads. A leading blank line therefore does not shift the
+/// first line's indentation onto the anchor.
+pub fn distro_id(os_release: &str) -> String {
+    for line in crate::store::splitlines(os_release.trim()) {
+        if let Some(value) = line.strip_prefix("ID=") {
+            return value.trim().trim_matches('"').to_string();
+        }
+    }
+    String::new()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ---- the file-reading probes -----------------------------------------
+
+    fn tree(files: &[(&str, &str)]) -> std::path::PathBuf {
+        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let root = std::env::temp_dir().join(format!(
+            "gmp-caps-{}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+        ));
+        for (path, contents) in files {
+            let full = root.join(path);
+            std::fs::create_dir_all(full.parent().expect("has a parent")).unwrap();
+            std::fs::write(full, contents).unwrap();
+        }
+        std::fs::create_dir_all(&root).unwrap();
+        root
+    }
+
+    #[test]
+    fn the_vendor_is_read_out_of_the_whole_file() {
+        assert_eq!(cpu_vendor("vendor_id\t: GenuineIntel\n"), "intel");
+        assert_eq!(cpu_vendor("vendor_id\t: AuthenticAMD\n"), "amd");
+        assert_eq!(cpu_vendor("vendor_id\t: Something\n"), "other");
+        assert_eq!(cpu_vendor(""), "other");
+    }
+
+    #[test]
+    fn the_model_name_is_the_first_one_and_is_capped() {
+        let cpuinfo = "processor\t: 0\nmodel name\t: Intel(R) Core(TM) i7\n\
+                       processor\t: 1\nmodel name\t: something else\n";
+        assert_eq!(cpu_model(cpuinfo), "Intel(R) Core(TM) i7");
+        let long = format!("model name\t: {}\n", "x".repeat(200));
+        assert_eq!(cpu_model(&long).chars().count(), 80);
+        assert_eq!(cpu_model("no model here"), "");
+    }
+
+    #[test]
+    fn a_machine_with_no_cpufreq_driver_says_none() {
+        // A real answer - usually a VM - and an empty string would read as a
+        // probe that failed.
+        let root = tree(&[("cpu0/x", "")]);
+        assert_eq!(cpufreq_driver(&root), "none");
+        std::fs::remove_dir_all(&root).ok();
+        let root = tree(&[("cpu0/cpufreq/scaling_driver", "intel_pstate\n")]);
+        assert_eq!(cpufreq_driver(&root), "intel_pstate");
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn gpu_vendors_are_named_sorted_and_deduplicated() {
+        let root = tree(&[
+            ("card0/device/vendor", "0x10de\n"),
+            ("card1/device/vendor", "0x8086\n"),
+            ("card2/device/vendor", "0x10de\n"),
+        ]);
+        assert_eq!(gpu_vendors(&root, false), vec!["intel", "nvidia"]);
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn only_a_single_digit_card_is_a_card() {
+        // The Python globs `card[0-9]`. Reproduced rather than widened.
+        let root = tree(&[
+            ("card0/device/vendor", "0x10de\n"),
+            ("card10/device/vendor", "0x1002\n"),
+            ("renderD128/device/vendor", "0x1002\n"),
+        ]);
+        assert_eq!(gpu_vendors(&root, false), vec!["nvidia"]);
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn a_machine_of_only_unknown_cards_says_unknown() {
+        let root = tree(&[("card0/device/vendor", "0xbeef\n")]);
+        assert_eq!(gpu_vendors(&root, false), vec!["unknown"]);
+        std::fs::remove_dir_all(&root).ok();
+        let empty = tree(&[("nothing", "")]);
+        assert_eq!(gpu_vendors(&empty, false), vec!["unknown"]);
+        std::fs::remove_dir_all(&empty).ok();
+    }
+
+    #[test]
+    fn nvidia_smi_counts_even_with_no_card_to_read() {
+        // The card can be hidden from sysfs while the driver is loaded.
+        let root = tree(&[("nothing", "")]);
+        assert_eq!(gpu_vendors(&root, true), vec!["nvidia"]);
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn a_handheld_is_recognised_from_any_of_the_three_fields() {
+        for (file, value, want) in [
+            ("product_name", "Jupiter", "steamdeck"),
+            ("board_name", "Galileo", "steamdeck"),
+            ("product_name", "ROG Ally RC71L", "rog_ally"),
+            ("board_name", "RC72LA", "rog_ally"),
+            ("product_name", "83E1", "legion_go"),
+            ("product_name", "Legion Go", "legion_go"),
+            ("product_name", "AOKZOE A1", "other_handheld"),
+            ("product_name", "ONEXPLAYER 2", "other_handheld"),
+            ("product_name", "AYANEO 2S", "other_handheld"),
+            ("product_name", "AYA NEO FOUNDER", "other_handheld"),
+        ] {
+            let root = tree(&[(file, value)]);
+            assert_eq!(handheld(&root), Some(want), "{value}");
+            std::fs::remove_dir_all(&root).ok();
+        }
+    }
+
+    #[test]
+    fn valve_needs_both_of_its_words() {
+        // `valve` alone is a vendor that ships other things; `steam` alone
+        // appears on machines that merely have Steam installed.
+        let root = tree(&[("sys_vendor", "Valve")]);
+        assert_eq!(handheld(&root), None);
+        std::fs::remove_dir_all(&root).ok();
+        let root = tree(&[("product_name", "Steam Machine")]);
+        assert_eq!(handheld(&root), None);
+        std::fs::remove_dir_all(&root).ok();
+        let root = tree(&[("sys_vendor", "Valve"), ("product_name", "Steam Deck")]);
+        assert_eq!(handheld(&root), Some("steamdeck"));
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn an_ordinary_desktop_is_not_a_handheld() {
+        let root = tree(&[
+            ("product_name", "XPS 15"),
+            ("board_name", "0ABCDE"),
+            ("sys_vendor", "Dell Inc."),
+        ]);
+        assert_eq!(handheld(&root), None);
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn the_whole_blob_is_stripped_first_the_way_the_python_reader_does() {
+        // `_read` strips, so the first line of a file that opens with a blank
+        // line is the first line WITH CONTENT, not an empty one.
+        assert_eq!(distro_id("\n\nID=arch\n\n"), "arch");
+        assert_eq!(cpu_model("\n  model name\t: Ryzen\n"), "Ryzen");
+    }
+
+    #[test]
+    fn the_distro_id_is_unquoted_and_is_not_id_like() {
+        assert_eq!(
+            distro_id("NAME=\"Arch\"\nID=arch\nID_LIKE=archlinux\n"),
+            "arch"
+        );
+        assert_eq!(distro_id("ID_LIKE=debian\nID=\"ubuntu\"\n"), "ubuntu");
+        assert_eq!(distro_id("ID=cachyos"), "cachyos");
+        assert_eq!(distro_id("NAME=nothing\n"), "");
+        assert_eq!(distro_id(""), "");
+    }
 
     #[test]
     fn expands_a_cpu_list() {
