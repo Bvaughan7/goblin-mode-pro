@@ -506,9 +506,324 @@ pub fn force_boost_plan(on: bool, games_running: bool) -> Vec<SwitchStep> {
     plan
 }
 
+/// Everything the payload currently has in force.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Applied {
+    pub helper: HelperState,
+    pub tearing: bool,
+    pub adaptive_sync: bool,
+    pub refresh_cap: bool,
+    pub scx: Option<String>,
+    pub focus_mode: bool,
+}
+
+/// One thing a recompute implies, in the order it should happen.
+#[derive(Debug, Clone, PartialEq)]
+pub enum RecomputeStep {
+    Helper(HelperStep),
+    EnableTearing,
+    RestoreTearing,
+    EnableAdaptiveSync { outputs: Option<Vec<String>> },
+    RestoreAdaptiveSync,
+    EnableRefreshCap { hz: i64 },
+    RestoreRefreshCap,
+    Scx(ScxAction),
+    EnterFocus,
+    ExitFocus,
+}
+
+/// Everything one recompute implies, in order.
+///
+/// The helper half is [`helper_plan`] and the scheduler half is
+/// [`scx_action`]; this is the whole of `_recompute_global`, which is the only
+/// place their order relative to each other and to the display is decided.
+///
+/// The display and focus steps are EDGE-TRIGGERED where the helper's are not.
+/// The helper is re-asked on every recompute so that a changed profile set is
+/// picked up; the compositor is asked only on the transition, because each of
+/// those calls is a round trip to a compositor that may be busy drawing a
+/// game.
+///
+/// That has a consequence worth knowing before somebody reports it as a
+/// compositor bug: the trigger is "is one applied", not "is THIS one applied".
+/// A second game asking for a different refresh cap, or for VRR on different
+/// outputs, gets the first game's - the change is not noticed until everything
+/// stops wanting it and the tweak goes back. Reproduced rather than fixed,
+/// because fixing it is a behaviour change to argue for on its own.
+///
+/// Whether each `Enable` actually worked is the caller's to record. A
+/// compositor that refuses leaves the flag false and the next recompute asks
+/// again, which is deliberate - a refusal is often temporary.
+pub fn recompute_plan(
+    wanted: &Wanted,
+    active: &[GameProfile],
+    state: &Applied,
+) -> Vec<RecomputeStep> {
+    let mut plan: Vec<RecomputeStep> = helper_plan(wanted, &state.helper)
+        .into_iter()
+        .map(RecomputeStep::Helper)
+        .collect();
+
+    if wanted.tearing && !state.tearing {
+        plan.push(RecomputeStep::EnableTearing);
+    } else if !wanted.tearing && state.tearing {
+        plan.push(RecomputeStep::RestoreTearing);
+    }
+
+    if wanted.adaptive_sync && !state.adaptive_sync {
+        plan.push(RecomputeStep::EnableAdaptiveSync {
+            outputs: wanted.vrr_outputs.clone(),
+        });
+    } else if !wanted.adaptive_sync && state.adaptive_sync {
+        plan.push(RecomputeStep::RestoreAdaptiveSync);
+    }
+
+    match (wanted.refresh_cap, state.refresh_cap) {
+        (Some(hz), false) => plan.push(RecomputeStep::EnableRefreshCap { hz }),
+        (None, true) => plan.push(RecomputeStep::RestoreRefreshCap),
+        _ => {}
+    }
+
+    let scx = scx_action(active, state.scx.as_deref());
+    if scx != ScxAction::Nothing {
+        plan.push(RecomputeStep::Scx(scx));
+    }
+
+    if wanted.focus_mode && !state.focus_mode {
+        plan.push(RecomputeStep::EnterFocus);
+    } else if !wanted.focus_mode && state.focus_mode {
+        plan.push(RecomputeStep::ExitFocus);
+    }
+    plan
+}
+
+/// Put everything back, whatever is running.
+///
+/// Not `recompute_plan` with nothing wanted, and the difference is the ORDER:
+/// the scheduler goes back FIRST here. A sched_ext scheduler is loaded for the
+/// whole machine rather than for the game, so it is the one tweak whose
+/// staying behind is felt by everything the user does next - and the one most
+/// worth undoing before anything else has a chance to fail.
+pub fn restore_plan(state: &Applied) -> Vec<RecomputeStep> {
+    let mut plan = Vec::new();
+    if state.scx.is_some() {
+        plan.push(RecomputeStep::Scx(ScxAction::Restore));
+    }
+    if state.helper.tweaks_applied {
+        plan.push(RecomputeStep::Helper(HelperStep::RevertAll));
+    }
+    if state.tearing {
+        plan.push(RecomputeStep::RestoreTearing);
+    }
+    if state.adaptive_sync {
+        plan.push(RecomputeStep::RestoreAdaptiveSync);
+    }
+    if state.refresh_cap {
+        plan.push(RecomputeStep::RestoreRefreshCap);
+    }
+    if state.focus_mode {
+        plan.push(RecomputeStep::ExitFocus);
+    }
+    plan
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ---- the whole recompute, in order -------------------------------------
+
+    fn all_wanted() -> Wanted {
+        Wanted {
+            governor: false,
+            power: None,
+            fan_spinup: false,
+            helper: false,
+            tearing: true,
+            adaptive_sync: true,
+            vrr_outputs: Some(vec!["DP-1".to_string()]),
+            refresh_cap: Some(60),
+            focus_mode: true,
+        }
+    }
+
+    fn nothing_wanted() -> Wanted {
+        Wanted {
+            governor: false,
+            power: None,
+            fan_spinup: false,
+            helper: false,
+            tearing: false,
+            adaptive_sync: false,
+            vrr_outputs: None,
+            refresh_cap: None,
+            focus_mode: false,
+        }
+    }
+
+    fn everything_applied() -> Applied {
+        Applied {
+            tearing: true,
+            adaptive_sync: true,
+            refresh_cap: true,
+            focus_mode: true,
+            ..Applied::default()
+        }
+    }
+
+    #[test]
+    fn nothing_wanted_and_nothing_in_force_is_nothing_to_do() {
+        assert_eq!(
+            recompute_plan(&nothing_wanted(), &[], &Applied::default()),
+            vec![]
+        );
+    }
+
+    #[test]
+    fn a_game_starting_turns_the_display_tweaks_on_in_order() {
+        assert_eq!(
+            recompute_plan(&all_wanted(), &[], &Applied::default()),
+            vec![
+                RecomputeStep::EnableTearing,
+                RecomputeStep::EnableAdaptiveSync {
+                    outputs: Some(vec!["DP-1".to_string()]),
+                },
+                RecomputeStep::EnableRefreshCap { hz: 60 },
+                RecomputeStep::EnterFocus,
+            ]
+        );
+    }
+
+    #[test]
+    fn the_last_game_leaving_puts_them_all_back() {
+        assert_eq!(
+            recompute_plan(&nothing_wanted(), &[], &everything_applied()),
+            vec![
+                RecomputeStep::RestoreTearing,
+                RecomputeStep::RestoreAdaptiveSync,
+                RecomputeStep::RestoreRefreshCap,
+                RecomputeStep::ExitFocus,
+            ]
+        );
+    }
+
+    #[test]
+    fn what_is_already_in_force_is_not_asked_for_again() {
+        // Edge-triggered, unlike the helper half above it, which re-applies
+        // every recompute so that a changed profile set is picked up.
+        assert_eq!(
+            recompute_plan(&all_wanted(), &[], &everything_applied()),
+            vec![]
+        );
+    }
+
+    #[test]
+    fn a_refresh_cap_already_in_force_is_not_changed_by_a_second_game() {
+        // Reproduced rather than fixed: the trigger is "is one applied", not
+        // "is THIS one applied", so a second game asking for a different cap
+        // gets the first game's. Worth knowing before someone reports it as a
+        // bug in the compositor.
+        let mut wanted = all_wanted();
+        wanted.refresh_cap = Some(40);
+        assert!(!recompute_plan(&wanted, &[], &everything_applied())
+            .iter()
+            .any(|s| matches!(s, RecomputeStep::EnableRefreshCap { .. })));
+    }
+
+    #[test]
+    fn a_change_of_vrr_outputs_is_not_reapplied_either() {
+        let mut wanted = all_wanted();
+        wanted.vrr_outputs = Some(vec!["HDMI-A-1".to_string()]);
+        assert!(!recompute_plan(&wanted, &[], &everything_applied())
+            .iter()
+            .any(|s| matches!(s, RecomputeStep::EnableAdaptiveSync { .. })));
+    }
+
+    #[test]
+    fn the_helper_is_dealt_with_before_the_display() {
+        let mut wanted = all_wanted();
+        wanted.helper = true;
+        wanted.governor = true;
+        let plan = recompute_plan(&wanted, &[], &Applied::default());
+        assert_eq!(
+            plan[0],
+            RecomputeStep::Helper(HelperStep::SetGovernor {
+                governor: PERFORMANCE_GOVERNOR.to_string(),
+            })
+        );
+        assert_eq!(plan[2], RecomputeStep::EnableTearing);
+    }
+
+    #[test]
+    fn the_scheduler_is_decided_after_the_display_and_before_focus() {
+        let mut game = GameProfile {
+            exe: "a".into(),
+            scx_scheduler: "lavd".into(),
+            ..GameProfile::default()
+        };
+        game.scx_mode = serde_json::json!("gaming");
+        let plan = recompute_plan(
+            &all_wanted(),
+            std::slice::from_ref(&game),
+            &Applied::default(),
+        );
+        let scx = plan.iter().position(|s| matches!(s, RecomputeStep::Scx(_)));
+        let focus = plan.iter().position(|s| *s == RecomputeStep::EnterFocus);
+        let cap = plan
+            .iter()
+            .position(|s| matches!(s, RecomputeStep::EnableRefreshCap { .. }));
+        assert!(cap < scx && scx < focus, "{plan:?}");
+    }
+
+    #[test]
+    fn a_scheduler_with_nothing_to_do_is_not_a_step() {
+        assert!(!recompute_plan(&nothing_wanted(), &[], &Applied::default())
+            .iter()
+            .any(|s| matches!(s, RecomputeStep::Scx(_))));
+    }
+
+    // ---- and the restore, which is a different order -----------------------
+
+    #[test]
+    fn restoring_puts_the_scheduler_back_first() {
+        // The whole MACHINE is on it, not just the game - so it goes back
+        // before anything else, rather than last with the other tweaks.
+        let plan = restore_plan(&Applied {
+            scx: Some("lavd".into()),
+            helper: HelperState {
+                tweaks_applied: true,
+                ..HelperState::default()
+            },
+            ..everything_applied()
+        });
+        assert_eq!(
+            plan,
+            vec![
+                RecomputeStep::Scx(ScxAction::Restore),
+                RecomputeStep::Helper(HelperStep::RevertAll),
+                RecomputeStep::RestoreTearing,
+                RecomputeStep::RestoreAdaptiveSync,
+                RecomputeStep::RestoreRefreshCap,
+                RecomputeStep::ExitFocus,
+            ]
+        );
+    }
+
+    #[test]
+    fn restoring_what_was_never_applied_does_nothing() {
+        assert_eq!(restore_plan(&Applied::default()), vec![]);
+    }
+
+    #[test]
+    fn restoring_only_undoes_what_is_actually_in_force() {
+        assert_eq!(
+            restore_plan(&Applied {
+                tearing: true,
+                ..Applied::default()
+            }),
+            vec![RecomputeStep::RestoreTearing]
+        );
+    }
 
     // ---- the two switches that are not a game -----------------------------
 
