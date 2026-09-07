@@ -7,6 +7,19 @@ All notable changes to Goblin Mode Pro. Format loosely follows
 ## [Unreleased]
 
 ### Fixed
+- **The kernel scheduler was invisible to everything that reports what is
+  applied.** `TweakStatus` has carried `scx_scheduler` since sched_ext support
+  landed, and `as_dict` - which is the whole of what leaves the daemon about
+  the tweaks in force - dropped it. So `goblin-mode-pro status` had a branch
+  rendering `scx_lavd` that could never run, because nothing put the key in the
+  dict it reads; and the fingerprint stored with each session recorded every
+  other tweak but not the one that replaces the kernel's scheduler for the
+  whole machine. A profile whose only tweak was a scheduler therefore looked,
+  everywhere afterwards, like a profile that did nothing - no status line, no
+  "performance mode on" notification, and a session that could not be compared
+  against one run on a different scheduler. Both are fixed, so such a profile
+  now announces itself; that is a new notification where there was silence,
+  and it is the point.
 - **A profile with a wrong-typed field made `SetProfile` fail instead of
   refusing.** The method is a D-Bus entry point whose payload is JSON from any
   client on the session bus, and it is declared to answer a boolean - but a

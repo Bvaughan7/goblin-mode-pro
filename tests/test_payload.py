@@ -425,5 +425,48 @@ class DescribeAppliedState(unittest.TestCase):
         self.assertEqual(self.state.read_text(), before)
 
 
+class StatusCarriesEverythingItHolds(unittest.TestCase):
+    """`as_dict` is the whole of what leaves the daemon about the tweaks in
+    force - it is the `tweaks` object in `GetStatus` and the thing a session's
+    fingerprint is built from. A field on the dataclass that never reaches it
+    is invisible to every reader downstream."""
+
+    def test_the_scheduler_reaches_the_status_reply(self):
+        """The CLI has a branch that renders it and could never run: nothing
+        put the key in the dict it reads."""
+        from goblinmode import cli
+
+        tweaks = payload_mod.TweakStatus(scx_scheduler="lavd").as_dict()
+        self.assertEqual(tweaks.get("scx_scheduler"), "lavd")
+        lines = cli.status_lines({"tweaks": tweaks})
+        self.assertIn("scx_lavd", "\n".join(lines))
+
+    def test_no_scheduler_is_reported_as_none_rather_than_missing(self):
+        self.assertIsNone(payload_mod.TweakStatus().as_dict()["scx_scheduler"])
+
+    def test_every_field_of_the_status_reaches_the_dict(self):
+        """The general rule the above is one instance of."""
+        import dataclasses
+
+        fields = {f.name for f in dataclasses.fields(payload_mod.TweakStatus)}
+        self.assertEqual(fields - set(payload_mod.TweakStatus().as_dict()), set())
+
+
+class TheFingerprintNamesTheScheduler(unittest.TestCase):
+    def test_a_swapped_scheduler_is_part_of_what_was_applied(self):
+        """It is the biggest lever in the tool - it replaces the kernel's
+        scheduler for the whole machine - and a session that does not record
+        it cannot be read against one that does."""
+        from goblinmode.daemon import tweaks_fingerprint
+
+        tweaks = payload_mod.TweakStatus(scx_scheduler="lavd").as_dict()
+        self.assertEqual(tweaks_fingerprint(tweaks), ["scx:lavd"])
+
+    def test_a_session_with_no_scheduler_says_nothing_about_one(self):
+        from goblinmode.daemon import tweaks_fingerprint
+
+        self.assertEqual(tweaks_fingerprint(payload_mod.TweakStatus().as_dict()), [])
+
+
 if __name__ == "__main__":
     unittest.main()

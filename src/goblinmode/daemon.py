@@ -804,6 +804,11 @@ def tweaks_fingerprint(t: dict) -> list[str]:
         out.append("vrr")
     if t.get("reniced"):
         out.append("renice")
+    # The biggest lever here: it replaces the kernel's scheduler for the whole
+    # machine, not for the game. A session that does not record it cannot be
+    # read against one that does, which is what this list is stored for.
+    if t.get("scx_scheduler"):
+        out.append(f"scx:{textfmt.name(t['scx_scheduler'])}")
     for _exe, mode in textfmt.fields(t.get("pinned")).items():
         out.append(f"pin:{textfmt.text(mode, 'None')}")
         break

@@ -65,6 +65,10 @@ class TweakStatus:
             "reniced": self.reniced or {},
             "pinned": self.pinned or {},
             "mangohud_files": self.mangohud_files or [],
+            # Was missing, and its absence was invisible: the CLI has rendered
+            # it since it was added and the branch could never run, because
+            # nothing put the key in the dict the CLI reads.
+            "scx_scheduler": self.scx_scheduler,
             "helper_available": self.helper_available,
             "limited_mode": self.limited_mode,
         }

@@ -103,6 +103,16 @@ pub fn tweaks_fingerprint(tweaks: &Value) -> Vec<String> {
     if truthy("reniced") {
         out.push("renice".to_string());
     }
+    // The biggest lever in the tool: it replaces the kernel's scheduler for
+    // the whole machine rather than for the game. A session that does not
+    // record it cannot be read against one that does, which is what this list
+    // is stored for.
+    if truthy("scx_scheduler") {
+        out.push(format!(
+            "scx:{}",
+            crate::pyfmt::name(tweaks.get("scx_scheduler").unwrap_or(&Value::Null))
+        ));
+    }
     // Only the first pinned process is named, in insertion order: the string
     // records which pinning MODE was in force, and a second entry would say
     // the same thing again.

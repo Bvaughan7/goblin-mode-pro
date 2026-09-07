@@ -60,7 +60,8 @@ GPU = {"vram_used_mb": 5900, "vram_total_mb": 6144, "vram_free_mb": 244,
 
 TWEAKS = {"governor": "performance", "epp_boosted": True, "tearing": True,
           "adaptive_sync": True, "reniced": {"4242": -5}, "power_limited": True,
-          "power_limits_w": [45, 60], "pinned": {"Wow.exe": "performance"}}
+          "power_limits_w": [45, 60], "pinned": {"Wow.exe": "performance"},
+          "scx_scheduler": "lavd"}
 
 
 def case(**over) -> dict:
@@ -116,6 +117,10 @@ CASES = {
     "fingerprint_epp_only": case(tweaks={"epp_boosted": True}),
     "fingerprint_governor_is_a_number": case(tweaks={"governor": 5}),
     "fingerprint_tearing_only": case(tweaks={"tearing": True}),
+    "fingerprint_scheduler_only": case(tweaks={"scx_scheduler": "lavd"}),
+    "fingerprint_no_scheduler": case(tweaks={"scx_scheduler": None}),
+    "fingerprint_scheduler_empty": case(tweaks={"scx_scheduler": ""}),
+    "fingerprint_scheduler_is_a_number": case(tweaks={"scx_scheduler": 7}),
     "fingerprint_vrr_only": case(tweaks={"adaptive_sync": True}),
     "fingerprint_renice_only": case(tweaks={"reniced": {"1": -5}}),
     "fingerprint_renice_empty": case(tweaks={"reniced": {}}),
