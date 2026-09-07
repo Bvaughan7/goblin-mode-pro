@@ -33,6 +33,7 @@ pub mod observer;
 pub mod paths;
 pub mod payload;
 pub mod preflight;
+pub mod proton;
 pub mod pyfmt;
 pub mod pyjson;
 pub mod report;
