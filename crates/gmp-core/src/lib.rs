@@ -22,6 +22,7 @@ pub mod fpswatch;
 pub mod gamedetect;
 pub mod gameevent;
 pub mod gpu;
+pub mod housekeeping;
 pub mod incidents;
 pub mod logrules;
 pub mod mangohud;
