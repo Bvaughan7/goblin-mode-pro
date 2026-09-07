@@ -77,5 +77,26 @@ class RenderPng(unittest.TestCase):
             self.assertTrue(os.path.exists(path))
 
 
+class LabelsAreWhatTheUserReads(unittest.TestCase):
+    """Every label goes straight into an f-string - the CLI's comparison table
+    and the GUI's diagnostics page both interpolate `row["label"]` and neither
+    runs it through a formatter. So a printf escape in one is not an escape,
+    it is two characters the user sees."""
+
+    def test_no_label_carries_an_unformatted_escape(self):
+        rows = benchmarkcard.diff_sessions(
+            {f: 1.0 for f, _ in benchmarkcard._METRICS},
+            {f: 2.0 for f, _ in benchmarkcard._METRICS})
+        self.assertTrue(rows)
+        for row in rows:
+            with self.subTest(field=row["field"]):
+                self.assertNotIn("%%", row["label"])
+
+    def test_the_stutter_label_reads_as_a_percentage(self):
+        rows = benchmarkcard.diff_sessions({"frametime_stutter_pct": 3.0},
+                                           {"frametime_stutter_pct": 2.0})
+        self.assertEqual(rows[0]["label"], "Stutter (% of frames)")
+
+
 if __name__ == "__main__":
     unittest.main()

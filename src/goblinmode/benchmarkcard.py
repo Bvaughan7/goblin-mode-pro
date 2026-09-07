@@ -27,7 +27,7 @@ _METRICS: tuple[tuple[str, str], ...] = (
     ("fps_p95", "95th %ile FPS"),
     ("fps_min", "Minimum FPS"),
     ("frametime_ms_avg", "Avg frame time (ms)"),
-    ("frametime_stutter_pct", "Stutter (%% of frames)"),
+    ("frametime_stutter_pct", "Stutter (% of frames)"),
     ("cpu_temp_avg", "CPU temp avg (°C)"),
     ("cpu_temp_max", "CPU temp peak (°C)"),
     ("gpu_temp_avg", "GPU temp avg (°C)"),

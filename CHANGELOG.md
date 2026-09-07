@@ -7,6 +7,12 @@ All notable changes to Goblin Mode Pro. Format loosely follows
 ## [Unreleased]
 
 ### Fixed
+- **A benchmark comparison showed `Stutter (%% of frames)`.** The label carried
+  a printf escape and nothing formats it: both the CLI's comparison table and
+  the GUI's diagnostics page interpolate the label straight into a string, so
+  the two characters reached the user as they were. One `%` now, with a test
+  that says no label may carry an unformatted escape - the rule rather than the
+  instance.
 - **The kernel scheduler was invisible to everything that reports what is
   applied.** `TweakStatus` has carried `scx_scheduler` since sched_ext support
   landed, and `as_dict` - which is the whole of what leaves the daemon about
