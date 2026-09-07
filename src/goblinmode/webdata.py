@@ -98,12 +98,6 @@ def protondb_tier(app_id: str) -> dict:
 # --------------------------------------------------------------------------
 # AreWeAntiCheatYet
 # --------------------------------------------------------------------------
-_STATUS_RANK = {  # worst first for the "is it playable?" read
-    "denied": 0, "broken": 1, "unknown": 2, "planned": 3,
-    "running": 4, "supported": 5,
-}
-
-
 def _anticheat_db() -> list[dict]:
     hit = _cached_json(_ANTICHEAT_CACHE, _ANTICHEAT_TTL)
     if hit is not None:

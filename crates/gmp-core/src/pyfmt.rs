@@ -135,9 +135,90 @@ pub fn is_word_char(c: char) -> bool {
     is_alnum(c) || c == '_'
 }
 
+/// The characters `str.isdigit` accepts that are not general category `Nd`.
+///
+/// Derived, not guessed: over the whole of Unicode, `isdigit` is exactly `Nd`
+/// plus these - every `Nd` character is a digit, and these 128 in 20 ranges
+/// are the ones with `Numeric_Type=Digit` outside it. Superscripts,
+/// subscripts, circled and parenthesised digits, and four historic scripts.
+const DIGIT_BUT_NOT_ND: &[(u32, u32)] = &[
+    (0x00B2, 0x00B3),
+    (0x00B9, 0x00B9),
+    (0x1369, 0x1371),
+    (0x19DA, 0x19DA),
+    (0x2070, 0x2070),
+    (0x2074, 0x2079),
+    (0x2080, 0x2089),
+    (0x2460, 0x2468),
+    (0x2474, 0x247C),
+    (0x2488, 0x2490),
+    (0x24EA, 0x24EA),
+    (0x24F5, 0x24FD),
+    (0x24FF, 0x24FF),
+    (0x2776, 0x277E),
+    (0x2780, 0x2788),
+    (0x278A, 0x2792),
+    (0x10A40, 0x10A43),
+    (0x10E60, 0x10E68),
+    (0x11052, 0x1105A),
+    (0x1F100, 0x1F10A),
+];
+
+/// `str.isdigit` for one character, which is neither `is_ascii_digit` nor
+/// `is_numeric`.
+///
+/// Narrower than `isnumeric`, which also takes fractions and Roman numerals -
+/// U+00BD and U+2160 are numeric and are not digits. Wider than `Nd`, which
+/// misses the superscripts and the circled forms. The middle of those three is
+/// what Python means by a digit, and it is the one a `c.isdigit()` filter in
+/// the Python is asking for.
+pub fn is_digit(c: char) -> bool {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    if RE
+        .get_or_init(|| Regex::new(r"^\p{Nd}$").expect("a valid pattern"))
+        .is_match(c.encode_utf8(&mut [0u8; 4]))
+    {
+        return true;
+    }
+    let code = c as u32;
+    DIGIT_BUT_NOT_ND
+        .iter()
+        .any(|(first, last)| code >= *first && code <= *last)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_digit_is_narrower_than_numeric_and_wider_than_ascii() {
+        assert!(is_digit('5'));
+        assert!(is_digit('\u{663}'), "Arabic-Indic three is Nd");
+        assert!(is_digit('\u{b2}'), "superscript two has Numeric_Type=Digit");
+        assert!(is_digit('\u{2460}'), "circled one too");
+        assert!(!is_digit('\u{bd}'), "a half is numeric and not a digit");
+        assert!(!is_digit('\u{2160}'), "a Roman numeral is not a digit");
+        assert!(!is_digit('a'));
+        assert!(!is_digit(' '));
+    }
+
+    #[test]
+    fn alnum_is_letters_and_numbers_and_not_the_marks_between_them() {
+        assert!(is_alnum('a'));
+        assert!(is_alnum('5'));
+        assert!(is_alnum('\u{2160}'), "a Roman numeral is numeric");
+        assert!(is_alnum('\u{bd}'), "so is a half");
+        assert!(!is_alnum('\u{345}'), "a combining mark is not, in Python");
+        assert!(!is_alnum('_'));
+    }
+
+    #[test]
+    fn a_word_character_is_alnum_or_an_underscore() {
+        assert!(is_word_char('_'));
+        assert!(is_word_char('a'));
+        assert!(!is_word_char('-'));
+        assert!(!is_word_char('\u{345}'));
+    }
 
     #[test]
     fn a_string_is_one_name_not_its_characters() {

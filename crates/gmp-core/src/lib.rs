@@ -42,3 +42,4 @@ pub mod scx;
 pub mod sessions;
 pub mod status;
 pub mod store;
+pub mod webdata;
