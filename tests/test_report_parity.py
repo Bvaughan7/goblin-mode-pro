@@ -210,6 +210,17 @@ CASES = {
     # -- the tweaks section -----------------------------------------------------
     "tweaks_present": rep(active_tweaks=TWEAKS),
     "tweaks_all_off": rep(active_tweaks={k: False for k in report.TWEAK_KEYS}),
+    # `governor` holds a NAME. Setting every key to a bool is the shape that
+    # hid a reader treating it as a flag - every non-empty name is truthy, so
+    # it read as tuned in every report from every machine.
+    "tweaks_governor_powersave": rep(active_tweaks={"governor": "powersave"}),
+    "tweaks_governor_performance": rep(active_tweaks={"governor": "performance"}),
+    "tweaks_governor_epp_only": rep(
+        active_tweaks={"governor": "schedutil", "epp_boosted": True}),
+    "tweaks_governor_null": rep(active_tweaks={"governor": None}),
+    "tweaks_governor_with_flags": rep(
+        active_tweaks={"governor": "powersave", "tearing": True,
+                       "power_limited": True}),
     "tweaks_all_on": rep(active_tweaks={k: True for k in report.TWEAK_KEYS}),
     "tweaks_out_of_order": rep(active_tweaks={"focus_mode": True, "governor": True}),
     "tweaks_unknown_key": rep(active_tweaks={"warp_drive": True}),

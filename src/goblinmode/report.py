@@ -140,8 +140,12 @@ def build_report(
 #: The tweaks named in the report's "Active tweaks" section. Deliberately the
 #: same list, in the same order, as the CLI's status line - separate constants
 #: because they are separate surfaces that could legitimately diverge.
-TWEAK_KEYS = ("governor", "epp_boosted", "tearing", "adaptive_sync",
-              "power_limited", "focus_mode")
+#:
+#: `governor` is NOT one of them. It holds the governor's NAME, and every
+#: non-empty name is truthy, so listing it here reported the governor as tuned
+#: in every report from every machine. It is decided separately, by the rule
+#: the session fingerprint and the GUI dashboard already used.
+TWEAK_KEYS = ("tearing", "adaptive_sync", "power_limited", "focus_mode")
 
 
 # --------------------------------------------------------------------------
@@ -231,7 +235,10 @@ def as_markdown(rep: dict) -> str:
 
     tw = _f(rep.get("active_tweaks"))
     if tw:
-        on = [k for k in TWEAK_KEYS if tw.get(k)]
+        on = []
+        if tw.get("governor") == "performance" or tw.get("epp_boosted"):
+            on.append("governor")
+        on += [k for k in TWEAK_KEYS if tw.get(k)]
         if tw.get("scx_scheduler"):
             on.append(f"scx_{_fname(tw['scx_scheduler'])}")
         _reniced = tw.get("reniced")

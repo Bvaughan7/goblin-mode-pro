@@ -48,8 +48,10 @@ def _p(*a) -> None:
 #: rather than read off the reply, so a newer daemon reporting a tweak this
 #: build has never heard of does not print a key the user cannot interpret,
 #: and so the order does not shift between runs.
-TWEAK_KEYS = ("governor", "epp_boosted", "tearing", "adaptive_sync",
-              "power_limited", "focus_mode")
+#: Tweaks that really are flags. `governor` is NOT one of them - it holds the
+#: governor's name, and every non-empty name is truthy, so testing it that way
+#: reports the governor as tuned on any machine where the helper answers.
+TWEAK_KEYS = ("tearing", "adaptive_sync", "power_limited", "focus_mode")
 
 
 def _fields(value) -> dict:
@@ -69,7 +71,12 @@ def status_lines(s) -> list[str]:
     caps = _fields(s.get("capabilities"))
     t = _fields(s.get("tweaks"))
 
-    on = [k for k in TWEAK_KEYS if t.get(k)]
+    on = []
+    # The same rule the session fingerprint and the GUI dashboard use: pinned,
+    # or the finer EPP knob moved on its own, which is what intel_pstate does.
+    if t.get("governor") == "performance" or t.get("epp_boosted"):
+        on.append("governor")
+    on += [k for k in TWEAK_KEYS if t.get(k)]
     if t.get("scx_scheduler"):
         on.append(f"scx_{textfmt.name(t['scx_scheduler'])}")
 

@@ -159,5 +159,58 @@ class CliDispatch(unittest.TestCase):
         self.assertEqual(argv[argv.index("--") + 1:], ["steam", "-tenfoot"])
 
 
+class ActiveTweaksLine(unittest.TestCase):
+    """`governor` in the tweaks object holds a NAME, not a flag.
+
+    Every other reader of that object knows it - the session fingerprint and
+    the GUI dashboard both ask whether it is `performance`, or whether EPP
+    alone was moved. The CLI tested it for truthiness, and every non-empty
+    string is truthy, so it reported the governor as an active tweak on any
+    machine where the helper answers at all.
+    """
+
+    def _line(self, tweaks: dict) -> str:
+        lines = cli.status_lines({"tweaks": tweaks})
+        return next(x for x in lines if x.startswith("active tweaks"))
+
+    def test_an_untouched_machine_reports_no_tweaks(self):
+        # What this daemon really answers with nothing running.
+        self.assertIn("none", self._line({"governor": "powersave"}))
+        self.assertIn("none", self._line({"governor": "schedutil"}))
+        self.assertIn("none", self._line({}))
+
+    def test_a_pinned_governor_is_a_tweak(self):
+        self.assertIn("governor", self._line({"governor": "performance"}))
+
+    def test_the_finer_knob_alone_still_counts(self):
+        """On intel_pstate the EPP moves without the governor being pinned,
+        and a session tuned that way is not an untuned session."""
+        self.assertIn("governor", self._line({"governor": "powersave",
+                                              "epp_boosted": True}))
+
+    def test_the_other_keys_are_still_plain_flags(self):
+        line = self._line({"governor": "powersave", "tearing": True,
+                           "power_limited": True})
+        self.assertIn("tearing", line)
+        self.assertIn("power_limited", line)
+        self.assertNotIn("governor", line)
+
+    def test_this_line_agrees_with_the_other_two_readers(self):
+        """Three places read this object. They may spell the answer
+        differently; they may not disagree about it."""
+        from goblinmode.daemon import tweaks_fingerprint
+        from goblinmode.gui.labels import active_tweak_labels
+
+        for tweaks in ({"governor": "powersave"},
+                       {"governor": "performance"},
+                       {"governor": "powersave", "epp_boosted": True},
+                       {"governor": None},
+                       {}):
+            with self.subTest(tweaks=tweaks):
+                cli_says = "governor" in self._line(tweaks)
+                self.assertEqual(cli_says, "governor" in tweaks_fingerprint(tweaks))
+                self.assertEqual(cli_says, "governor" in active_tweak_labels(tweaks))
+
+
 if __name__ == "__main__":
     unittest.main()

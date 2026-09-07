@@ -24,14 +24,13 @@ use serde_json::Value;
 /// Fixed rather than derived from the reply, so a newer daemon reporting a
 /// tweak this build has never heard of does not print it under a key the user
 /// cannot interpret - and so the order does not change between runs.
-pub const TWEAK_KEYS: &[&str] = &[
-    "governor",
-    "epp_boosted",
-    "tearing",
-    "adaptive_sync",
-    "power_limited",
-    "focus_mode",
-];
+///
+/// `governor` is NOT among them and must not be: it holds the governor's
+/// NAME, and every non-empty name is truthy, so a build that tested it the
+/// way it tests these reported the governor as tuned on any machine where the
+/// helper answers at all. It is decided separately, by the rule the session
+/// fingerprint and the GUI dashboard both use.
+pub const TWEAK_KEYS: &[&str] = &["tearing", "adaptive_sync", "power_limited", "focus_mode"];
 
 const EM_DASH: &str = "—";
 
@@ -68,11 +67,20 @@ pub fn status(status: &Value) -> Vec<String> {
     ));
 
     let tweaks = field(status, "tweaks").cloned().unwrap_or(Value::Null);
-    let mut on: Vec<String> = TWEAK_KEYS
-        .iter()
-        .filter(|key| truthy_field(&tweaks, key).is_some())
-        .map(|key| (*key).to_string())
-        .collect();
+    let mut on: Vec<String> = Vec::new();
+    // Pinned, or the finer EPP knob moved on its own - which is what
+    // intel_pstate does, and a session tuned that way is not an untuned one.
+    if text(field(&tweaks, "governor"), "") == "performance"
+        || truthy_field(&tweaks, "epp_boosted").is_some()
+    {
+        on.push("governor".to_string());
+    }
+    on.extend(
+        TWEAK_KEYS
+            .iter()
+            .filter(|key| truthy_field(&tweaks, key).is_some())
+            .map(|key| (*key).to_string()),
+    );
     if let Some(scheduler) = truthy_field(&tweaks, "scx_scheduler") {
         on.push(format!("scx_{}", name(scheduler)));
     }
@@ -269,7 +277,8 @@ mod tests {
             "master_enabled": true,
             "active_games": ["Wow.exe"],
             "governor": "performance",
-            "tweaks": {"governor": true, "focus_mode": true, "scx_scheduler": "rusty"},
+            "tweaks": {"governor": "performance", "focus_mode": true,
+                       "scx_scheduler": "rusty"},
             "helper_available": true,
             "capabilities": {"cpu_model": "i7-10750H", "gpu_vendors": ["nvidia"],
                              "kernel_release": "6.9.0"},
@@ -290,11 +299,36 @@ mod tests {
     }
 
     #[test]
+    fn a_governor_that_is_not_pinned_is_not_an_active_tweak() {
+        // `governor` holds a name, and every non-empty name is truthy. A
+        // build that tested it the way it tests the flags beside it reported
+        // the governor as tuned on every machine where the helper answers.
+        let lines = status(&json!({"tweaks": {"governor": "powersave"}}));
+        assert_eq!(lines[3], "active tweaks : none");
+        let lines = status(&json!({"tweaks": {"governor": "schedutil"}}));
+        assert_eq!(lines[3], "active tweaks : none");
+    }
+
+    #[test]
+    fn the_finer_knob_alone_still_counts_as_a_tuned_governor() {
+        // intel_pstate moves EPP without pinning the governor.
+        let lines = status(&json!({
+            "tweaks": {"governor": "powersave", "epp_boosted": true}
+        }));
+        assert_eq!(lines[3], "active tweaks : governor");
+    }
+
+    #[test]
     fn the_tweak_order_is_the_tables_not_the_replys() {
         // A daemon serialising its tweaks in another order must not change
         // what the line reads, or two machines disagree for no reason.
+        //
+        // `governor` carries the governor's NAME here, which is what a daemon
+        // really sends. An earlier version of this fixture said `true`, and a
+        // boolean is the one value that cannot tell a pinned governor from a
+        // powersave one.
         let lines = status(&json!({
-            "tweaks": {"focus_mode": true, "tearing": true, "governor": true}
+            "tweaks": {"focus_mode": true, "tearing": true, "governor": "performance"}
         }));
         assert_eq!(lines[3], "active tweaks : governor, tearing, focus_mode");
     }

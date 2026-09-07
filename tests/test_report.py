@@ -55,5 +55,46 @@ class WorksForMeIssueUrl(unittest.TestCase):
         self.assertIn("title=", url)
 
 
+class ActiveTweaksSection(unittest.TestCase):
+    """A bug report is read by somebody trying to help. It saying the governor
+    is tuned when it is not sends them looking in the wrong place.
+
+    `governor` in the tweaks object holds a NAME. Every non-empty name is
+    truthy, so the section listed it on every machine - which is the same
+    mistake the CLI's status line made, in the same object, for the same
+    reason.
+    """
+
+    def _section(self, tweaks: dict) -> str:
+        md = report.as_markdown({"active_tweaks": tweaks}).splitlines()
+        heading = md.index("### Active tweaks")
+        return md[heading + 1]
+
+    def test_an_untouched_machine_lists_nothing(self):
+        self.assertIn("none", self._section({"governor": "powersave"}))
+        self.assertIn("none", self._section({"governor": "schedutil"}))
+
+    def test_a_pinned_governor_is_listed(self):
+        self.assertIn("governor", self._section({"governor": "performance"}))
+
+    def test_the_finer_knob_alone_still_counts(self):
+        self.assertIn("governor",
+                      self._section({"governor": "powersave", "epp_boosted": True}))
+
+    def test_it_agrees_with_the_cli_about_the_same_object(self):
+        """Two surfaces, deliberately separate constants, which may spell the
+        answer differently and may not disagree about it."""
+        from goblinmode import cli
+
+        for tweaks in ({"governor": "powersave"}, {"governor": "performance"},
+                       {"governor": "powersave", "epp_boosted": True},
+                       {"tearing": True}, {}):
+            with self.subTest(tweaks=tweaks):
+                line = next(x for x in cli.status_lines({"tweaks": tweaks})
+                            if x.startswith("active tweaks"))
+                self.assertEqual("governor" in self._section(tweaks) if tweaks else False,
+                                 "governor" in line)
+
+
 if __name__ == "__main__":
     unittest.main()

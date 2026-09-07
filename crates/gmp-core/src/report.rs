@@ -21,14 +21,12 @@ use crate::pyfmt::{fields, name, text};
 /// Deliberately the same list, in the same order, as the CLI's status line.
 /// They are separate constants because they are separate surfaces that could
 /// legitimately diverge, not because they currently do.
-pub const TWEAK_KEYS: &[&str] = &[
-    "governor",
-    "epp_boosted",
-    "tearing",
-    "adaptive_sync",
-    "power_limited",
-    "focus_mode",
-];
+///
+/// `governor` is NOT among them and must not be: it holds the governor's
+/// NAME, and every non-empty name is truthy, so a build listing it here
+/// reported the governor as tuned in every report from every machine. It is
+/// decided separately, by the rule the session fingerprint uses.
+pub const TWEAK_KEYS: &[&str] = &["tearing", "adaptive_sync", "power_limited", "focus_mode"];
 
 /// GitHub caps an issue URL long before this, but the truncation exists to
 /// keep the *link* usable; the full report goes on the clipboard regardless.
@@ -262,11 +260,17 @@ pub fn as_markdown(rep: &Value) -> String {
     let tweaks = fields(field(rep, "active_tweaks"));
     if !tweaks.is_empty() {
         let truthy = |key: &str| tweaks.get(key).filter(|v| crate::config::truthy(v));
-        let mut on: Vec<String> = TWEAK_KEYS
-            .iter()
-            .filter(|key| truthy(key).is_some())
-            .map(|key| (*key).to_string())
-            .collect();
+        let mut on: Vec<String> = Vec::new();
+        // Pinned, or the finer EPP knob moved on its own.
+        if text(tweaks.get("governor"), "") == "performance" || truthy("epp_boosted").is_some() {
+            on.push("governor".to_string());
+        }
+        on.extend(
+            TWEAK_KEYS
+                .iter()
+                .filter(|key| truthy(key).is_some())
+                .map(|key| (*key).to_string()),
+        );
         if let Some(scheduler) = truthy("scx_scheduler") {
             on.push(format!("scx_{}", name(scheduler)));
         }

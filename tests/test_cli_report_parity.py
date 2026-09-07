@@ -116,6 +116,18 @@ CASES = {
     "status_tweaks_is_a_list": case(status={"tweaks": [1]}),
     "status_tweaks_all_off": case(status={"tweaks": {k: False for k in cli.TWEAK_KEYS}}),
     "status_tweaks_all_on": case(status={"tweaks": {k: True for k in cli.TWEAK_KEYS}}),
+    # `governor` holds a NAME. The two cases above set every key to a bool,
+    # which is the shape that hid a reader treating this one as a flag - every
+    # non-empty name is truthy, so it read as tuned on any machine at all.
+    "status_governor_powersave": case(status={"tweaks": {"governor": "powersave"}}),
+    "status_governor_performance": case(
+        status={"tweaks": {"governor": "performance"}}),
+    "status_governor_schedutil_epp_on": case(
+        status={"tweaks": {"governor": "schedutil", "epp_boosted": True}}),
+    "status_tweaks_governor_null": case(status={"tweaks": {"governor": None}}),
+    "status_governor_with_real_flags": case(
+        status={"tweaks": {"governor": "powersave", "tearing": True,
+                           "power_limited": True}}),
     "status_tweaks_unknown_key": case(status={"tweaks": {"warp_drive": True}}),
     "status_tweaks_out_of_order": case(status={"tweaks": {"focus_mode": True,
                                                           "governor": True}}),

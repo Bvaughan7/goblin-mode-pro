@@ -7,6 +7,15 @@ All notable changes to Goblin Mode Pro. Format loosely follows
 ## [Unreleased]
 
 ### Fixed
+- **The CLI and the bug report claimed the CPU governor was tuned on every
+  machine.** Both listed it among the active tweaks by testing the `governor`
+  field for truthiness - but that field holds the governor's NAME, and every
+  non-empty name is truthy. So `goblin-mode-pro-cli status` said
+  `active tweaks : governor` while showing `governor : powersave` two lines
+  above, and every bug report said the same, sending whoever read it looking
+  in the wrong place. Both now use the rule the session fingerprint and the
+  GUI dashboard already used: pinned to `performance`, or the finer EPP knob
+  moved on its own.
 - **A `ryzenadj --info` table the self-test could not parse was reported as a
   crash in the self-test.** The pattern that finds the STAPM limit accepts
   digits and dots, so a bare `.` matches it and is not a float - and the probe
