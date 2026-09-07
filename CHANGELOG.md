@@ -19,7 +19,9 @@ All notable changes to Goblin Mode Pro. Format loosely follows
   "performance mode on" notification, and a session that could not be compared
   against one run on a different scheduler. Both are fixed, so such a profile
   now announces itself; that is a new notification where there was silence,
-  and it is the point.
+  and it is the point. The dashboard's "active tweaks" row had the same gap
+  from the other direction - it was built from a fixed list of keys that did
+  not include the scheduler - and now names it the way the CLI does.
 - **A profile with a wrong-typed field made `SetProfile` fail instead of
   refusing.** The method is a D-Bus entry point whose payload is JSON from any
   client on the session bus, and it is declared to answer a boolean - but a
