@@ -118,9 +118,105 @@ pub(crate) fn py_str(x: f64) -> String {
     }
 }
 
+/// `format!("{v:g}")` as Python writes it, which Rust has no equivalent of.
+///
+/// The default `%g`: six significant digits, exponent form when the exponent
+/// is below -4 or at least 6, trailing zeros stripped along with a decimal
+/// point left with nothing after it, and an exponent that is always signed and
+/// at least two digits wide.
+///
+/// The subtlety is the ORDER. The value is rounded to six significant digits
+/// FIRST, and the choice of form is made against the rounded exponent - so
+/// 999999.5 is not `999999.5` shortened, it is `1e+06`, because rounding
+/// carried it over the boundary. Deciding the form from the original exponent
+/// gives `1e+06`'s digits printed in fixed form, which is a different string.
+pub fn py_g(x: f64) -> String {
+    if x.is_nan() {
+        return "nan".to_string();
+    }
+    if x.is_infinite() {
+        return if x < 0.0 { "-inf" } else { "inf" }.to_string();
+    }
+    const PRECISION: usize = 6;
+    // Round first: this is what decides which form is used.
+    let scientific = format!("{:.*e}", PRECISION - 1, x);
+    let (mantissa, exponent) = scientific.split_once('e').expect("Rust always writes one");
+    let exponent: i32 = exponent.parse().expect("Rust always writes a number");
+
+    if exponent < -4 || exponent >= PRECISION as i32 {
+        let sign = if exponent < 0 { '-' } else { '+' };
+        return format!(
+            "{}e{sign}{:02}",
+            strip_zeros(mantissa),
+            exponent.unsigned_abs()
+        );
+    }
+    // Fixed form, with the digits after the point chosen so that six
+    // significant ones survive.
+    let places = (PRECISION as i32 - 1 - exponent).max(0) as usize;
+    strip_zeros(&format!("{x:.places$}"))
+}
+
+/// Drop trailing zeros after a decimal point, and the point itself when
+/// nothing is left after it. A string with no point is returned as it is.
+fn strip_zeros(text: &str) -> String {
+    if !text.contains('.') {
+        return text.to_string();
+    }
+    text.trim_end_matches('0').trim_end_matches('.').to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn g_writes_whole_numbers_without_a_point() {
+        assert_eq!(py_g(0.0), "0");
+        assert_eq!(py_g(1.0), "1");
+        assert_eq!(py_g(7.0), "7");
+        assert_eq!(py_g(-0.0), "-0");
+    }
+
+    #[test]
+    fn g_keeps_six_significant_digits() {
+        assert_eq!(py_g(123.456789), "123.457");
+        assert_eq!(py_g(12345.6789), "12345.7");
+        assert_eq!(py_g(0.5), "0.5");
+        assert_eq!(py_g(55.15), "55.15");
+        assert_eq!(py_g(0.1 + 0.2), "0.3");
+    }
+
+    #[test]
+    fn g_switches_to_an_exponent_where_python_switches() {
+        assert_eq!(py_g(999_999.0), "999999");
+        assert_eq!(py_g(1_000_000.0), "1e+06");
+        assert_eq!(py_g(1_234_567.0), "1.23457e+06");
+        assert_eq!(py_g(0.0001), "0.0001");
+        assert_eq!(py_g(0.00001), "1e-05");
+    }
+
+    #[test]
+    fn g_decides_the_form_after_rounding_not_before() {
+        // 999999.5 has an exponent of 5, which is fixed form - until six
+        // significant digits round it to 1000000, whose exponent is 6.
+        assert_eq!(py_g(999_999.5), "1e+06");
+    }
+
+    #[test]
+    fn g_writes_an_exponent_signed_and_at_least_two_digits_wide() {
+        assert_eq!(py_g(1e100), "1e+100");
+        assert_eq!(py_g(1e-100), "1e-100");
+        assert_eq!(py_g(1e15), "1e+15");
+        assert_eq!(py_g(1e-5), "1e-05");
+    }
+
+    #[test]
+    fn g_writes_the_special_values_in_lower_case() {
+        assert_eq!(py_g(f64::NAN), "nan");
+        assert_eq!(py_g(f64::INFINITY), "inf");
+        assert_eq!(py_g(f64::NEG_INFINITY), "-inf");
+    }
 
     /// Every expected value here is what CPython 3.14 prints for `sum(...)`
     /// of the same list. The fold's answer is given alongside, because on
