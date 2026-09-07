@@ -45,6 +45,14 @@ PAIRS = [
     # Negative baselines.
     ({"cpu_temp_avg": -10.0}, {"cpu_temp_avg": -5.0}),
     ({"cpu_temp_avg": -5.0}, {"cpu_temp_avg": -10.0}),
+    # Percentages that land on a one-place boundary. The delta and the
+    # percentage round to DIFFERENT places, so a pair that pins one says
+    # nothing about the other.
+    ({"fps_avg": 100.0}, {"fps_avg": 100.25}),
+    ({"fps_avg": 1000.0}, {"fps_avg": 1001.5}),
+    ({"fps_avg": 10.0}, {"fps_avg": 10.125}),
+    ({"cpu_temp_avg": 200.0}, {"cpu_temp_avg": 200.5}),
+    ({"fps_avg": 3.0}, {"fps_avg": 3.0585}),
     # Rounding boundaries, on the delta and on the percentage.
     ({"fps_avg": 1.0}, {"fps_avg": 1.005}),
     ({"fps_avg": 1.0}, {"fps_avg": 1.015}),

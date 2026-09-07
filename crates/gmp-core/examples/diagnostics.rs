@@ -16,6 +16,28 @@ fn main() {
     let samples: Vec<Sample> =
         serde_json::from_value(input["samples"].clone()).expect("samples must be a list");
 
+    // The two rate readings, which nothing else in this example reaches.
+    let rate_pair = |row: &serde_json::Value, key: &str| {
+        row.get(key)
+            .and_then(|v| Some((v[0].as_f64()?, v[1].as_i64()?)))
+    };
+    let rates: Vec<serde_json::Value> = input["rates"]
+        .as_array()
+        .map(|rows| {
+            rows.iter()
+                .map(|row| {
+                    let prev = rate_pair(row, "prev");
+                    let now = row["now"].as_f64().unwrap_or(0.0);
+                    let value = row["value"].as_i64().unwrap_or(0);
+                    serde_json::json!([
+                        diagnostics::rate_mbps(prev, now, value),
+                        diagnostics::package_power(prev, now, value),
+                    ])
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
     let mut engine = Engine::default();
     let verdicts: Vec<serde_json::Value> = samples
         .iter()
@@ -41,6 +63,7 @@ fn main() {
             "reasons": samples.iter()
                 .map(|s| diagnostics::parse_gpu_reasons(&s.gpu_throttle_reasons).to_string())
                 .collect::<Vec<_>>(),
+            "rates": rates,
         }))
         .unwrap()
     );

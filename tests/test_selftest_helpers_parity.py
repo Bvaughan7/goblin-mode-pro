@@ -56,6 +56,13 @@ PKCHECKS = [
     {"installed": True, "code": 1, "output": "not registered"},
     {"installed": True, "code": 1, "output": "No such action"},
     {"installed": True, "code": 3, "output": "something went wrong\nand more\n"},
+    # `pkcheck` output is another program\'s stderr. Python splits on more
+    # than a newline, so where the first line ENDS can differ.
+    {"installed": True, "code": 3, "output": "first\x0bsecond\n"},
+    {"installed": True, "code": 3, "output": "first\x0csecond\n"},
+    {"installed": True, "code": 3, "output": "first\x85second\n"},
+    {"installed": True, "code": 3, "output": "first\u2028second\n"},
+    {"installed": True, "code": 3, "output": "first\rsecond\n"},
     {"installed": True, "code": 7, "output": ""},
     {"installed": True, "code": 1, "output": ""},
 ]

@@ -163,6 +163,48 @@ SEQUENCES = {
 }
 
 
+#: (prev (time, counter) or None, now, counter) for the two rate readings.
+#: Weighted at the one-place rounding boundary, and at the guards each has:
+#: a clock that did not move, a counter that went backwards, no previous
+#: reading at all.
+RATES = [
+    {"prev": None, "now": 10.0, "value": 1_000_000},
+    {"prev": [0.0, 0], "now": 1.0, "value": 1_000_000},
+    {"prev": [0.0, 0], "now": 1.0, "value": 0},
+    {"prev": [0.0, 1_000_000], "now": 1.0, "value": 0},
+    {"prev": [1.0, 0], "now": 1.0, "value": 1_000_000},
+    {"prev": [2.0, 0], "now": 1.0, "value": 1_000_000},
+    # Rates that land on a boundary: 0.25, 0.15, 1.25, 2.5, 55.15.
+    {"prev": [0.0, 0], "now": 1.0, "value": 250_000},
+    {"prev": [0.0, 0], "now": 1.0, "value": 150_000},
+    {"prev": [0.0, 0], "now": 1.0, "value": 1_250_000},
+    {"prev": [0.0, 0], "now": 1.0, "value": 2_500_000},
+    {"prev": [0.0, 0], "now": 1.0, "value": 55_150_000},
+    {"prev": [0.0, 0], "now": 2.0, "value": 500_000},
+    {"prev": [0.0, 0], "now": 4.0, "value": 1_000_000},
+    {"prev": [0.5, 0], "now": 1.0, "value": 125_000},
+    {"prev": [0.0, 0], "now": 0.1, "value": 25_000},
+]
+
+
+def _python_rates(case):
+    """What the two readings come to, through the same arithmetic the
+    samplers use. `_disk_read` and `_package_power` differ in their guards -
+    the disk one refuses `now <= prev_t` before subtracting and the RAPL one
+    tests `dt <= 0` after - so both are asked."""
+    prev, now, value = case["prev"], case["now"], case["value"]
+    if prev is None:
+        return [None, None]
+    disk = None
+    if now > prev[0] and value - prev[1] >= 0:
+        disk = round((value - prev[1]) / (now - prev[0]) / 1_000_000, 1)
+    power = None
+    dt, de = now - prev[0], value - prev[1]
+    if dt > 0 and de >= 0:
+        power = round(de / dt / 1_000_000, 1)
+    return [disk, power]
+
+
 class BothImplementationsAgree(unittest.TestCase):
     def setUp(self):
         self.binary = _binary()
@@ -172,11 +214,22 @@ class BothImplementationsAgree(unittest.TestCase):
                           "not built - run `cargo build -p gmp-core --example diagnostics`")
             self.skipTest("build it with `cargo build -p gmp-core --example diagnostics`")
 
-    def _rust(self, samples: list[dict]) -> dict:
-        r = subprocess.run([str(self.binary)], input=json.dumps({"samples": samples}),
+    def _rust(self, samples: list[dict], rates: list | None = None) -> dict:
+        payload = {"samples": samples, "rates": rates or []}
+        r = subprocess.run([str(self.binary)], input=json.dumps(payload),
                            capture_output=True, text=True, timeout=60, check=False)
         self.assertEqual(r.returncode, 0, r.stderr)
         return json.loads(r.stdout)
+
+    def test_both_rate_readings_agree(self):
+        """Neither was reached by this harness until an audit asked which
+        suites notice a broken `round(x, 1)` and these two did not. They are
+        the only place the sampler turns a pair of counter readings into a
+        number somebody sees."""
+        got = self._rust([], RATES)["rates"]
+        for case, answer in zip(RATES, got, strict=True):
+            with self.subTest(**case):
+                self.assertEqual(answer, _python_rates(case))
 
     @staticmethod
     def _sample(d: dict) -> Sample:

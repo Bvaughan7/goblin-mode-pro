@@ -89,6 +89,14 @@ def _cases():
     yield {"content": f"{big}\n{FAULT}\n", "pos": 0}
     # More than the tail holds.
     yield {"content": "".join(f"line{i}\n" for i in range(300)), "pos": 0}
+    # Terminators `str.splitlines` breaks on and `str::lines` does not. A
+    # Proton log is raw output from somebody else\'s program; a form feed or a
+    # NEL in it splits one line into two on the Python side, and a tail that
+    # disagreed about that would quote the wrong context into an incident.
+    for terminator in ("\x0b", "\x0c", "\x1c", "\x1d", "\x1e", "\x85",
+                       "\u2028", "\u2029", "\r"):
+        yield {"content": f"{NOISE}{terminator}{FAULT}\n", "pos": 0}
+        yield {"content": f"{FAULT}{terminator}{NOISE}\n", "pos": 0}
 
 
 class BothImplementationsReadTheSameThing(unittest.TestCase):
