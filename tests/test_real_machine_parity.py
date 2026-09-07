@@ -183,6 +183,60 @@ class ThisMachineAgrees(unittest.TestCase):
                                            "statuses": [status]})[0],
                          exporter.render(status))
 
+    def test_the_rust_cli_prints_what_the_python_cli_prints(self):
+        """End to end, against whichever daemon is running: the Rust binary
+        connects to the session bus, calls `GetStatus`, parses the JSON string
+        the interface answers with and renders it - and the result has to be
+        the lines the Python renderer produces from the same reply.
+
+        This is the first thing in the port that is a CLIENT of the running
+        system rather than a function asked a question, so it is the first
+        check that the seam works in the direction a cutover needs.
+        """
+        from goblinmode import cli
+
+        binary = None
+        for profile in ("debug", "release"):
+            candidate = _REPO / "target" / profile / "gmp-cli"
+            if candidate.exists():
+                binary = candidate
+        if binary is None:
+            self.skipTest("build it with `cargo build -p gmp-cli`")
+
+        probe = subprocess.run(
+            ["gdbus", "call", "--session", "-d", "com.goblinmode.Pro.Daemon",
+             "-o", "/com/goblinmode/Pro/Daemon",
+             "-m", "com.goblinmode.Pro.Daemon.GetStatus"],
+            capture_output=True, text=True)
+        if probe.returncode != 0:
+            self.skipTest("the daemon is not on the session bus")
+        raw = probe.stdout.strip()
+        status = json.loads(raw[2:raw.rindex("',")].encode().decode("unicode_escape"))
+
+        rust = subprocess.run([str(binary), "status"], capture_output=True,
+                              text=True, timeout=60)
+        self.assertEqual(rust.returncode, 0, rust.stderr)
+        self.assertEqual(rust.stdout.splitlines(), cli.status_lines(status))
+
+    def test_the_rust_cli_says_so_when_nothing_is_listening(self):
+        """A CLI that silently starts a background service because it was
+        asked for a status line is doing something nobody asked for. This one
+        connects without auto-starting, so a missing daemon is a message."""
+        binary = None
+        for profile in ("debug", "release"):
+            candidate = _REPO / "target" / profile / "gmp-cli"
+            if candidate.exists():
+                binary = candidate
+        if binary is None:
+            self.skipTest("build it with `cargo build -p gmp-cli`")
+        empty = dict(os.environ)
+        empty["DBUS_SESSION_BUS_ADDRESS"] = "unix:path=/nonexistent/gmp-no-bus"
+        out = subprocess.run([str(binary), "status"], capture_output=True,
+                             text=True, timeout=60, env=empty)
+        self.assertNotEqual(out.returncode, 0)
+        self.assertIn("gmp-cli:", out.stderr)
+        self.assertEqual(out.stdout, "")
+
     def test_the_real_session_history_compares_the_same(self):
         from goblinmode import benchmarkcard
         from goblinmode.paths import DATA_DIR

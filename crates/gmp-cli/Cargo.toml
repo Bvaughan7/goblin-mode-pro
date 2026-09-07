@@ -1,6 +1,6 @@
 [package]
 name = "gmp-cli"
-description = "Command-line surface for Goblin Mode Pro: selftest reporting"
+description = "Command-line surface for Goblin Mode Pro"
 publish.workspace = true
 version.workspace = true
 edition.workspace = true
@@ -9,10 +9,21 @@ license.workspace = true
 repository.workspace = true
 authors.workspace = true
 
+[lib]
+name = "gmp_cli"
+path = "src/lib.rs"
+
+[[bin]]
+name = "gmp-cli"
+path = "src/main.rs"
+
 [dependencies]
 gmp-core = { path = "../gmp-core" }
+zbus.workspace = true
+tokio.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+anyhow.workspace = true
 
 [lints.rust]
 unsafe_code = "forbid"
