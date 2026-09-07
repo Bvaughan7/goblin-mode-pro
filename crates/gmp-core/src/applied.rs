@@ -213,9 +213,156 @@ pub fn revert_plan(state: Option<&State>) -> RevertPlan {
     }
 }
 
+/// The record a running daemon leaves behind, so that a `--revert` from a
+/// DIFFERENT process can undo what it did.
+///
+/// The reader half of this module has always existed; this is the writer, and
+/// it matters for the same reason the reader does. The file is the only thing
+/// standing between a daemon that dies badly and a machine left on the
+/// performance governor with a compositor tearing hint set. During a cutover
+/// the two implementations will be writing and reading each other's copies of
+/// it, so this renders the document CPython renders - key order included -
+/// rather than an equivalent one.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Record {
+    pub active: Vec<String>,
+    pub governor_applied: bool,
+    pub power_applied: bool,
+    pub power_backend: Option<String>,
+    pub tearing_applied: bool,
+    pub adaptive_sync_applied: bool,
+    pub refresh_cap_applied: bool,
+    pub focus_mode: bool,
+    pub scx_applied: Option<String>,
+    pub scx_previous: Option<String>,
+    /// Executable to pid.
+    pub reniced: Map<String, Value>,
+    /// What the cold path needs to undo the compositor without the daemon's
+    /// in-memory state.
+    pub compositor: Map<String, Value>,
+}
+
+fn optional(value: &Option<String>) -> Value {
+    match value {
+        Some(text) => Value::String(text.clone()),
+        None => Value::Null,
+    }
+}
+
+/// The record as the file holds it: `json.dumps(..., indent=2)`, no trailing
+/// newline.
+///
+/// The key order is the order the Python writes them in and is reproduced
+/// rather than sorted. Nothing reads this file positionally, so the order does
+/// not change what a revert does - but during the cutover the two
+/// implementations' files should differ only where the machine differed, and a
+/// re-ordered document is a diff that has to be explained every time.
+pub fn render(record: &Record) -> String {
+    let mut out = Map::new();
+    out.insert(
+        "active".into(),
+        Value::Array(record.active.iter().cloned().map(Value::String).collect()),
+    );
+    out.insert("governor_applied".into(), record.governor_applied.into());
+    out.insert("power_applied".into(), record.power_applied.into());
+    out.insert("power_backend".into(), optional(&record.power_backend));
+    out.insert("tearing_applied".into(), record.tearing_applied.into());
+    out.insert(
+        "adaptive_sync_applied".into(),
+        record.adaptive_sync_applied.into(),
+    );
+    out.insert(
+        "refresh_cap_applied".into(),
+        record.refresh_cap_applied.into(),
+    );
+    out.insert("focus_mode".into(), record.focus_mode.into());
+    out.insert("scx_applied".into(), optional(&record.scx_applied));
+    out.insert("scx_previous".into(), optional(&record.scx_previous));
+    out.insert("reniced".into(), Value::Object(record.reniced.clone()));
+    out.insert(
+        "compositor".into(),
+        Value::Object(record.compositor.clone()),
+    );
+    crate::pyjson::dumps_indented(&Value::Object(out), 2)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ---- the record a running daemon leaves behind ------------------------
+
+    #[test]
+    fn a_clean_record_reads_back_as_not_dirty() {
+        // The round trip that matters: what this writer produces for a daemon
+        // holding nothing must be what the reader calls clean. A mismatch
+        // between the two halves is a revert that runs on every start, or one
+        // that never runs at all.
+        let text = render(&Record::default());
+        let state = parse(&text).expect("the writer produces a readable file");
+        assert!(!is_dirty(Some(&state)));
+    }
+
+    #[test]
+    fn a_record_with_work_in_it_reads_back_as_dirty() {
+        let text = render(&Record {
+            governor_applied: true,
+            ..Record::default()
+        });
+        assert!(is_dirty(parse(&text).as_ref()));
+    }
+
+    #[test]
+    fn the_compositor_record_survives_the_round_trip() {
+        // It is the half that cannot be rebuilt from memory by the process
+        // doing the reverting, which is the whole reason it is written down.
+        let mut comp = Map::new();
+        comp.insert("tearing_active".into(), Value::Bool(true));
+        comp.insert("refresh_active".into(), Value::from(60));
+        comp.insert("saved_refresh_hz".into(), Value::from(144));
+        let text = render(&Record {
+            compositor: comp.clone(),
+            ..Record::default()
+        });
+        let state = parse(&text).expect("readable");
+        assert_eq!(compositor_state(&state), comp);
+        assert!(compositor_needs_restore(&compositor_state(&state)));
+    }
+
+    #[test]
+    fn nothing_applied_is_written_as_null_rather_than_left_out() {
+        // A key that is absent and a key that is null mean the same thing to
+        // the reader, and only one of them tells someone reading the file that
+        // the daemon considered it.
+        let text = render(&Record::default());
+        assert!(text.contains("\"power_backend\": null"), "{text}");
+        assert!(text.contains("\"scx_applied\": null"), "{text}");
+        assert!(text.contains("\"scx_previous\": null"), "{text}");
+    }
+
+    #[test]
+    fn an_empty_record_still_names_every_field() {
+        let text = render(&Record::default());
+        for key in [
+            "active",
+            "governor_applied",
+            "power_applied",
+            "power_backend",
+            "tearing_applied",
+            "adaptive_sync_applied",
+            "refresh_cap_applied",
+            "focus_mode",
+            "scx_applied",
+            "scx_previous",
+            "reniced",
+            "compositor",
+        ] {
+            assert!(
+                text.contains(&format!("\"{key}\"")),
+                "{key} missing from {text}"
+            );
+        }
+    }
 
     fn state(raw: &str) -> Option<State> {
         parse(raw)
