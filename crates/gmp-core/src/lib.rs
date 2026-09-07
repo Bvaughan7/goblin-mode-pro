@@ -19,6 +19,7 @@ pub mod compositor;
 pub mod config;
 pub mod config_tables;
 pub mod cpuset;
+pub mod daemon_api;
 pub mod diagnostics;
 pub mod exporter;
 pub mod focus;
