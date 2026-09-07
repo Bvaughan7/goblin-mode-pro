@@ -13,6 +13,7 @@
 pub mod applied;
 pub mod benchmarkcard;
 pub mod capabilities;
+pub mod community;
 pub mod compositor;
 pub mod config;
 pub mod config_tables;
