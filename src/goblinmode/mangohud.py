@@ -104,14 +104,6 @@ def _entries_for(profile: GameProfile) -> list[str]:
     return entries
 
 
-#: in-game keys written into every managed block (shown in the GUI)
-HOTKEYS = {
-    "Shift_R + F12": "show / hide the overlay",
-    "Shift_L + F2": "start / stop the frame-rate log",
-    "Shift_L + F4": "reload this config",
-}
-
-
 def apply(profile: GameProfile) -> Path:
     """Write the managed block for *profile*; return the file touched."""
     path = _target_path(profile)
