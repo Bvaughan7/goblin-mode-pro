@@ -245,7 +245,8 @@ jobs:
                                 tests.test_community_parity \
                                 tests.test_webdata_parity \
                                 tests.test_proton_parity \
-                                tests.test_focus_parity -v
+                                tests.test_focus_parity \
+                                tests.test_clip_parity -v
 
       # Advisories, licences and dependency sources. See deny.toml for why
       # this runs before the tree is big.

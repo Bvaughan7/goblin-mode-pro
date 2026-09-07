@@ -13,6 +13,7 @@
 pub mod applied;
 pub mod benchmarkcard;
 pub mod capabilities;
+pub mod clip;
 pub mod community;
 pub mod compositor;
 pub mod config;
