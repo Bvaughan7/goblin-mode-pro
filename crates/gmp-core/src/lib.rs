@@ -31,6 +31,7 @@ pub mod incidents;
 pub mod logrules;
 pub mod logwatch;
 pub mod mangohud;
+pub mod notify;
 pub mod observer;
 pub mod paths;
 pub mod payload;
