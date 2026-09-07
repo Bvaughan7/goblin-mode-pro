@@ -71,6 +71,37 @@ pub fn valid_name(name: &str) -> bool {
         .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || *b == b'_')
 }
 
+/// The `scx_*` schedulers present on disk, short names, sorted.
+///
+/// Used for capability reporting when `scx_loader` is not running yet. Asking
+/// the loader instead would D-Bus-activate a root service from an
+/// unprivileged capability probe, which is not a thing a probe should do.
+///
+/// `scx_loader` itself is not a scheduler and is skipped. A name that appears
+/// in both directories is one scheduler, and a directory that happens to be
+/// named this way is not one at all.
+pub fn scheduler_binaries(dirs: &[std::path::PathBuf]) -> Vec<String> {
+    let mut names: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+    for dir in dirs {
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if !name.starts_with("scx_") || name == "scx_loader" {
+                continue;
+            }
+            // Follows symlinks, the way `Path.is_file` does: a scheduler
+            // reached through /usr/bin is still a scheduler.
+            if !std::fs::metadata(entry.path()).is_ok_and(|m| m.is_file()) {
+                continue;
+            }
+            names.insert(name["scx_".len()..].to_string());
+        }
+    }
+    names.into_iter().collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

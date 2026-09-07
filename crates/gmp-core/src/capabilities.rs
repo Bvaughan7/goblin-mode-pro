@@ -541,6 +541,162 @@ pub fn on_ac_power(supply_root: &std::path::Path) -> Option<bool> {
     None
 }
 
+/// The one file whose existence means the CPU power limit can be raised.
+const RAPL_LIMIT: &str = "intel-rapl/intel-rapl:0/constraint_0_power_limit_uw";
+
+/// Everything a capability snapshot needs to know about a machine.
+///
+/// Every root is an argument and both lookups are closures, which is what
+/// lets one desktop be graded against a Steam Deck, an AMD laptop with no
+/// RAPL and a VM with no cpufreq driver at all. The alternative - reading
+/// `/sys` directly - can only ever confirm the machine the test runs on.
+pub struct Machine<'a> {
+    pub cpuinfo: &'a str,
+    pub os_release: &'a str,
+    pub kernel_release: &'a str,
+    pub cpu_root: &'a std::path::Path,
+    pub dmi_root: &'a std::path::Path,
+    pub drm_root: &'a std::path::Path,
+    pub hwmon_root: &'a std::path::Path,
+    pub powercap_root: &'a std::path::Path,
+    pub sched_ext_sysfs: &'a std::path::Path,
+    pub vkbasalt_layer: &'a std::path::Path,
+    pub scx_bin_dirs: &'a [std::path::PathBuf],
+    /// Whether a named tool is on `$PATH`.
+    pub have: &'a dyn Fn(&str) -> bool,
+    /// An environment variable, or the empty string.
+    pub env: &'a dyn Fn(&str) -> String,
+}
+
+/// Everything this machine can do, as one map.
+///
+/// This goes onto the daemon status, and the GUI hides the features it says
+/// are missing rather than letting them fail silently. So a field that is
+/// wrong here is a control that appears on a machine that cannot honour it,
+/// or vanishes from one that can - which is why the whole map is graded
+/// against the Python rather than the interesting fields.
+///
+/// Nothing here is privileged and nothing here writes: every question is
+/// asked by reading a file's name, or by looking for a tool on `$PATH`.
+pub fn detect(m: &Machine) -> serde_json::Map<String, serde_json::Value> {
+    use serde_json::{json, Value};
+
+    let vendor = cpu_vendor(m.cpuinfo);
+    let nvidia_smi = (m.have)("nvidia-smi");
+    let gpus = gpu_vendors(m.drm_root, nvidia_smi);
+    let ryzenadj = (m.have)("ryzenadj");
+
+    // Two existence tests that behave differently, and both are the
+    // Python's. The EPP and governor files are found with a glob, which
+    // reports a name that is THERE; the RAPL file is found with `exists`,
+    // which reports a name that RESOLVES. A dangling symlink is therefore an
+    // EPP that is present and a RAPL that is not - a distinction no real
+    // sysfs makes, kept because a probe that reads a slightly different set
+    // of files than the shipped one never announces itself.
+    let listed = |path: std::path::PathBuf| path.symlink_metadata().is_ok();
+    let epp = listed(
+        m.cpu_root
+            .join("cpu0/cpufreq/energy_performance_preference"),
+    );
+    let governor = listed(m.cpu_root.join("cpu0/cpufreq/scaling_governor"));
+    let rapl = m.powercap_root.join(RAPL_LIMIT).exists();
+
+    // sched_ext is a kernel feature plus a userspace loader, and the list of
+    // installed schedulers is only read when both are there. That is not an
+    // optimisation: it keeps a machine that has never heard of sched_ext
+    // from having its /usr/bin walked by a capability probe.
+    let scx_kernel = m.sched_ext_sysfs.is_dir();
+    let scx_loader = (m.have)("scx_loader");
+    let schedulers = if scx_kernel && scx_loader {
+        crate::scx::scheduler_binaries(m.scx_bin_dirs)
+    } else {
+        Vec::new()
+    };
+
+    let mut out = serde_json::Map::new();
+    let mut put = |key: &str, value: Value| {
+        out.insert(key.to_string(), value);
+    };
+    put("cpu_vendor", json!(vendor));
+    put("cpu_model", json!(cpu_model(m.cpuinfo)));
+    put("cpufreq_driver", json!(cpufreq_driver(m.cpu_root)));
+    put("governor_control", json!(governor));
+    put("epp_control", json!(epp));
+    put("rapl_control", json!(rapl));
+    put("ryzenadj", json!(ryzenadj));
+    // RAPL first: it is the kernel's own interface and needs no extra tool.
+    // ryzenadj is the fallback, and it is chosen on the TOOL rather than on
+    // the CPU vendor - an Intel machine with no RAPL and ryzenadj installed
+    // reports ryzenadj, which is what the Python does.
+    put(
+        "tdp_control",
+        match (rapl, ryzenadj) {
+            (true, _) => json!("rapl"),
+            (false, true) => json!("ryzenadj"),
+            (false, false) => Value::Null,
+        },
+    );
+    put("gpu_vendors", json!(gpus));
+    put("nvidia_smi", json!(nvidia_smi));
+    // A conjunction, not either half: the deep GPU snapshot needs an NVIDIA
+    // card AND the tool that reads it.
+    put(
+        "gpu_deep_stats",
+        json!(gpus.iter().any(|v| v == "nvidia") && nvidia_smi),
+    );
+    put("gamescope", json!((m.have)("gamescope")));
+    put("gamemode", json!((m.have)("gamemoderun")));
+    put("mangohud", json!((m.have)("mangohud")));
+    put("compositor", json!(compositor(m.env)));
+    put("distro_id", json!(distro_id(m.os_release)));
+    put("package_manager", json!(package_manager(m.have)));
+    put(
+        "core_layout",
+        Value::Object(crate::cpulayout::core_layout(m.cpu_root)),
+    );
+    put("kernel_release", json!(m.kernel_release));
+    put("kernel_flavor", json!(kernel_flavor(m.kernel_release)));
+    put("handheld", json!(handheld(m.dmi_root)));
+    // Both undervolt fields are gated on the CPU vendor as well as on the
+    // tool, so an AMD machine with intel-undervolt installed still reports
+    // nothing for `undervolt`. Two fields rather than one because they are
+    // different tools with different risks, and the GUI labels them apart.
+    put(
+        "undervolt",
+        if vendor == "intel" && (m.have)("intel-undervolt") {
+            json!("intel-undervolt")
+        } else {
+            Value::Null
+        },
+    );
+    put(
+        "amd_undervolt",
+        if vendor == "amd" && ryzenadj {
+            json!("ryzenadj")
+        } else {
+            Value::Null
+        },
+    );
+    put("fan_control", json!(has_writable_pwm(m.hwmon_root)));
+    put(
+        "sched_ext",
+        json!({
+            "kernel": scx_kernel,
+            "loader": scx_loader,
+            "available": scx_kernel && scx_loader,
+            "schedulers": schedulers,
+        }),
+    );
+    put("session_recorder", json!(session_recorder(m.have)));
+    // Either the binary or the implicit layer file: vkBasalt is usable
+    // through the layer alone, with nothing on $PATH to find.
+    put(
+        "vkbasalt",
+        json!((m.have)("vkBasalt") || m.vkbasalt_layer.exists()),
+    );
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
