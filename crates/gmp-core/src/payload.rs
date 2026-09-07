@@ -627,9 +627,150 @@ pub fn restore_plan(state: &Applied) -> Vec<RecomputeStep> {
     plan
 }
 
+/// What the privileged helper answered when a status was taken.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum HelperReply {
+    /// Not there at all - it never claimed to be.
+    Unavailable,
+    /// It answered both questions.
+    Answered {
+        governor: Option<String>,
+        power_limits_uw: (i64, i64),
+    },
+    /// It said it was there and then stopped answering. `governor` is
+    /// whatever it managed before it stopped.
+    Failed { governor: Option<String> },
+}
+
+/// The four fields of a status that come from the helper rather than from the
+/// payload's own bookkeeping.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct StatusReads {
+    pub governor: Option<String>,
+    pub power_limits_w: Option<(i64, i64)>,
+    pub helper_available: bool,
+    pub limited_mode: bool,
+}
+
+/// Microwatts as the status reports them: whole watts, Python's rounding.
+///
+/// `round()` goes to EVEN on a tie rather than away from zero, and RAPL holds
+/// its limits in microwatts, so a half-watt value is an ordinary thing for it
+/// to answer. The pair ends up in the status reply the GUI draws and in the
+/// `pl:45/60` token stored with every session - so a rounding that disagreed
+/// would put a different token in the history and quietly spoil the comparison
+/// those tokens exist for.
+pub fn power_limits_w(pl1_uw: i64, pl2_uw: i64) -> (i64, i64) {
+    let watts = |uw: i64| crate::round::half_even(uw as f64 / 1e6) as i64;
+    (watts(pl1_uw), watts(pl2_uw))
+}
+
+/// The fields of a status that come from the helper rather than from the
+/// payload's own bookkeeping.
+///
+/// `helper_available` is what the READS did, not what the probe claimed. A
+/// helper that answers `available()` and then stops answering is reported
+/// unavailable, because that is what the caller will find when it tries to
+/// change something.
+///
+/// The governor it managed to answer before it stopped is still reported. The
+/// two reads are separate calls and the helper can die between them; throwing
+/// away the answer it did give would be a status that knows less than the
+/// daemon does.
+pub fn status_reads(reply: &HelperReply) -> StatusReads {
+    match reply {
+        HelperReply::Unavailable => StatusReads {
+            governor: None,
+            power_limits_w: None,
+            helper_available: false,
+            limited_mode: true,
+        },
+        HelperReply::Answered {
+            governor,
+            power_limits_uw,
+        } => StatusReads {
+            governor: governor.clone(),
+            power_limits_w: Some(power_limits_w(power_limits_uw.0, power_limits_uw.1)),
+            helper_available: true,
+            limited_mode: false,
+        },
+        HelperReply::Failed { governor } => StatusReads {
+            governor: governor.clone(),
+            power_limits_w: None,
+            helper_available: false,
+            limited_mode: true,
+        },
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ---- what the helper contributes to a status --------------------------
+
+    #[test]
+    fn watts_are_microwatts_rounded_the_way_python_rounds() {
+        // Halves go to EVEN, not away from zero. RAPL reports in microwatts
+        // and a half-watt limit is an ordinary thing for it to hold.
+        assert_eq!(power_limits_w(45_000_000, 60_000_000), (45, 60));
+        assert_eq!(power_limits_w(45_500_000, 46_500_000), (46, 46));
+        assert_eq!(power_limits_w(500_000, 1_500_000), (0, 2));
+        assert_eq!(power_limits_w(2_500_000, 3_500_000), (2, 4));
+    }
+
+    #[test]
+    fn a_limit_of_nothing_is_zero_watts_rather_than_no_answer() {
+        // The pair is `None` when the helper could not be asked; a helper
+        // that answers zero has answered.
+        assert_eq!(power_limits_w(0, 0), (0, 0));
+    }
+
+    #[test]
+    fn an_unavailable_helper_leaves_every_field_it_owns_empty() {
+        let reads = status_reads(&HelperReply::Unavailable);
+        assert_eq!(reads.governor, None);
+        assert_eq!(reads.power_limits_w, None);
+        assert!(!reads.helper_available);
+        assert!(
+            reads.limited_mode,
+            "limited mode is the other side of the coin"
+        );
+    }
+
+    #[test]
+    fn a_helper_that_answers_fills_them_in() {
+        let reads = status_reads(&HelperReply::Answered {
+            governor: Some("performance".into()),
+            power_limits_uw: (45_000_000, 60_000_000),
+        });
+        assert_eq!(reads.governor.as_deref(), Some("performance"));
+        assert_eq!(reads.power_limits_w, Some((45, 60)));
+        assert!(reads.helper_available);
+        assert!(!reads.limited_mode);
+    }
+
+    #[test]
+    fn a_helper_that_stops_answering_is_unavailable_however_it_started() {
+        // `available()` said yes and a read then raised. What the status
+        // reports is what the READS did, not what the probe claimed.
+        let reads = status_reads(&HelperReply::Failed { governor: None });
+        assert!(!reads.helper_available);
+        assert!(reads.limited_mode);
+        assert_eq!(reads.power_limits_w, None);
+    }
+
+    #[test]
+    fn a_governor_read_before_the_failure_is_still_reported() {
+        // The two reads are separate calls and the helper can die between
+        // them. Throwing away the answer it did give would be a status that
+        // knows less than the daemon does.
+        let reads = status_reads(&HelperReply::Failed {
+            governor: Some("performance".into()),
+        });
+        assert_eq!(reads.governor.as_deref(), Some("performance"));
+        assert!(!reads.helper_available);
+    }
 
     // ---- the whole recompute, in order -------------------------------------
 
