@@ -354,6 +354,193 @@ pub fn distro_id(os_release: &str) -> String {
     String::new()
 }
 
+/// Kernels that get named, in the order they are looked for.
+///
+/// Order is a decision, not an accident: a kernel called `6.6-lts-zen` is a
+/// zen kernel that happens to be the LTS base, and the tag list is checked
+/// before the `-lts` rule so it is named for the part that changes how it
+/// behaves.
+const KERNEL_FLAVORS: &[&str] = &[
+    "cachyos", "xanmod", "liquorix", "lqx", "zen", "tkg", "nobara", "bazzite", "clear", "xero",
+];
+
+/// Package managers, in the order they are tried, with the name reported for
+/// each. Only `apt-get` answers to a different name than it is found by.
+const PACKAGE_MANAGERS: &[(&str, &str)] = &[
+    ("pacman", "pacman"),
+    ("apt-get", "apt"),
+    ("dnf", "dnf"),
+    ("zypper", "zypper"),
+    ("xbps-install", "xbps-install"),
+    ("eopkg", "eopkg"),
+    ("emerge", "emerge"),
+];
+
+/// Screen recorders, best first.
+const RECORDERS: &[&str] = &["gpu-screen-recorder", "wf-recorder", "obs", "spectacle"];
+
+/// A rough classification of the running kernel.
+///
+/// Gaming-oriented builds get named and everything else is `generic`. This
+/// feeds a gentle upgrade nudge and nothing else, so a kernel named wrongly
+/// costs a suggestion the user did not need, never a tweak.
+pub fn kernel_flavor(release: &str) -> String {
+    let rel = release.to_lowercase();
+    for tag in KERNEL_FLAVORS {
+        if rel.contains(tag) {
+            // Liquorix packages itself under both names and reports the short
+            // one, so the two spellings collapse here rather than downstream.
+            return if *tag == "liquorix" { "lqx" } else { tag }.to_string();
+        }
+    }
+    if rel.contains("-lts") {
+        return "lts".to_string();
+    }
+    "generic".to_string()
+}
+
+/// Which compositor is running, from the session's own environment.
+///
+/// KDE and GNOME each answer twice, because what a tweak has to do to them
+/// differs between X11 and Wayland. The desktop name is matched as an
+/// uppercased SUBSTRING, which is what makes `KDE:Plasma` and `ubuntu:GNOME`
+/// - both of them real, both shipped by distributions - resolve at all.
+///
+/// The wlroots pair are found by their own variables and only when the
+/// desktop name is not one of the two above; and a variable set to the empty
+/// string does not count, which is the difference between asking whether it
+/// is SET and asking what it says.
+pub fn compositor(env: &dyn Fn(&str) -> String) -> String {
+    let desktop = env("XDG_CURRENT_DESKTOP").to_uppercase();
+    let session = env("XDG_SESSION_TYPE");
+    if desktop.contains("KDE") {
+        return if session == "wayland" {
+            "kwin-wayland"
+        } else {
+            "kwin-x11"
+        }
+        .to_string();
+    }
+    if desktop.contains("GNOME") {
+        return if session == "wayland" {
+            "mutter-wayland"
+        } else {
+            "mutter-x11"
+        }
+        .to_string();
+    }
+    if !env("HYPRLAND_INSTANCE_SIGNATURE").is_empty() {
+        return "hyprland".to_string();
+    }
+    if !env("SWAYSOCK").is_empty() {
+        return "sway".to_string();
+    }
+    if session.is_empty() {
+        return "unknown".to_string();
+    }
+    session
+}
+
+/// Which package manager this machine has, or nothing.
+///
+/// Used only to hand the user a copy-pasteable install line - see
+/// [`install_command`], which never runs anything itself.
+pub fn package_manager(have: &dyn Fn(&str) -> bool) -> Option<&'static str> {
+    PACKAGE_MANAGERS
+        .iter()
+        .find(|(tool, _)| have(tool))
+        .map(|(_, name)| *name)
+}
+
+/// Which screen recorder to offer the clip feature through, or nothing.
+pub fn session_recorder(have: &dyn Fn(&str) -> bool) -> Option<&'static str> {
+    RECORDERS.iter().copied().find(|tool| have(tool))
+}
+
+/// Whether any hwmon exposes the standard `pwmN` + `pwmN_enable` pair.
+///
+/// Existence only, never a write test, so this is safe to call unprivileged.
+/// Most laptops and handhelds answer no: the EC or the firmware owns the fan
+/// curve and does not hand it over.
+///
+/// The pair has to live in the SAME hwmon, and the control file has to be
+/// `pwm` followed by digits and nothing else - `pwm1_enable` is itself a file
+/// whose name begins `pwm` and a digit, so without that the enable file would
+/// happily stand in for the control file it is supposed to accompany.
+pub fn has_writable_pwm(hwmon_root: &std::path::Path) -> bool {
+    let Ok(hwmons) = std::fs::read_dir(hwmon_root) else {
+        return false;
+    };
+    for hwmon in hwmons.flatten() {
+        if !hwmon.file_name().to_string_lossy().starts_with("hwmon") {
+            continue;
+        }
+        let Ok(files) = std::fs::read_dir(hwmon.path()) else {
+            continue;
+        };
+        for file in files.flatten() {
+            let name = file.file_name().to_string_lossy().into_owned();
+            if !is_pwm_control(&name) {
+                continue;
+            }
+            if hwmon.path().join(format!("{name}_enable")).exists() {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+/// `pwm` followed by one or more digits and nothing else.
+///
+/// Two different digit rules, both the Python's and neither one redundant:
+/// the glob that finds these files insists the FIRST digit is ASCII, and the
+/// pattern that then checks the name accepts any Unicode decimal digit for
+/// the rest. No kernel names a file this way; it is copied because a probe
+/// that reads a slightly different set of files than the shipped one is
+/// exactly the kind of difference that never announces itself.
+fn is_pwm_control(name: &str) -> bool {
+    static RE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    let re = RE.get_or_init(|| regex::Regex::new(r"^pwm[0-9][\p{Nd}]*$").expect("valid"));
+    re.is_match(name)
+}
+
+/// `true` on mains, `false` on battery, `None` when there is nothing to ask.
+///
+/// `None` is the answer on most desktops, and it is not the same as "on
+/// battery": nothing downstream should drop to a handheld's battery preset
+/// because a machine has no power supply to report on.
+///
+/// Deliberately uncached - unlike the rest of this module, this changes at
+/// plug and unplug rather than once at process start.
+pub fn on_ac_power(supply_root: &std::path::Path) -> Option<bool> {
+    let read = |path: std::path::PathBuf| {
+        std::fs::read_to_string(path)
+            .unwrap_or_default()
+            .trim()
+            .to_string()
+    };
+    let Ok(entries) = std::fs::read_dir(supply_root) else {
+        return None;
+    };
+    // Sorted, where the Python takes the directory in whatever order the
+    // kernel hands it over. It can only matter on a machine with two mains
+    // supplies that disagree, which is not a machine that exists - but an
+    // answer that depends on readdir order is not one worth having either.
+    let mut supplies: Vec<std::path::PathBuf> = entries.flatten().map(|e| e.path()).collect();
+    supplies.sort();
+    for supply in supplies {
+        if read(supply.join("type")) != "Mains" {
+            continue;
+        }
+        let online = read(supply.join("online"));
+        if !online.is_empty() {
+            return Some(online == "1");
+        }
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

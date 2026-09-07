@@ -253,7 +253,8 @@ jobs:
                                 tests.test_daemonapi_parity \
                                 tests.test_real_machine_parity \
                                 tests.test_cpulayout_parity \
-                                tests.test_capabilities_probe_parity -v
+                                tests.test_capabilities_probe_parity \
+                                tests.test_capabilities_env_parity -v
 
       # Advisories, licences and dependency sources. See deny.toml for why
       # this runs before the tree is big.
