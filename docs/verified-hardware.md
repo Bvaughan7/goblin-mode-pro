@@ -222,6 +222,38 @@ alternated PASS and FAIL. It samples for three seconds and takes the peak now,
 and a channel that genuinely never moves is reported as a SKIP naming the EC as
 the reason, not a failure.
 
+### The revert path, end to end, when a game exits
+
+**Verified 2026-09-06 on the Dell G7** — and by accident, which is why it is
+worth writing down.
+
+Until then the helper's `RevertAll` had only ever been called by hand: the
+conformance suite, or somebody testing. What had never been observed was the
+whole chain firing on its own — the observer noticing a tracked process
+disappear, `_on_game_event` taking the exit branch, the payload asking the
+helper, and the machine going back. A daemon that applies correctly and never
+reverts leaves the governor pinned for as long as the session lasts, and it
+looks exactly like a daemon that is working.
+
+That chain ran nine times in half an hour, and the journal shows every step:
+
+```
+observer: game exited: cargo
+payload:  reverting payload for cargo
+payload:  CPU governor / EPP / power limits restored via helper
+helper:   reverted (ok=true)
+```
+
+Twenty-four successful reverts in that window, none of them asked for by hand.
+
+The accident is the reason it happened: the auto-detector had adopted a `cargo`
+build as a game (fixed in the same session — see the CHANGELOG), so every
+compile started and stopped a "game". That makes it a real test of the
+mechanism and not of the game. What it proves is the chain; what it does not
+prove is anything specific to a title that also gets reniced or core-pinned,
+runs for hours, or exits by crashing rather than cleanly. Those still want a
+real session.
+
 ### Your machine here
 
 Run `goblin-mode-pro-cli selftest --json`, open an issue, and this table grows.
