@@ -405,6 +405,16 @@ mod tests {
                 .unwrap()
                 .as_nanos()
         ));
+        // A counter as well as the clock: two tests running in parallel can
+        // read the same nanosecond, and two tests sharing a directory is one
+        // of them finding a file the other wrote. That is how this suite went
+        // red - the analyser test that expects no log found the log written
+        // by the test beside it.
+        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let dir = dir.with_extension(
+            NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+                .to_string(),
+        );
         std::fs::create_dir_all(&dir).unwrap();
         dir
     }
