@@ -128,6 +128,32 @@ install_package() {
     _shim /usr/bin/goblin-mode-pro-daemon goblinmode.daemon
     _shim /usr/bin/goblin-mode-pro        goblinmode.gui.app
     _shim /usr/bin/goblin-mode-pro-cli    goblinmode.cli
+    warn_about_shadow_copies
+}
+
+# An older `goblinmode` in site-packages does NOT break anything: every shim
+# above puts $LIB_DIR at the front of sys.path, so the copy just installed is
+# the one that runs. It is worth saying anyway, because it silently answers a
+# direct `python3 -c "import goblinmode"` with whatever it happens to be - and
+# somebody checking whether a fix landed is exactly the person who will import
+# it that way and conclude their install did not take.
+warn_about_shadow_copies() {
+    local found
+    found=$(python3 -c '
+import sys, pathlib
+for entry in sys.path:
+    if not entry or "goblin-mode-pro" in entry:
+        continue
+    candidate = pathlib.Path(entry) / "goblinmode"
+    if candidate.is_dir():
+        print(candidate)
+' 2>/dev/null || true)
+    [ -n "$found" ] || return 0
+    warn "another copy of goblinmode is on Python's import path:"
+    printf '%s\n' "$found" | while read -r path; do warn "    $path"; done
+    warn "the installed commands ignore it - they load $LIB_DIR first - but a"
+    warn "bare python3 -c \"import goblinmode\" will load that one instead."
+    warn "remove it if you did not put it there on purpose."
 }
 
 _shim() {
