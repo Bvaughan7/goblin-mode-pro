@@ -15,6 +15,7 @@ pub mod capabilities;
 pub mod compositor;
 pub mod config;
 pub mod config_tables;
+pub mod cpuset;
 pub mod diagnostics;
 pub mod fpswatch;
 pub mod gamedetect;
