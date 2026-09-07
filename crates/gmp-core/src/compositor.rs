@@ -248,7 +248,9 @@ fn vrr_state(line: &str) -> Option<String> {
     let at = line.find("Vrr:")?;
     let rest = line[at + "Vrr:".len()..].trim_start_matches(is_py_space);
     let end = rest
-        .find(|c: char| !(c.is_alphanumeric() || c == '_'))
+        // `\w`, which is Python's `isalnum` plus the underscore - and
+        // `isalnum` is not `char::is_alphanumeric`. See `pyfmt::is_alnum`.
+        .find(|c: char| !crate::pyfmt::is_word_char(c))
         .unwrap_or(rest.len());
     (end > 0).then(|| rest[..end].to_lowercase())
 }
@@ -260,6 +262,16 @@ pub fn valid_vrr_policy(policy: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_vrr_value_stops_where_python_word_characters_stop() {
+        // `char::is_alphanumeric` would carry the combining mark into the
+        // value and hand back a policy name nothing matches.
+        assert_eq!(vrr_state("Vrr: Auto\u{345}matic").as_deref(), Some("auto"));
+        assert_eq!(vrr_state("Vrr: \u{345}Automatic"), None);
+        assert_eq!(vrr_state("Vrr: Automatic").as_deref(), Some("automatic"));
+        assert_eq!(vrr_state("Vrr: auto_matic").as_deref(), Some("auto_matic"));
+    }
 
     /// The real shape of `kscreen-doctor -o`: one `Output:` line, then
     /// indented property lines. `Modes:` is never on the `Output:` line

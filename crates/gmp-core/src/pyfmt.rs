@@ -14,7 +14,9 @@
 //!
 //! Mirrors `src/goblinmode/textfmt.py` function for function.
 
+use regex::Regex;
 use serde_json::Value;
+use std::sync::OnceLock;
 
 use crate::config::truthy;
 use crate::round::py_str;
@@ -105,6 +107,32 @@ pub fn number(value: Option<&Value>) -> Option<f64> {
         Some(Value::Number(n)) => n.as_f64(),
         _ => None,
     }
+}
+
+/// `str.isalnum` for one character, which is NOT `char::is_alphanumeric`.
+///
+/// Rust follows the derived Alphabetic property, which takes in
+/// `Other_Alphabetic` - combining marks such as U+0345 and the U+0363..036F
+/// block. Python asks only for a general category of `L*` or `N*`, and over
+/// the printable characters below U+3000 alone the two disagree about 771 of
+/// them.
+///
+/// Python's regex `\w` is this plus the underscore, which is what the
+/// documentation says and what a probe confirms, so a port of a `\w` pattern
+/// wants this predicate too.
+///
+/// Spelled as a pattern because that is what the rule IS: `isalnum` is
+/// `isalpha` (the `L` categories) or `isnumeric` (the `N` ones), and
+/// `isdecimal` and `isdigit` are subsets of the second.
+pub fn is_alnum(c: char) -> bool {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| Regex::new(r"^[\p{L}\p{N}]$").expect("a valid pattern"))
+        .is_match(c.encode_utf8(&mut [0u8; 4]))
+}
+
+/// Python's regex `\w`: [`is_alnum`] or an underscore.
+pub fn is_word_char(c: char) -> bool {
+    is_alnum(c) || c == '_'
 }
 
 #[cfg(test)]

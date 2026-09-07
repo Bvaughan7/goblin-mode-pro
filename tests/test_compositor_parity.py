@@ -94,6 +94,15 @@ DUMPS = {
     "vrr_no_space": out("eDP-1", "Modes: 1:1920x1080@60*", "Vrr:Always"),
     "vrr_before_modes": out("eDP-1", "Vrr: Always", "Modes: 1:1920x1080@60*"),
     "vrr_twice": out("eDP-1", "Vrr: Always", "Vrr: Never"),
+    # `\\w` is Python's `isalnum` plus the underscore, and `isalnum` is not
+    # Rust's `char::is_alphanumeric` - it refuses the combining marks the
+    # derived Alphabetic property takes in. Not a shape a compositor emits;
+    # here because the two implementations parted company over it elsewhere
+    # and this is the other place the same rule is spelled.
+    "vrr_combining_mark": out("eDP-1", "Vrr: Auto\u0345matic"),
+    "vrr_mark_first": out("eDP-1", "Vrr: \u0345Automatic"),
+    "vrr_non_ascii_digit": out("eDP-1", "Vrr: Auto\u0663"),
+    "vrr_roman_numeral": out("eDP-1", "Vrr: \u2160"),
     "vrr_without_output": "\tVrr: Always\n",
     # Panel naming.
     "edp_variants": out("eDP", "Modes: 1:1920x1080@60*") + out("eDP-1-unknown", "Modes: 2:800x600@60"),

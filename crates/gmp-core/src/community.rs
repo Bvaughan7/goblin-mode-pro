@@ -11,9 +11,7 @@
 //! re-validates every field through `GameProfile` before saving. These checks
 //! are the first of those layers, not the only one.
 
-use regex::Regex;
 use serde_json::{Map, Value};
-use std::sync::OnceLock;
 
 /// The only host this module will talk to.
 pub const ALLOWED_HOST: &str = "raw.githubusercontent.com";
@@ -81,7 +79,7 @@ pub fn allowed_url(url: &str) -> bool {
 pub fn safe_slug(slug: &str) -> Result<String, String> {
     let filtered: String = slug
         .chars()
-        .filter(|c| is_alnum(*c) || matches!(c, '.' | '-' | '_'))
+        .filter(|c| crate::pyfmt::is_alnum(*c) || matches!(c, '.' | '-' | '_'))
         .take(64)
         .collect();
     if filtered.is_empty()
@@ -149,18 +147,6 @@ pub fn shareable(data: &Value) -> Result<Value, String> {
         .map(|(key, value)| (key.clone(), value.clone()))
         .collect();
     Ok(Value::Object(kept))
-}
-
-/// `str.isalnum` for one character: a general category of `L*` or `N*`.
-///
-/// Spelled as a pattern rather than assembled from `char` predicates because
-/// that is what the rule IS - Python's `isalnum` is `isalpha` (the `L`
-/// categories) or `isnumeric` (the `N` ones), and `isdecimal` and `isdigit`
-/// are subsets of the second.
-fn is_alnum(c: char) -> bool {
-    static RE: OnceLock<Regex> = OnceLock::new();
-    RE.get_or_init(|| Regex::new(r"^[\p{L}\p{N}]$").expect("a valid pattern"))
-        .is_match(c.encode_utf8(&mut [0u8; 4]))
 }
 
 /// Python truthiness for the shapes a fetched JSON document holds.
