@@ -240,7 +240,8 @@ jobs:
                                 tests.test_mangohud_parity \
                                 tests.test_exporter_parity \
                                 tests.test_housekeeping_parity \
-                                tests.test_benchmarkcard_parity -v
+                                tests.test_benchmarkcard_parity \
+                                tests.test_logwatch_parity -v
 
       # Advisories, licences and dependency sources. See deny.toml for why
       # this runs before the tree is big.

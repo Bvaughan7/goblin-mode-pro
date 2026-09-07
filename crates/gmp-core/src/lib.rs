@@ -26,6 +26,7 @@ pub mod gpu;
 pub mod housekeeping;
 pub mod incidents;
 pub mod logrules;
+pub mod logwatch;
 pub mod mangohud;
 pub mod observer;
 pub mod paths;
