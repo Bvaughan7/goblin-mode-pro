@@ -18,6 +18,7 @@ pub mod community;
 pub mod compositor;
 pub mod config;
 pub mod config_tables;
+pub mod cpulayout;
 pub mod cpuset;
 pub mod daemon_api;
 pub mod diagnostics;
