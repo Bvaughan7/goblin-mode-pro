@@ -248,7 +248,7 @@ Block by block, tracked in [issue #1](https://github.com/Bvaughan7/goblin-mode-p
 | **H1** | One unit, symlinked implementation, rollback as a drop-in | **Done.** The unit runs `/usr/libexec/goblin-mode-pro/helper`, a symlink, verified on hardware. `install.sh --helper=rust` builds, contract-checks and installs the Rust binary; Python is installed either way so rolling back needs no toolchain |
 | **P2** | Freeze the daemon's session-bus interface, and grade it from outside | **Done.** `docs/dbus-daemon-interface-v1.xml` (29 methods, 5 signals, 3 properties) + `tests/conformance/daemon.py`. Baseline on real hardware: **23 PASS / 0 FAIL / 9 SKIP** — it was 1 FAIL on the first run, and that bug is fixed |
 | **P0** | State the widened scope publicly, and say plainly that the original justification does not extend to it | **Done.** This page, the README and the ROADMAP |
-| **P3** | `gmp-core` — the domain logic, tests translated first, module by module | **Done.** The twelve modules the block was scoped around, each with a parity harness that asks both implementations the same questions and diffs the answers. It has kept growing since, as pieces the other blocks needed turned out to belong here rather than beside them - the MangoHud configurator, the Prometheus document, the log-file pruner, the benchmark comparison, the Proton log watcher. Every one of them is diffed by a harness CI runs, and `tests/test_parity_coverage.py` is what stops one being written and forgotten |
+| **P3** | `gmp-core` — the domain logic, tests translated first, module by module | **Done, and then some.** The twelve modules the block was scoped around, each with a parity harness that asks both implementations the same questions and diffs the answers - and since then every other module whose answers can be asked for without a bus, a helper or a display. Forty-one crate modules and forty-seven harnesses. What is left in Python and not mirrored here is the CLI's own surface, the tray, and the daemon loop's plumbing: the parts that hold a handle rather than make a decision. Every harness is run by CI, and `tests/test_parity_coverage.py` fails when one is written and not added |
 | **P4** | `gmp-daemon` and `gmp-cli` | **In progress.** `crates/gmp-daemon` serves the frozen interface - graded byte for byte by the same canonicalizer the Python daemon goes through - with the four disk-backed read methods answering for real and the rest refusing. The judgement the loop makes is being ported ahead of the loop itself, each piece as a plan the daemon carries out rather than as calls it makes: the poll tick, what the machine should be doing for the active set, the calls that implies and their order, the scheduler decision, the record a finished session leaves behind, what a game arriving or leaving means, what raising an incident does besides filing it, what the daemon does with a frame-rate event, what a saved profile edit makes it redo, and the two switches that are not a game - the master toggle and force-boost. The recompute is ported whole - the order of the helper, the display, the scheduler and focus mode, and the restore's different order - and so is the record it leaves on disk for a cold `--revert`. What is left is the plumbing that carries those plans out: the live helper and compositor handles, the state each call writes back, and the process-tree walking behind renice and core pinning - the decision of WHICH cpus a pinning mode means is ported |
 | **P5** | `gmp-gui` — gtk4-rs, `ksni` for the tray, and the i18n msgids preserved character for character | Not started. ~3,300 lines |
 | **P6** | Cutover: delete the Python, repackage, re-verify every capability under Rust | Not started |
@@ -304,6 +304,20 @@ What the port has found so far, none of which was in the plan:
   along: every incident in its corpus was ASCII. There is now one renderer that
   writes what CPython writes, checked against it over 2,000 generated
   documents.
+
+- **Three Python string predicates are not the Rust functions they look
+  like.** `str.isalnum` is `\p{L}` or `\p{N}` and nothing else; Rust's
+  `char::is_alphanumeric` follows the derived Alphabetic property, which takes
+  in `Other_Alphabetic` combining marks - they disagree about 771 of the
+  printable characters below U+3000 alone. Python's regex `\w` is that same
+  `isalnum` plus the underscore, so a port of a `\w` pattern inherits the
+  difference; it had, in the compositor's VRR parser. And `str.isdigit` is
+  neither `is_ascii_digit` nor `is_numeric` - it is `Nd` plus 128 characters in
+  20 ranges with `Numeric_Type=Digit`, so it takes superscripts and circled
+  digits and leaves out fractions and Roman numerals. All three live in
+  `pyfmt` now, swept against CPython over tens of thousands of characters,
+  because the first was found by a harness and the second by grepping for the
+  shape of the first.
 
 Freezing the *daemon's* interface did the same thing on its first run:
 **ignoring a game could not be undone.** `IgnoreGame` appended to
